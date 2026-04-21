@@ -1,0 +1,22 @@
+[2026-04-21 14:25:13] --- START sub-001 ---
+[2026-04-21 14:25:45] EEGLAB initialized.
+[2026-04-21 14:25:45] BIDS context: session=01 | task=rtgmn | bids_ses_dir=K:\Wilken_Arbeitsordner\Raw_data\BIDS_RTGMN\sub-001\ses-01
+[2026-04-21 14:25:46] Step 01: BIDS formatting -> skipped by preplan (step disabled)
+[2026-04-21 14:25:46] Step 02: triggerfix -> skipped by preplan (step disabled)
+[2026-04-21 14:25:46] Clearing step folder before rerun: Z:\pb\KPP_KPN_joined\Aperiodic\Saskia\derivatives\02_until_ica\sub-001
+[2026-04-21 14:25:46] Clearing step folder before rerun: Z:\pb\KPP_KPN_joined\Aperiodic\Saskia\derivatives\03_for_ica\sub-001
+[2026-04-21 14:25:46] Step 03: until ICA
+[2026-04-21 14:25:46] prep_03_until_ica: BIDS fallback: no *.vhdr found for sub-001 (checked: K:\Wilken_Arbeitsordner\Raw_data\BIDS_RTGMN\sub-001\ses-01\eeg | K:\Wilken_Arbeitsordner\Raw_data\BIDS_RTGMN\sub-001\eeg)
+[2026-04-21 14:25:46] prep03_untilica: no input found. Neither *_triggersfixed.set in Z:\pb\KPP_KPN_joined\Aperiodic\Saskia\derivatives\01_trigger_fix\sub-001 nor any *.vhdr in BIDS eeg folder for sub-001.
+[2026-04-21 14:25:46] Step 03: until ICA runtime: 0.01 min
+[2026-04-21 14:25:46] ERROR: prep_03_until_ica failed for sub-001: prep03_untilica: no input found. Neither *_triggersfixed.set in Z:\pb\KPP_KPN_joined\Aperiodic\Saskia\derivatives\01_trigger_fix\sub-001 nor any *.vhdr in BIDS eeg folder for sub-001.
+[2026-04-21 14:25:46] Error using eeg_pipeline_helpers>run_step_with_logging_impl (line 937)
+prep_03_until_ica failed for sub-001: prep03_untilica: no input found. Neither *_triggersfixed.set in
+Z:\pb\KPP_KPN_joined\Aperiodic\Saskia\derivatives\01_trigger_fix\sub-001 nor any *.vhdr in BIDS eeg folder for sub-001.
+
+Error in eeg_pipeline_helpers>run_one_subject_impl (line 879)
+    run_step_with_logging_impl( ...
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Error in run_eeg_pipeline (line 379)
+        status(i) = helpers.run_one_subject(subject_plans(i), cfg);
+                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^

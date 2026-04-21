@@ -44,8 +44,8 @@ cfg.constants = struct();
 cfg.constants.log_prefix_master = "run_eeg_pipeline_aperiodic"; % master log filename prefix
 
 cfg.bids = struct();
-cfg.bids.dataset_folder_name = "baseline"; % BIDS dataset folder name (if you have multiple datasets in teh same raw folder)
-cfg.bids.task_label          = "baseline";      % BIDS task label
+cfg.bids.dataset_folder_name = "BIDS_RTGMN"; % BIDS dataset folder name
+cfg.bids.task_label          = "rtgmn";      % BIDS task label
 cfg.bids.session_label       = "01";         % BIDS session label
 
 % -------------------------------------------------------------------------
@@ -65,19 +65,19 @@ cfg.paths.profile_paths = struct();
 cfg.paths.profile_paths.pc = struct( ...
     'source_eeg_root',  'K:\Wilken_Arbeitsordner\Raw_data\RTG_Metin_Nilay_EEG_Baseline', ...
     'source_beh_root',  '', ...
-    'bids_root',        'Z:\pb\KPP_KPN_joined\Aperiodic\Saskia\sourcedata', ...
+    'bids_root',        fullfile('Z:\pb\KPP_KPN_joined\Aperiodic\Saskia\de\Raw_data', char(cfg.bids.dataset_folder_name)), ...
     'derivatives_root', 'Z:\pb\KPP_KPN_joined\Aperiodic\Saskia\derivatives');
 
 cfg.paths.profile_paths.server_windows = struct( ...
     'source_eeg_root',  '', ...
     'source_beh_root',  '', ...
-    'bids_root',         'Z:\pb\KPP_KPN_joined\Aperiodic\Saskia\sourcedata', ...
+    'bids_root',        'Z:\pb\KPP_KPN_joined\Aperiodic\Saskia\sourcedata', ...
     'derivatives_root', 'Z:\pb\KPP_KPN_joined\Aperiodic\Saskia\derivatives');
 
 cfg.paths.profile_paths.hpc_hummel = struct( ...
     'source_eeg_root',  '', ...
     'source_beh_root',  '', ...
-    'bids_root',        fullfile('/beegfs/u/bbf7366/sourcedata', char(cfg.bids.dataset_folder_name)), ...
+    'bids_root',        fullfile('/beegfs/u/bbf7366/raw', char(cfg.bids.dataset_folder_name)), ...
     'derivatives_root', '/beegfs/u/bbf7366/derivatives/preprocessed_eeg');
 
 cfg.paths.bids_root_override        = "";
@@ -142,43 +142,16 @@ end
 
 profile_cfg = cfg.paths.profile_paths.(profile_name);
 
-% -------------------------------------------------------------------------
-% Base paths from selected profile
-% -------------------------------------------------------------------------
-cfg.paths.source_eeg_root  = string(profile_cfg.source_eeg_root);
-cfg.paths.source_beh_root  = string(profile_cfg.source_beh_root);
-cfg.paths.bids_root        = string(profile_cfg.bids_root);
-cfg.paths.derivatives_root = string(profile_cfg.derivatives_root);
+cfg.paths.source_eeg_root  = string(profile_cfg.source_eeg_root);   % fresh/raw EEG input for Step 01
+cfg.paths.source_beh_root  = string(profile_cfg.source_beh_root);   % optional fresh/raw behavior input for Step 01
+cfg.paths.bids_root        = string(profile_cfg.bids_root);         % Step 01 output / Steps 02-06 input
+cfg.paths.derivatives_root = string(profile_cfg.derivatives_root);  % Steps 02-06 outputs
 
-% -------------------------------------------------------------------------
-% Optional environment overrides
-% Intended for batch/HPC/test runs without editing this config file
-% -------------------------------------------------------------------------
-bids_env = helpers.get_env_first_nonempty({'EEG_PIPELINE_BIDS_ROOT'});
-derivatives_env = helpers.get_env_first_nonempty({'EEG_PIPELINE_DERIVATIVES_ROOT'});
-source_eeg_env = helpers.get_env_first_nonempty({'EEG_PIPELINE_SOURCE_EEG_ROOT'});
-source_beh_env = helpers.get_env_first_nonempty({'EEG_PIPELINE_SOURCE_BEH_ROOT'});
+bids_env         = helpers.get_env_first_nonempty({'EEG_PIPELINE_BIDS_ROOT'});
+derivatives_env  = helpers.get_env_first_nonempty({'EEG_PIPELINE_DERIVATIVES_ROOT'});
+source_eeg_env   = helpers.get_env_first_nonempty({'EEG_PIPELINE_SOURCE_EEG_ROOT'});
+source_beh_env   = helpers.get_env_first_nonempty({'EEG_PIPELINE_SOURCE_BEH_ROOT'});
 
-if strlength(bids_env) > 0
-    cfg.paths.bids_root = string(bids_env);
-end
-
-if strlength(derivatives_env) > 0
-    cfg.paths.derivatives_root = string(derivatives_env);
-end
-
-if strlength(source_eeg_env) > 0
-    cfg.paths.source_eeg_root = string(source_eeg_env);
-end
-
-if strlength(source_beh_env) > 0
-    cfg.paths.source_beh_root = string(source_beh_env);
-end
-
-% -------------------------------------------------------------------------
-% Explicit config overrides
-% Highest priority because they are set directly in this file
-% -------------------------------------------------------------------------
 if strlength(string(cfg.paths.bids_root_override)) > 0
     cfg.paths.bids_root = string(cfg.paths.bids_root_override);
 end
@@ -244,7 +217,7 @@ cfg.steps.prep_01_bids_formatting = struct( ...
     'overwrite_if_older_than', "");
 
 cfg.steps.prep_02_triggerfix = struct( ...
-    'run', true, ...
+    'run', false, ...
     'overwrite_mode', "", ...
     'overwrite_if_older_than', "");
 
@@ -537,58 +510,11 @@ cfg.prep_05.qc_table_delimiter          = ';';
 % =========================================================================
 cfg.prep_06 = struct();
 
-cfg.prep_06.epoching_mode = "baseline"; % "baseline" | "event_locked"
-cfg.prep_06.reference_mode = "keep";
-
-% baseline-specfic
-cfg.prep_06.regepoch_length_sec = 10;
-cfg.prep_06.regepoch_step_sec   = 10;
-
-cfg.prep_06.baseline_start_condition        = "open";
-cfg.prep_06.baseline_open_marker_prefixes   = {'S 1'};
-cfg.prep_06.baseline_closed_marker_prefixes = {'S 2'};
-cfg.prep_06.baseline_end_markers            = {'S 99'};
-
-% event-locked-specific
-cfg.prep_06.events_phase = { ...
-    'S 201','S 241', ...
-    'S 2021','S 2421','S 2022','S 2422', ...
-    'S 203','S 213','S 223','S 233','S 243', ...
-    'S 2041','S 2441','S 2042','S 2442','S 2043','S 2443', ...
-    'S 205','S 245' ...
-    };
-
-cfg.prep_06.epoch_start_s = -0.4;
-cfg.prep_06.epoch_end_s   =  2.6;
-
-% general
-cfg.prep_06.do_artifact_rejection               = true;
-cfg.prep_06.do_initial_hard_threshold_rejection = true;
-cfg.prep_06.initial_hard_threshold_uv           = 100;
-
-cfg.prep_06.do_baseline_correction = false;
-cfg.prep_06.base_start_ms          = -200;
-cfg.prep_06.base_end_ms            = 0;
-
-cfg.prep_06.max_reject_prop = 0;
-
-cfg.prep_06.split_non_eeg_channels = false;
-cfg.prep_06.eeg_only_keep_eog      = false;
-
-cfg.prep_06.shared_epoch_rejection = struct();
-cfg.prep_06.shared_epoch_rejection.enable        = true;
-cfg.prep_06.shared_epoch_rejection.use_faster    = true;
-cfg.prep_06.shared_epoch_rejection.faster_z      = 2;
-cfg.prep_06.shared_epoch_rejection.use_robust_z  = false;
-cfg.prep_06.shared_epoch_rejection.use_ptp       = true;
-cfg.prep_06.shared_epoch_rejection.ptp_uV_thresh = 300;
-cfg.prep_06.shared_epoch_rejection.max_reject_prop = 0;
-
 cfg.prep_06.save_final_only         = true;
 cfg.prep_06.save_intermediate_steps = false;
 cfg.prep_06.savemode                = 'twofiles';
 
-cfg.prep_06.reference_mode         = "keep"; % second spot where you can rereference
+cfg.prep_06.reference_mode         = "avg";
 cfg.prep_06.mastoid_channel_labels = {'T9','T10'};
 
 cfg.prep_06.epoch_start_s = -0.4;

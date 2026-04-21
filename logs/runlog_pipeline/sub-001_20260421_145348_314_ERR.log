@@ -1,0 +1,20 @@
+[2026-04-21 14:53:48] --- START sub-001 ---
+[2026-04-21 14:53:49] EEGLAB initialized.
+[2026-04-21 14:53:50] BIDS context: session=01 | task=rtgmn | bids_ses_dir=Z:\pb\KPP_KPN_joined\Aperiodic\Saskia\sourcedata\BIDS_RTGMN\sub-001\ses-01
+[2026-04-21 14:53:50] Step 01: BIDS formatting -> skipped by preplan (step disabled)
+[2026-04-21 14:53:50] Step 02: triggerfix -> skipped by preplan (step disabled)
+[2026-04-21 14:53:50] Step 03: until ICA
+[2026-04-21 14:53:50] prep_03_until_ica: BIDS fallback: no *.vhdr found for sub-001 (checked: Z:\pb\KPP_KPN_joined\Aperiodic\Saskia\sourcedata\BIDS_RTGMN\sub-001\ses-01\eeg | Z:\pb\KPP_KPN_joined\Aperiodic\Saskia\sourcedata\BIDS_RTGMN\sub-001\eeg)
+[2026-04-21 14:53:50] prep03_untilica: no input found. Neither *_triggersfixed.set in Z:\pb\KPP_KPN_joined\Aperiodic\Saskia\derivatives\01_trigger_fix\sub-001 nor any *.vhdr in BIDS eeg folder for sub-001.
+[2026-04-21 14:53:50] Step 03: until ICA runtime: 0.00 min
+[2026-04-21 14:53:50] ERROR: prep_03_until_ica failed for sub-001: prep03_untilica: no input found. Neither *_triggersfixed.set in Z:\pb\KPP_KPN_joined\Aperiodic\Saskia\derivatives\01_trigger_fix\sub-001 nor any *.vhdr in BIDS eeg folder for sub-001.
+[2026-04-21 14:53:50] Error using eeg_pipeline_helpers>run_step_with_logging_impl (line 937)
+prep_03_until_ica failed for sub-001: prep03_untilica: no input found. Neither *_triggersfixed.set in
+Z:\pb\KPP_KPN_joined\Aperiodic\Saskia\derivatives\01_trigger_fix\sub-001 nor any *.vhdr in BIDS eeg folder for sub-001.
+
+Error in eeg_pipeline_helpers>run_one_subject_impl (line 879)
+    run_step_with_logging_impl( ...
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Error in run_eeg_pipeline (line 347)
+        status(i) = helpers.run_one_subject(subject_plans(i), cfg);
+                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^

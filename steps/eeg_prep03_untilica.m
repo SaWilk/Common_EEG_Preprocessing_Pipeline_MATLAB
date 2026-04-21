@@ -60,19 +60,19 @@ end
 if isfield(paths, 'prep_02_out_dir') && strlength(string(paths.prep_02_out_dir)) > 0
     prep02_out_dir = paths.prep_02_out_dir;
 else
-    prep02_out_dir = fullfile(paths.out_root, '01_trigger_fix', sprintf('sub-%s', subj_id));
+    prep02_out_dir = fullfile(paths.derivatives_root, '01_trigger_fix', sprintf('sub-%s', subj_id));
 end
 
 if isfield(paths, 'prep_03_out_dir_until_ica') && strlength(string(paths.prep_03_out_dir_until_ica)) > 0
     prep03_out_dir_untilica = paths.prep_03_out_dir_until_ica;
 else
-    prep03_out_dir_untilica = fullfile(paths.out_root, '02_until_ica', sprintf('sub-%s', subj_id));
+    prep03_out_dir_untilica = fullfile(paths.derivatives_root, '02_until_ica', sprintf('sub-%s', subj_id));
 end
 
 if isfield(paths, 'prep_03_out_dir_for_ica') && strlength(string(paths.prep_03_out_dir_for_ica)) > 0
     prep03_out_dir_forica = paths.prep_03_out_dir_for_ica;
 else
-    prep03_out_dir_forica = fullfile(paths.out_root, '03_for_ica', sprintf('sub-%s', subj_id));
+    prep03_out_dir_forica = fullfile(paths.derivatives_root, '03_for_ica', sprintf('sub-%s', subj_id));
 end
 
 helpers.ensure_dir(prep03_out_dir_untilica);
@@ -551,6 +551,17 @@ end
 EEG = helpers.append_eeg_comment(EEG, sprintf( ...
     'prep03_untilica: saved preica: %s', out_preica));
 
+EEG = helpers.safe_save_set( ...
+    EEG, ...
+    prep03_out_dir_untilica, ...
+    sprintf('%s_preica.set', run_base_name), ...
+    helpers, ...
+    cfg);
+
+helpers.log_msg_default( ...
+    'prep03_untilica: saved preica: %s', ...
+    out_preica);
+
 
 %% ========================================================================
 %  CREATE FORICA
@@ -654,6 +665,17 @@ end
 % ========================================================================
 ica_prep_eeg = helpers.append_eeg_comment(ica_prep_eeg, sprintf( ...
     'prep03_untilica: saved forica: %s', out_forica));
+
+ica_prep_eeg = helpers.safe_save_set( ...
+    ica_prep_eeg, ...
+    prep03_out_dir_forica, ...
+    sprintf('%s_forica.set', run_base_name), ...
+    helpers, ...
+    cfg);
+
+helpers.log_msg_default( ...
+    'prep03_untilica: saved forica: %s', ...
+    out_forica);
 
 helpers.log_msg_default('prep03_untilica: DONE sub-%s | %s', subj_id, run_base_name);
 

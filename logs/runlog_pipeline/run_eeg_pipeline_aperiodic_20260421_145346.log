@@ -1,0 +1,43 @@
+[2026-04-21 14:53:46] === PIPELINE START 21-Apr-2026 14:53:46 ===
+[2026-04-21 14:53:46] pipeline_name    : aperiodic_pipeline
+[2026-04-21 14:53:46] step_prefix      : eeg
+[2026-04-21 14:53:46] root_dir         : Z:\pb\KPP_KPN_joined\Aperiodic\EEG_Preprocessing_Pipeline\Common_EEG_Preprocessing_Pipeline_MATLAB
+[2026-04-21 14:53:46] steps_dir        : Z:\pb\KPP_KPN_joined\Aperiodic\EEG_Preprocessing_Pipeline\Common_EEG_Preprocessing_Pipeline_MATLAB\steps
+[2026-04-21 14:53:46] env_mode         : pc
+[2026-04-21 14:53:46] machine_kind     : pc
+[2026-04-21 14:53:47] hostname         : UN-LAP-015977
+[2026-04-21 14:53:47] is_slurm         : 0 | SLURM_JOB_ID= | SLURM_CLUSTER_NAME=
+[2026-04-21 14:53:47] profile          : pc
+[2026-04-21 14:53:47] source_eeg_root  : K:\Wilken_Arbeitsordner\Raw_data\RTG_Metin_Nilay_EEG_Baseline
+[2026-04-21 14:53:47] source_beh_root  : 
+[2026-04-21 14:53:47] bids_root        : Z:\pb\KPP_KPN_joined\Aperiodic\Saskia\sourcedata\BIDS_RTGMN
+[2026-04-21 14:53:47] derivatives_root : Z:\pb\KPP_KPN_joined\Aperiodic\Saskia\derivatives
+[2026-04-21 14:53:47] task_label       : rtgmn
+[2026-04-21 14:53:47] session_label    : 01
+[2026-04-21 14:53:47] overwrite_mode   : delete
+[2026-04-21 14:53:47] overwrite_date   : 
+[2026-04-21 14:53:47] step05 iclabel: eye=0.80 mus=0.80 heart=0.80 line=0.80 ch=0.80 other=0.95 brain_min=0.05 edge=0.10
+[2026-04-21 14:53:47] step06: ref=avg | epoch=[-0.400 2.600] s | hard_thresh_apply=1 | hard_thresh=100.0 uV | baseline_apply=0 | baseline=[-200 0] ms | faster_z=3.00 | robust=1
+[2026-04-21 14:53:47] Toolboxes initialized (master).
+[2026-04-21 14:53:47] Found 1 subject(s).
+[2026-04-21 14:53:47] Resolved worker count=2 (machine_kind=pc, profile=pc)
+[2026-04-21 14:53:47] Parallel requested (2 workers).
+[2026-04-21 14:53:48] WARNING: Parallel license unavailable. Falling back to serial. (Unable to check out a license for the Parallel Computing Toolbox.
+MathWorks Licensing Error 4
+
+A licensing error occurred while trying to use Parallel Computing Toolbox.
+Maximum number of simultaneous users for this product reached.
+
+For help with this issue, see this support article: 
+https://www.mathworks.com/support/lme/4
+
+Details for Support
+Feature: Distrib_Computing_Toolbox
+License: C:\Users\bbf7366\AppData\Roaming\MathWorks\MATLAB\R2025b_licenses;C:\Program Files\matlab\R2025b\licenses\license.dat;C:\Program Files\matlab\R2025b\licenses\network.lic
+Error Code: -4.2)
+[2026-04-21 14:53:48] Preplan sub-001 | 01=0 | 02=0 | 03=1 | 04=1 | 05=1 | 06=1
+[2026-04-21 14:53:48] Planning complete: 1/1 subject(s) require work.
+[2026-04-21 14:53:50] === PIPELINE END 21-Apr-2026 14:53:50 ===
+[2026-04-21 14:53:50] Completed: 0 ok | 1 failed
+[2026-04-21 14:53:50] Failed subjects:
+[2026-04-21 14:53:50]   sub-001 | prep_03_until_ica failed for sub-001: prep03_untilica: no input found. Neither *_triggersfixed.set in Z:\pb\KPP_KPN_joined\Aperiodic\Saskia\derivatives\01_trigger_fix\sub-001 nor any *.vhdr in BIDS eeg folder for sub-001. | log=Z:\pb\KPP_KPN_joined\Aperiodic\EEG_Preprocessing_Pipeline\Common_EEG_Preprocessing_Pipeline_MATLAB\logs\runlog_pipeline\sub-001_20260421_145348_314_ERR.log

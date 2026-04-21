@@ -195,7 +195,7 @@ function machine_kind = detect_machine_kind_impl(varargin) %#ok<INUSD>
 machine_kind = "unknown";
 
 override = lower(strtrim(string(get_env_first_nonempty_impl({'EEG_PIPELINE_MACHINE_KIND'}))));
-if any(override == ["pc","server_windows","hpc_hummel"])
+if any(override == ["local_windows","server_windows","hpc_hummel"])
     machine_kind = override;
     return;
 end
@@ -217,19 +217,29 @@ if strlength(hostname) > 0 && startsWith(hostname, "vdi")
     return;
 end
 
-machine_kind = "pc";
+if ispc
+    machine_kind = "local_windows";
+    return;
+end
 end
 
-function profile = default_profile_for_mode_impl(mode, machine_kind) %#ok<INUSD>
-mode = string(lower(strtrim(mode)));
+function profile = default_profile_for_mode_impl(mode, machine_kind)
+mode         = string(lower(strtrim(mode)));
+machine_kind = string(lower(strtrim(machine_kind)));
 
 switch mode
     case "hpc"
         profile = "hpc_hummel";
     case "server"
         profile = "server_windows";
+    case "pc"
+        if machine_kind == "server_windows"
+            profile = "server_windows";
+        else
+            profile = "pc_shared";
+        end
     otherwise
-        profile = "pc";
+        profile = "pc_shared";
 end
 end
 
@@ -385,8 +395,8 @@ end
 end
 
 function root = resolve_toolbox_root_impl(cfg, which_toolbox)
-env_name = "EEG_PIPELINE_" + upper(which_toolbox) + "_ROOT";
-root = string(getenv(char(env_name)));
+env_name = upper(which_toolbox) + "_ROOT";
+root = string(getenv(env_name));
 
 if strlength(root) > 0
     return;
@@ -561,7 +571,7 @@ end
 switch machine_kind
     case "server_windows"
         n_workers = 4;
-    case "pc"
+    case "local_windows"
         n_workers = 2;
     case "hpc_hummel"
         tmp = get_slurm_cpus_per_task_impl();
@@ -574,7 +584,7 @@ switch machine_kind
         switch profile
             case "server_windows"
                 n_workers = 4;
-            case "pc"
+            case {"pc_now","pc_shared"}
                 n_workers = 2;
             case "hpc_hummel"
                 tmp = get_slurm_cpus_per_task_impl();
@@ -608,10 +618,10 @@ end
 function paths = build_paths_impl(cfg, subj_id)
 paths = struct();
 
-paths.root_dir         = cfg.root_dir;
-paths.bids_root        = cfg.paths.bids_root;
-paths.derivatives_root = cfg.paths.derivatives_root;
-paths.subj_label       = sprintf('sub-%s', subj_id);
+paths.root_dir  = cfg.root_dir;
+paths.bids_root = cfg.paths.bids_root;
+paths.out_root  = cfg.paths.out_root;
+paths.subj_label = sprintf('sub-%s', subj_id);
 
 paths.session_label   = string(cfg.bids.session_label);
 paths.bids_task_label = string(cfg.bids.task_label);
@@ -620,9 +630,9 @@ paths.bids_sub_dir = fullfile(paths.bids_root, paths.subj_label);
 paths.bids_ses_dir = fullfile(paths.bids_sub_dir, "ses-" + paths.session_label);
 paths.prep_01_out_dir = paths.bids_ses_dir;
 
-paths.step_02_root           = fullfile(paths.derivatives_root, '01_trigger_fix');
-paths.step_03_until_ica_root = fullfile(paths.derivatives_root, '02_until_ica');
-paths.step_03_for_ica_root   = fullfile(paths.derivatives_root, '03_for_ica');
+paths.step_02_root           = fullfile(paths.out_root, '01_trigger_fix');
+paths.step_03_until_ica_root = fullfile(paths.out_root, '02_until_ica');
+paths.step_03_for_ica_root   = fullfile(paths.out_root, '03_for_ica');
 
 ica_tag = "runica";
 if isfield(cfg, 'prep_04') && isfield(cfg.prep_04, 'ica_method')
@@ -634,9 +644,9 @@ if isfield(cfg.paths, 'branch_by_ica_method') && cfg.paths.branch_by_ica_method
     suffix = "_" + ica_tag;
 end
 
-paths.step_04_root = fullfile(paths.derivatives_root, "04_after_ica"      + suffix);
-paths.step_05_root = fullfile(paths.derivatives_root, "05_until_epoching" + suffix);
-paths.step_06_root = fullfile(paths.derivatives_root, "06_epoched"        + suffix);
+paths.step_04_root = fullfile(paths.out_root, "04_after_ica"      + suffix);
+paths.step_05_root = fullfile(paths.out_root, "05_until_epoching" + suffix);
+paths.step_06_root = fullfile(paths.out_root, "06_epoched"        + suffix);
 
 ensure_dir_impl(paths.step_02_root);
 ensure_dir_impl(paths.step_03_until_ica_root);
@@ -659,7 +669,7 @@ ensure_dir_impl(paths.prep_04_out_dir);
 ensure_dir_impl(paths.prep_05_out_dir);
 ensure_dir_impl(paths.prep_06_out_dir);
 
-paths.checks_root = fullfile(paths.derivatives_root, 'checks');
+paths.checks_root = fullfile(paths.out_root, 'checks');
 ensure_dir_impl(paths.checks_root);
 
 paths.checks_ica_components_root = fullfile(paths.checks_root, 'ica_comps');
@@ -673,7 +683,7 @@ ensure_dir_impl(paths.checks_ica_components_subj_dir);
 ensure_dir_impl(paths.checks_ica_components_rej_dir);
 ensure_dir_impl(paths.checks_ica_components_edge_dir);
 
-paths.qc_root = fullfile(paths.derivatives_root, 'qc');
+paths.qc_root = fullfile(paths.out_root, 'qc');
 ensure_dir_impl(paths.qc_root);
 
 paths.qc_dir = fullfile(paths.qc_root, paths.subj_label);
@@ -1777,61 +1787,38 @@ if EEG_in.trials < 1 || isempty(idx_eeg)
     return;
 end
 
-if ~isfield(EEG_in, 'data') || isempty(EEG_in.data) || ndims(EEG_in.data) < 3 || size(EEG_in.data,2) < 1
-    warning('apply_fallback_epoch_rejection: invalid or empty epoched data -> skipping rejection.');
-    return;
-end
-
 bad_faster = false(EEG_in.trials, 1);
 bad_ptp    = false(EEG_in.trials, 1);
 
 if isfield(step_cfg, 'use_faster') && step_cfg.use_faster && exist('epoch_properties', 'file') == 2
-    try
-        props = epoch_properties(EEG_in, idx_eeg);
+    props = epoch_properties(EEG_in, idx_eeg);
 
-        if ~isempty(props) && size(props, 1) ~= EEG_in.trials && size(props, 2) == EEG_in.trials
-            props = props.';
-        end
+    if ~isempty(props) && size(props, 1) ~= EEG_in.trials && size(props, 2) == EEG_in.trials
+        props = props.';
+    end
 
-        if ~isempty(props) && size(props, 1) == EEG_in.trials
-            if info.robust_z
-                med = median(props, 1, 'omitnan');
-                madv = median(abs(props - med), 1, 'omitnan');
-                denom = 1.4826 .* madv;
-                denom(denom == 0 | isnan(denom)) = Inf;
-                zmat = (props - med) ./ denom;
-            else
-                mu = mean(props, 1, 'omitnan');
-                sd = std(props, 0, 1, 'omitnan');
-                sd(sd == 0 | isnan(sd)) = Inf;
-                zmat = (props - mu) ./ sd;
-            end
-
-            bad_faster = any(abs(zmat) > step_cfg.faster_z_thresh, 2);
+    if ~isempty(props) && size(props, 1) == EEG_in.trials
+        if info.robust_z
+            med = median(props, 1, 'omitnan');
+            madv = median(abs(props - med), 1, 'omitnan');
+            denom = 1.4826 .* madv;
+            denom(denom == 0 | isnan(denom)) = Inf;
+            zmat = (props - med) ./ denom;
         else
-            warning('apply_fallback_epoch_rejection: epoch_properties returned unexpected size -> ignoring FASTER part.');
+            mu = mean(props, 1, 'omitnan');
+            sd = std(props, 0, 1, 'omitnan');
+            sd(sd == 0 | isnan(sd)) = Inf;
+            zmat = (props - mu) ./ sd;
         end
 
-    catch me
-        warning('apply_fallback_epoch_rejection: epoch_properties failed -> continuing without FASTER part. %s', me.message);
-        bad_faster = false(EEG_in.trials, 1);
+        bad_faster = any(abs(zmat) > step_cfg.faster_z_thresh, 2);
     end
 end
 
 if isfield(step_cfg, 'use_ptp') && step_cfg.use_ptp
-    try
-        data = double(EEG_in.data(idx_eeg, :, :));
-        ptp  = squeeze(max(data, [], 2) - min(data, [], 2));
-
-        if isvector(ptp)
-            ptp = ptp(:).';
-        end
-
-        bad_ptp = any(ptp > step_cfg.ptp_uV_thresh, 1)';
-    catch me
-        warning('apply_fallback_epoch_rejection: PTP computation failed. %s', me.message);
-        bad_ptp = false(EEG_in.trials, 1);
-    end
+    data = double(EEG_in.data(idx_eeg, :, :));
+    ptp  = squeeze(max(data, [], 2) - min(data, [], 2));
+    bad_ptp = any(ptp > step_cfg.ptp_uV_thresh, 1)';
 end
 
 bad = bad_faster | bad_ptp;
@@ -2608,63 +2595,40 @@ if isempty(idx_eeg)
     return;
 end
 
-if ~isfield(EEG, 'data') || isempty(EEG.data) || ndims(EEG.data) < 3 || size(EEG.data,2) < 1
-    warning('apply_shared_epoch_rejection: invalid or empty epoched data -> skipping FASTER/shared rejection.');
-    return;
-end
-
 bad_faster = false(EEG.trials, 1);
 bad_ptp    = false(EEG.trials, 1);
 
 have_faster = (exist('epoch_properties', 'file') == 2);
 
 if reject_cfg.use_faster && have_faster
-    try
-        props = epoch_properties(EEG, idx_eeg);
+    props = epoch_properties(EEG, idx_eeg);
 
-        if ~isempty(props) && size(props, 1) ~= EEG.trials && size(props, 2) == EEG.trials
-            props = props.';
-        end
+    if ~isempty(props) && size(props, 1) ~= EEG.trials
+        props = props.';
+    end
 
-        if ~isempty(props) && size(props, 1) == EEG.trials
-            if reject_cfg.use_robust_z
-                med = median(props, 1, 'omitnan');
-                madv = median(abs(props - med), 1, 'omitnan');
-                denom = 1.4826 .* madv;
-                denom(denom == 0 | isnan(denom)) = Inf;
-                zmat = (props - med) ./ denom;
-            else
-                mu = mean(props, 1, 'omitnan');
-                sd = std(props, 0, 1, 'omitnan');
-                sd(sd == 0 | isnan(sd)) = Inf;
-                zmat = (props - mu) ./ sd;
-            end
-
-            bad_faster = any(abs(zmat) > reject_cfg.faster_z, 2);
+    if size(props, 1) == EEG.trials
+        if reject_cfg.use_robust_z
+            med = median(props, 1, 'omitnan');
+            madv = median(abs(props - med), 1, 'omitnan');
+            denom = 1.4826 .* madv;
+            denom(denom == 0 | isnan(denom)) = Inf;
+            zmat = (props - med) ./ denom;
         else
-            warning('apply_shared_epoch_rejection: epoch_properties returned unexpected size -> ignoring FASTER part.');
+            mu = mean(props, 1, 'omitnan');
+            sd = std(props, 0, 1, 'omitnan');
+            sd(sd == 0 | isnan(sd)) = Inf;
+            zmat = (props - mu) ./ sd;
         end
 
-    catch me
-        warning('apply_shared_epoch_rejection: epoch_properties failed -> continuing without FASTER part. %s', me.message);
-        bad_faster = false(EEG.trials, 1);
+        bad_faster = any(abs(zmat) > reject_cfg.faster_z, 2);
     end
 end
 
 if reject_cfg.use_ptp
-    try
-        data = double(EEG.data(idx_eeg, :, :));
-        ptp  = squeeze(max(data, [], 2) - min(data, [], 2));
-
-        if isvector(ptp)
-            ptp = ptp(:).';
-        end
-
-        bad_ptp = any(ptp > reject_cfg.ptp_uV_thresh, 1)';
-    catch me
-        warning('apply_shared_epoch_rejection: PTP computation failed. %s', me.message);
-        bad_ptp = false(EEG.trials, 1);
-    end
+    data = double(EEG.data(idx_eeg, :, :));
+    ptp  = squeeze(max(data, [], 2) - min(data, [], 2));
+    bad_ptp = any(ptp > reject_cfg.ptp_uV_thresh, 1)';
 end
 
 bad = bad_faster | bad_ptp;
@@ -2963,16 +2927,15 @@ end
 
 function raw_qc_behavior_vs_eeg_and_write_csv_impl(beh, EEG, subj_id, bids_base, out_dir, varargin)
 
-if nargin < 5
-    error('raw_qc_behavior_vs_eeg_and_write_csv_impl requires at least 5 inputs: beh, EEG, subj_id, bids_base, out_dir.');
+arguments
+    beh table
+    EEG struct
+    subj_id
+    bids_base
+    out_dir
 end
-
-if ~istable(beh)
-    error('beh must be a table.');
-end
-
-if ~isstruct(EEG)
-    error('EEG must be a struct.');
+arguments (Repeating)
+    varargin
 end
 
 subj_id   = char(string(subj_id));
@@ -2998,9 +2961,6 @@ if numel(varargin) == 1 && isstruct(varargin{1})
         opts.(fields{k}) = user_opts.(fields{k});
     end
 elseif ~isempty(varargin)
-    if mod(numel(varargin), 2) ~= 0
-        error('Optional inputs must be either one struct or name/value pairs.');
-    end
     for k = 1:2:numel(varargin)
         key = string(varargin{k});
         opts.(char(key)) = varargin{k + 1};
@@ -3146,6 +3106,11 @@ for r = 1:height(T)
 end
 
 fclose(fid);
+end
+
+function s = escape_semicolons_impl(s)
+s = string(s);
+s = replace(s, ";", ",");
 end
 
 function [tokens, times_s] = build_beh_key_token_stream_with_time_impl(beh, opts)

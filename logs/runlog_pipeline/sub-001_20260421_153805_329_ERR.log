@@ -1,0 +1,34 @@
+[2026-04-21 15:38:05] --- START sub-001 ---
+[2026-04-21 15:38:06] EEGLAB initialized.
+[2026-04-21 15:38:06] BIDS context: session=01 | task=baseline | bids_ses_dir=Z:\pb\KPP_KPN_joined\Aperiodic\Saskia\sourcedata\sub-001\ses-01
+[2026-04-21 15:38:06] Step 01: BIDS formatting -> skipped by preplan (step disabled)
+[2026-04-21 15:38:06] Step 02: triggerfix -> skipped by preplan (step disabled)
+[2026-04-21 15:38:06] Clearing step folder before rerun: Z:\pb\KPP_KPN_joined\Aperiodic\Saskia\derivatives\02_until_ica\sub-001
+[2026-04-21 15:38:07] Step 03: until ICA
+[2026-04-21 15:38:07] prep_03_until_ica: BIDS fallback: using vhdr=Z:\pb\KPP_KPN_joined\Aperiodic\Saskia\sourcedata\sub-001\ses-01\eeg\sub-001_ses-01_task-classical_eeg.vhdr
+[2026-04-21 15:38:07] prep03_untilica: START sub-001 | sub-001_ses-01_task-classical_eeg | input_source=bids_vhdr | input=Z:\pb\KPP_KPN_joined\Aperiodic\Saskia\sourcedata\sub-001\ses-01\eeg\sub-001_ses-01_task-classical_eeg.vhdr
+[2026-04-21 15:38:09] Loaded BrainVision: Z:\pb\KPP_KPN_joined\Aperiodic\Saskia\sourcedata\sub-001\ses-01\eeg\sub-001_ses-01_task-classical_eeg.vhdr
+[2026-04-21 15:38:20] prep03_untilica: AFTER interpolation channel counts EEG=59 | EOG=4 | AUX=3
+[2026-04-21 15:38:30] Saved set: Z:\pb\KPP_KPN_joined\Aperiodic\Saskia\derivatives\02_until_ica\sub-001\sub-001_ses-01_task-classical_eeg_preica.set
+[2026-04-21 15:38:30] prep03_untilica: saved preica: Z:\pb\KPP_KPN_joined\Aperiodic\Saskia\derivatives\02_until_ica\sub-001\sub-001_ses-01_task-classical_eeg_preica.set
+[2026-04-21 15:38:32] ERROR: Unable to perform assignment because the indices on the left side are not compatible with the size of the right side.
+[2026-04-21 15:38:32] Unable to perform assignment because the indices on the left side are not compatible with the size of the right side.
+
+Error in epoch_properties (line 26)
+		ampdiffs(t,u) = max(EEG.data(t,:,u)) - min(EEG.data(t,:,u));
+  ^^^^^^^^^^^^^
+Error in eeg_pipeline_helpers>apply_shared_epoch_rejection_impl (line 2594)
+    props = epoch_properties(EEG, idx_eeg);
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Error in eeg_prep03_untilica (line 630)
+        [ica_prep_eeg, rej_info] = helpers.apply_shared_epoch_rejection( ...
+                                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Error in eeg_pipeline_helpers>run_step_with_logging_impl (line 932)
+    step_out = feval(cfg.step_fns.(step_name), subj_id, cfg, paths, helpers);
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Error in eeg_pipeline_helpers>run_one_subject_impl (line 879)
+    run_step_with_logging_impl( ...
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Error in run_eeg_pipeline (line 360)
+        status(i) = helpers.run_one_subject(subject_plans(i), cfg);
+                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^

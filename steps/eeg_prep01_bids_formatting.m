@@ -3,7 +3,7 @@ function step_out = eeg_prep01_bids_formatting(subj_id, cfg, paths, helpers)
 % Step 01 of the unified EEG pipeline.
 %
 % WHAT THIS STEP DOES
-%   - Finds raw EEG files for ONE subject
+%   - Finds fresh/raw EEG files for ONE subject
 %   - Copies/renames them into BIDS structure
 %   - Optionally copies behavioral logs into /beh
 %   - Optionally copies one EEG-side log into /eeg as *_events.log
@@ -30,15 +30,37 @@ try
     task_label    = char(string(step_cfg.task_label));
     session_label = char(string(step_cfg.session_label));
 
-    do_eeg  = logical(step_cfg.do_eeg);
-    do_beh  = logical(step_cfg.do_beh);
+    do_eeg = logical(step_cfg.do_eeg);
+    do_beh = logical(step_cfg.do_beh);
 
-    try_export_bids             = logical(step_cfg.try_eeglab_bids_export);
-    write_readme_if_needed      = logical(step_cfg.write_readme_if_exporter_did_not);
-    copy_sidecar_log_to_events  = logical(step_cfg.copy_eeg_sidecar_log_to_events);
+    try_export_bids            = logical(step_cfg.try_eeglab_bids_export);
+    write_readme_if_needed     = logical(step_cfg.write_readme_if_exporter_did_not);
+    copy_sidecar_log_to_events = logical(step_cfg.copy_eeg_sidecar_log_to_events);
 
-    raw_eeg_dir = char(string(step_cfg.raw_eeg_dir));
-    raw_beh_dir = char(string(step_cfg.raw_beh_dir));
+    % ---------------------------------------------------------------------
+    % Resolve input roots
+    % Priority:
+    %   1) subject-specific paths built by runner
+    %   2) cfg.paths.*
+    %   3) compatibility aliases in cfg.prep_01
+    % ---------------------------------------------------------------------
+    if isfield(paths, 'source_eeg_root') && strlength(string(paths.source_eeg_root)) > 0
+        raw_eeg_dir = char(string(paths.source_eeg_root));
+    elseif isfield(cfg, 'paths') && isfield(cfg.paths, 'source_eeg_root') && ...
+            strlength(string(cfg.paths.source_eeg_root)) > 0
+        raw_eeg_dir = char(string(cfg.paths.source_eeg_root));
+    else
+        raw_eeg_dir = char(string(step_cfg.raw_eeg_dir));
+    end
+
+    if isfield(paths, 'source_beh_root') && strlength(string(paths.source_beh_root)) > 0
+        raw_beh_dir = char(string(paths.source_beh_root));
+    elseif isfield(cfg, 'paths') && isfield(cfg.paths, 'source_beh_root') && ...
+            strlength(string(cfg.paths.source_beh_root)) > 0
+        raw_beh_dir = char(string(cfg.paths.source_beh_root));
+    else
+        raw_beh_dir = char(string(step_cfg.raw_beh_dir));
+    end
 
     re_vhdr      = char(string(step_cfg.raw_eeg_regex));
     re_bids_vhdr = char(string(step_cfg.existing_bids_vhdr_regex));
@@ -51,27 +73,27 @@ try
     beh_dir = fullfile(paths.bids_ses_dir, 'beh');
 
     helpers.log_msg_default('Step 01 start for sub-%s', subj_id);
-    helpers.log_msg_default('Target session folder: %s', paths.bids_ses_dir);
+    helpers.log_msg_default('Step 01 source_eeg_root: %s', raw_eeg_dir);
+    helpers.log_msg_default('Step 01 source_beh_root: %s', raw_beh_dir);
+    helpers.log_msg_default('Step 01 bids_root      : %s', bids_root);
+    helpers.log_msg_default('Target session folder : %s', paths.bids_ses_dir);
 
     % ---------------------------------------------------------------------
     % Basic checks / folder creation
     % ---------------------------------------------------------------------
-    if cfg.io.dry_run
-        helpers.log_msg_default('DRY RUN: would ensure BIDS root exists: %s', bids_root);
-        helpers.log_msg_default('DRY RUN: would ensure session folder exists: %s', paths.bids_ses_dir);
-    else
-        helpers.ensure_dir(bids_root);
-        helpers.ensure_dir(paths.bids_ses_dir);
-    end
+    helpers.ensure_dir(bids_root);
+    helpers.ensure_dir(paths.bids_ses_dir);
 
     if do_eeg && ~exist(raw_eeg_dir, 'dir')
         error('Step 01: raw EEG directory does not exist: %s', raw_eeg_dir);
     end
 
-    if do_beh && ~exist(raw_beh_dir, 'dir')
-        helpers.log_msg_default('WARNING: project-specific behavior folder missing: %s', raw_beh_dir);
-        helpers.log_msg_default('Behavior copy disabled for sub-%s.', subj_id);
-        do_beh = false;
+    if do_beh
+        if strlength(string(raw_beh_dir)) == 0 || exist(raw_beh_dir, 'dir') ~= 7
+            helpers.log_msg_default('WARNING: project-specific behavior folder missing or empty: %s', raw_beh_dir);
+            helpers.log_msg_default('Behavior copy disabled for sub-%s.', subj_id);
+            do_beh = false;
+        end
     end
 
     wrote_description = false;
@@ -145,11 +167,7 @@ try
 
             bids_base = sprintf('%s_%s_task-%s%s', sub_label, ses_label, task_label_this_file, run_tag);
 
-            if cfg.io.dry_run
-                helpers.log_msg_default('DRY RUN: would ensure EEG folder exists: %s', eeg_dir);
-            else
-                helpers.ensure_dir(eeg_dir);
-            end
+            helpers.ensure_dir(eeg_dir);
 
             [~, src_base_noext] = fileparts(src_vhdr);
             src_vmrk = [src_base_noext '.vmrk'];
@@ -180,23 +198,16 @@ try
             dst_vmrk = fullfile(eeg_dir, dst_vmrk_name);
             dst_data = fullfile(eeg_dir, dst_data_name);
 
-            helpers.log_msg_default('Copying BrainVision triplet for sub-%s: %s -> %s', ...
+            helpers.log_msg_default( ...
+                'Copying BrainVision triplet for sub-%s: %s -> %s', ...
                 subj_id, src_vhdr, dst_vhdr_name);
 
-            if cfg.io.dry_run
-                helpers.log_msg_default('DRY RUN: would copy %s', fullfile(raw_eeg_dir, src_vhdr));
-                helpers.log_msg_default('DRY RUN: would copy %s', fullfile(raw_eeg_dir, src_vmrk));
-                helpers.log_msg_default('DRY RUN: would copy %s', fullfile(raw_eeg_dir, src_data));
-                helpers.log_msg_default('DRY RUN: would rewrite internal BrainVision links to %s / %s / %s', ...
-                    dst_data_name, dst_vmrk_name, dst_data_name);
-            else
-                copyfile(fullfile(raw_eeg_dir, src_vhdr), dst_vhdr);
-                copyfile(fullfile(raw_eeg_dir, src_vmrk), dst_vmrk);
-                copyfile(fullfile(raw_eeg_dir, src_data), dst_data);
+            copyfile(fullfile(raw_eeg_dir, src_vhdr), dst_vhdr);
+            copyfile(fullfile(raw_eeg_dir, src_vmrk), dst_vmrk);
+            copyfile(fullfile(raw_eeg_dir, src_data), dst_data);
 
-                rewrite_vhdr_links_impl(dst_vhdr, dst_data_name, dst_vmrk_name);
-                rewrite_vmrk_links_impl(dst_vmrk, dst_data_name);
-            end
+            rewrite_vhdr_links_impl(dst_vhdr, dst_data_name, dst_vmrk_name);
+            rewrite_vmrk_links_impl(dst_vmrk, dst_data_name);
 
             % -------------------------------------------------------------
             % PROJECT-SPECIFIC OPTIONAL LOG COPY
@@ -212,13 +223,7 @@ try
                     [~, newest_ix] = max([log_candidates.datenum]);
                     src_log = fullfile(log_candidates(newest_ix).folder, log_candidates(newest_ix).name);
                     dst_log = fullfile(eeg_dir, [bids_base '_events.log']);
-
-                    if cfg.io.dry_run
-                        helpers.log_msg_default('DRY RUN: would copy project-specific sidecar log: %s -> %s', ...
-                            src_log, dst_log);
-                    else
-                        copyfile(src_log, dst_log);
-                    end
+                    copyfile(src_log, dst_log);
                 else
                     helpers.log_msg_default('WARNING: no project-specific CF sidecar log found for sub-%s', subj_id);
                 end
@@ -252,11 +257,7 @@ try
         % It is expected to stay OFF by default for normal users.
         % -------------------------------------------------------------
         if do_beh
-            if cfg.io.dry_run
-                helpers.log_msg_default('DRY RUN: would ensure behavior folder exists: %s', beh_dir);
-            else
-                helpers.ensure_dir(beh_dir);
-            end
+            helpers.ensure_dir(beh_dir);
 
             beh_candidates = [ ...
                 dir(fullfile(raw_beh_dir, sprintf('CF_%s-*.log', subj_id))); ...
@@ -285,19 +286,14 @@ try
                 src_beh = fullfile(beh_candidates(b).folder, beh_name);
                 dst_beh = fullfile(beh_dir, [beh_base '_beh.' beh_ext]);
 
-                if cfg.io.dry_run
-                    helpers.log_msg_default('DRY RUN: would copy project-specific behavior file: %s -> %s', ...
-                        src_beh, dst_beh);
-                else
-                    copyfile(src_beh, dst_beh);
-                end
+                copyfile(src_beh, dst_beh);
             end
         end
 
         % -------------------------------------------------------------
         % Optional EEGLAB BIDS export
         % -------------------------------------------------------------
-        if do_eeg && try_export_bids && ~cfg.io.dry_run
+        if do_eeg && try_export_bids
             try
                 EEG = pop_loadbv(eeg_dir, [bids_base '_eeg.vhdr']);
                 EEG = eeg_checkset(EEG);
@@ -332,20 +328,16 @@ try
     if write_readme_if_needed && ~wrote_description
         readme_path = fullfile(bids_root, 'README');
 
-        if cfg.io.dry_run
-            helpers.log_msg_default('DRY RUN: would write README: %s', readme_path);
-        else
-            fid = fopen(readme_path, 'w');
-            if fid > 0
-                fprintf(fid, 'BIDS dataset organized by eeg_prep01_bids_formatting.\n');
-                fprintf(fid, 'Raw BrainVision files were copied and renamed into BIDS structure.\n');
-                if do_beh
-                    fprintf(fid, 'Project-specific CF behavior files were copied into /beh when available.\n');
-                else
-                    fprintf(fid, 'Project-specific behavior copy was disabled.\n');
-                end
-                fclose(fid);
+        fid = fopen(readme_path, 'w');
+        if fid > 0
+            fprintf(fid, 'BIDS dataset organized by eeg_prep01_bids_formatting.\n');
+            fprintf(fid, 'Raw BrainVision files were copied and renamed into BIDS structure.\n');
+            if do_beh
+                fprintf(fid, 'Project-specific CF behavior files were copied into /beh when available.\n');
+            else
+                fprintf(fid, 'Project-specific behavior copy was disabled.\n');
             end
+            fclose(fid);
         end
     end
 
@@ -422,4 +414,4 @@ cleanup_obj = onCleanup(@() fclose(fid)); %#ok<NASGU>
 for i = 1:numel(lines)
     fprintf(fid, '%s\n', lines{i});
 end
-endnd
+end

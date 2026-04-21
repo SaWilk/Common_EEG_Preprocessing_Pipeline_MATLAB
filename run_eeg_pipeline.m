@@ -15,15 +15,16 @@ function run_eeg_pipeline(varargin)
 % INPUT
 %   Required:
 %     - eeg_pipeline_config.m in the same folder
-%     - eeg_pipeline_helpers.m in the same folder
-%     - external step functions on the MATLAB path or in this folder
+%     - eeg_pipeline_helpers.m on the MATLAB path
+%     - external step functions on the MATLAB path or in ./steps
 %
 %   Optional call-time subject override:
 %     run_eeg_pipeline('211','212','213')
 %     run_eeg_pipeline({'211','212','213'})
 %
 % OUTPUT
-%   - Preprocessed EEG derivatives under cfg.paths.out_root
+%   - Step 01 BIDS raw output under cfg.paths.bids_root
+%   - Steps 02-06 derivatives under cfg.paths.derivatives_root
 %   - Logs under <runner_folder>/logs/runlog_pipeline/
 %
 % NOTES
@@ -58,7 +59,7 @@ if exist(fullfile(root_dir, 'eeg_pipeline_config.m'), 'file') ~= 2
 end
 
 if exist('eeg_pipeline_helpers', 'file') ~= 2
-    error('Helper file not found on path. Expected in: %s', steps_dir);
+    error('Helper file not found on path. Expected in root or steps: %s | %s', root_dir, steps_dir);
 end
 
 % =========================================================================
@@ -81,8 +82,7 @@ end
 % =========================================================================
 % MASTER LOG
 % =========================================================================
-if ~isfield(cfg, 'paths') || ~isfield(cfg.paths, 'logs_dir') || ...
-        strlength(string(cfg.paths.logs_dir)) == 0
+if ~isfield(cfg.paths, 'logs_dir') || strlength(string(cfg.paths.logs_dir)) == 0
     cfg.paths.logs_dir = fullfile(cfg.root_dir, 'logs', 'runlog_pipeline');
 end
 
@@ -94,8 +94,8 @@ end
 master_log = fullfile( ...
     logs_dir, ...
     sprintf('%s_%s.log', ...
-        char(string(cfg.constants.log_prefix_master)), ...
-        datestr(now, char(string(cfg.constants.datestr_master)))));
+    char(string(cfg.constants.log_prefix_master)), ...
+    datestr(now, char(string(cfg.constants.datestr_master)))));
 
 helpers = eeg_pipeline_helpers(master_log);
 
@@ -125,8 +125,10 @@ helpers.log_msg(master_log, ...
     char(string(cfg.env.slurm_job_id)), ...
     char(string(cfg.env.slurm_cluster)));
 helpers.log_msg(master_log, 'profile          : %s', char(string(cfg.paths.profile)));
+helpers.log_msg(master_log, 'source_eeg_root  : %s', char(string(cfg.paths.source_eeg_root)));
+helpers.log_msg(master_log, 'source_beh_root  : %s', char(string(cfg.paths.source_beh_root)));
 helpers.log_msg(master_log, 'bids_root        : %s', char(string(cfg.paths.bids_root)));
-helpers.log_msg(master_log, 'out_root         : %s', char(string(cfg.paths.out_root)));
+helpers.log_msg(master_log, 'derivatives_root : %s', char(string(cfg.paths.derivatives_root)));
 helpers.log_msg(master_log, 'task_label       : %s', char(string(cfg.bids.task_label)));
 helpers.log_msg(master_log, 'session_label    : %s', char(string(cfg.bids.session_label)));
 helpers.log_msg(master_log, 'overwrite_mode   : %s', char(string(cfg.io.overwrite_mode)));
@@ -144,13 +146,13 @@ helpers.log_msg(master_log, ...
     cfg.prep_05.iclabel_edge_margin);
 
 helpers.log_msg(master_log, ...
-    ['step06: ref=%s | epoch_mode=%s | epoch=[%.3f %.3f] s | regular_len=%g s | ' ...
-     'baseline_apply=%d | baseline=[%d %d] ms | faster_z=%.2f | robust=%d'], ...
+    ['step06: ref=%s | epoch=[%.3f %.3f] s | hard_thresh_apply=%d | hard_thresh=%.1f uV | ' ...
+    'baseline_apply=%d | baseline=[%d %d] ms | faster_z=%.2f | robust=%d'], ...
     char(string(cfg.prep_06.reference_mode)), ...
-    char(string(cfg.prep_06.epoching_mode)), ...
     cfg.prep_06.epoch_start_s, ...
     cfg.prep_06.epoch_end_s, ...
-    cfg.prep_06.regepoch_length_sec, ...
+    cfg.prep_06.do_initial_hard_threshold_rejection, ...
+    cfg.prep_06.initial_hard_threshold_uv, ...
     cfg.prep_06.do_baseline_correction, ...
     cfg.prep_06.base_start_ms, ...
     cfg.prep_06.base_end_ms, ...
@@ -172,8 +174,8 @@ helpers.log_msg(master_log, 'Found %d subject(s).', numel(sub_ids));
 % =========================================================================
 % PARALLEL SETUP
 % =========================================================================
-use_parallel     = helpers.resolve_parallel_enable(cfg);
-pool_obj         = [];
+use_parallel      = helpers.resolve_parallel_enable(cfg);
+pool_obj          = [];
 pool_started_here = false;
 
 if use_parallel
@@ -212,8 +214,21 @@ if use_parallel
 
         if ~isempty(pool_obj) && ~cfg.parallel.pool_is_thread
             try
-                pctRunOnAll addpath(root_dir);
-                pctRunOnAll addpath(steps_dir);
+                if ~isempty(pool_obj) && ~cfg.parallel.pool_is_thread
+                    try
+                        root_dir_esc  = strrep(root_dir,  '''', '''''');
+                        steps_dir_esc = strrep(steps_dir, '''', '''''');
+
+                        pctRunOnAll(sprintf('addpath(''%s'');', root_dir_esc));
+                        pctRunOnAll(sprintf('addpath(''%s'');', steps_dir_esc));
+
+                        helpers.log_msg(master_log, 'Worker paths updated: root + steps');
+                    catch me_path
+                        helpers.log_msg(master_log, ...
+                            'WARNING: Could not push paths to workers (%s). Continuing.', ...
+                            me_path.message);
+                    end
+                end
                 helpers.log_msg(master_log, 'Worker paths updated: root + steps');
             catch me_path
                 helpers.log_msg(master_log, ...
