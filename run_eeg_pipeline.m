@@ -1,7 +1,7 @@
 % =========================================================================
 % FILE: run_eeg_pipeline.m
 % =========================================================================
-function run_eeg_pipeline(varargin)
+function run_eeg_pipeline(config_spec, varargin)
 % RUN_EEG_PIPELINE Unified EEG preprocessing runner.
 %
 % WHAT THIS SCRIPT DOES
@@ -54,28 +54,39 @@ if exist(steps_dir, 'dir') ~= 7
 end
 addpath(steps_dir);
 
-if exist(fullfile(root_dir, 'eeg_pipeline_config.m'), 'file') ~= 2
-    error('Config file not found in root: %s', fullfile(root_dir, 'eeg_pipeline_config.m'));
-end
-
 if exist('eeg_pipeline_helpers', 'file') ~= 2
     error('Helper file not found on path. Expected in root or steps: %s | %s', root_dir, steps_dir);
 end
 
+if nargin < 1 || isempty(config_spec)
+    error(['You must pass the config function as first argument, e.g. ' ...
+        'run_eeg_pipeline(''eeg_pipeline_config_baseline'').']);
+end
+
+% =========================================================================
+% RESOLVE CONFIG FUNCTION
+% =========================================================================
+[config_fn, config_name, config_file] = resolve_config_function_local(config_spec, root_dir);
+
 % =========================================================================
 % LOAD CONFIG
 % =========================================================================
-cfg = eeg_pipeline_config();
+cfg = config_fn();
 
-cfg.this_file = this_file;
-cfg.root_dir  = root_dir;
+cfg.runner_file     = this_file;
+cfg.runner_root_dir = root_dir;
+cfg.config_name     = string(config_name);
+cfg.config_file     = string(config_file);
 
-if nargin > 0
-    if numel(varargin) == 1 && iscell(varargin{1})
-        cfg.subjects.list = varargin{1};
+if nargin > 1
+    subject_args = varargin;
+
+    if numel(subject_args) == 1 && iscell(subject_args{1})
+        cfg.subjects.list = subject_args{1};
     else
-        cfg.subjects.list = varargin;
+        cfg.subjects.list = subject_args;
     end
+
     cfg.subjects.min_id = [];
 end
 
@@ -94,8 +105,8 @@ end
 master_log = fullfile( ...
     logs_dir, ...
     sprintf('%s_%s.log', ...
-    char(string(cfg.constants.log_prefix_master)), ...
-    datestr(now, char(string(cfg.constants.datestr_master)))));
+        char(string(cfg.constants.log_prefix_master)), ...
+        datestr(now, char(string(cfg.constants.datestr_master)))));
 
 helpers = eeg_pipeline_helpers(master_log);
 
@@ -113,8 +124,10 @@ end
 % =========================================================================
 helpers.log_msg(master_log, '=== PIPELINE START %s ===', datestr(now));
 helpers.log_msg(master_log, 'pipeline_name    : %s', char(pipeline_name));
+helpers.log_msg(master_log, 'config_name      : %s', char(string(cfg.config_name)));
+helpers.log_msg(master_log, 'config_file      : %s', char(string(cfg.config_file)));
 helpers.log_msg(master_log, 'step_prefix      : %s', char(string(cfg.pipeline.step_prefix)));
-helpers.log_msg(master_log, 'root_dir         : %s', root_dir);
+helpers.log_msg(master_log, 'runner_root_dir  : %s', root_dir);
 helpers.log_msg(master_log, 'steps_dir        : %s', steps_dir);
 helpers.log_msg(master_log, 'env_mode         : %s', char(string(cfg.env.mode)));
 helpers.log_msg(master_log, 'machine_kind     : %s', char(string(cfg.env.machine_kind)));
@@ -146,8 +159,9 @@ helpers.log_msg(master_log, ...
     cfg.prep_05.iclabel_edge_margin);
 
 helpers.log_msg(master_log, ...
-    ['step06: ref=%s | epoch=[%.3f %.3f] s | hard_thresh_apply=%d | hard_thresh=%.1f uV | ' ...
-    'baseline_apply=%d | baseline=[%d %d] ms | faster_z=%.2f | robust=%d'], ...
+    ['step06: mode=%s | ref=%s | epoch=[%.3f %.3f] s | hard_thresh_apply=%d | hard_thresh=%.1f uV | ' ...
+     'baseline_apply=%d | baseline=[%d %d] ms | max_reject_prop=%.3f'], ...
+    char(string(cfg.prep_06.epoching_mode)), ...
     char(string(cfg.prep_06.reference_mode)), ...
     cfg.prep_06.epoch_start_s, ...
     cfg.prep_06.epoch_end_s, ...
@@ -156,8 +170,7 @@ helpers.log_msg(master_log, ...
     cfg.prep_06.do_baseline_correction, ...
     cfg.prep_06.base_start_ms, ...
     cfg.prep_06.base_end_ms, ...
-    cfg.prep_06.faster_z_thresh, ...
-    cfg.prep_06.faster_use_robust_z);
+    cfg.prep_06.max_reject_prop);
 
 % =========================================================================
 % MASTER TOOLBOX INIT
@@ -214,21 +227,8 @@ if use_parallel
 
         if ~isempty(pool_obj) && ~cfg.parallel.pool_is_thread
             try
-                if ~isempty(pool_obj) && ~cfg.parallel.pool_is_thread
-                    try
-                        root_dir_esc  = strrep(root_dir,  '''', '''''');
-                        steps_dir_esc = strrep(steps_dir, '''', '''''');
-
-                        pctRunOnAll(sprintf('addpath(''%s'');', root_dir_esc));
-                        pctRunOnAll(sprintf('addpath(''%s'');', steps_dir_esc));
-
-                        helpers.log_msg(master_log, 'Worker paths updated: root + steps');
-                    catch me_path
-                        helpers.log_msg(master_log, ...
-                            'WARNING: Could not push paths to workers (%s). Continuing.', ...
-                            me_path.message);
-                    end
-                end
+                pctRunOnAll addpath(root_dir);
+                pctRunOnAll addpath(steps_dir);
                 helpers.log_msg(master_log, 'Worker paths updated: root + steps');
             catch me_path
                 helpers.log_msg(master_log, ...
@@ -383,4 +383,64 @@ if n_fail > 0
     error('Pipeline finished with failures (%d/%d). See logs.', n_fail, n_sub);
 end
 
+end
+
+function [config_fn, config_name, config_file] = resolve_config_function_local(config_spec, root_dir)
+config_file = "";
+
+if isa(config_spec, 'function_handle')
+    config_fn   = config_spec;
+    config_name = func2str(config_spec);
+    config_file = which(config_name);
+    return;
+end
+
+config_text = char(string(config_spec));
+config_text = strtrim(config_text);
+
+if isempty(config_text)
+    error('Config argument is empty.');
+end
+
+config_dir = '';
+[maybe_dir, maybe_name, maybe_ext] = fileparts(config_text);
+
+if ~isempty(maybe_dir)
+    config_dir  = maybe_dir;
+    config_name = maybe_name;
+else
+    config_name = config_text;
+    if endsWith(config_name, '.m', 'IgnoreCase', true)
+        [~, config_name] = fileparts(config_name);
+    end
+end
+
+if ~isempty(config_dir)
+    if exist(config_dir, 'dir') ~= 7
+        error('Config directory not found: %s', config_dir);
+    end
+    addpath(config_dir);
+end
+
+if exist(config_name, 'file') ~= 2
+    candidate_in_root = fullfile(root_dir, [config_name '.m']);
+    if exist(candidate_in_root, 'file') == 2
+        addpath(root_dir);
+    end
+end
+
+if exist(config_name, 'file') ~= 2
+    if ~isempty(maybe_ext)
+        error('Config file not found: %s', config_text);
+    else
+        error('Config function not found on path: %s', config_name);
+    end
+end
+
+config_fn   = str2func(config_name);
+config_file = which(config_name);
+
+if isempty(config_file)
+    error('Could not resolve config function file for: %s', config_name);
+end
 end

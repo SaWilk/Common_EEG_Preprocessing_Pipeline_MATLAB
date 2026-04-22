@@ -45,7 +45,7 @@ cfg.constants.log_prefix_master = "run_eeg_pipeline_aperiodic"; % master log fil
 
 cfg.bids = struct();
 cfg.bids.dataset_folder_name = "baseline"; % BIDS dataset folder name (if you have multiple datasets in teh same raw folder)
-cfg.bids.task_label          = "baseline";      % BIDS task label
+cfg.bids.task_label          = "baseline";   % BIDS task label of EEG dataset
 cfg.bids.session_label       = "01";         % BIDS session label
 
 % -------------------------------------------------------------------------
@@ -63,13 +63,13 @@ cfg.paths.profile_override = ""; % leave empty for automatic profile selection
 cfg.paths.profile_paths = struct();
 
 cfg.paths.profile_paths.pc = struct( ...
-    'source_eeg_root',  'K:\Wilken_Arbeitsordner\Raw_data\RTG_Metin_Nilay_EEG_Baseline', ...
+    'source_eeg_root',  'Z:\pb\KLPSY1\KLPSY1-RTG\PROOF - Data\Real\EEG\Baseline', ...
     'source_beh_root',  '', ...
     'bids_root',        'Z:\pb\KPP_KPN_joined\Aperiodic\Saskia\sourcedata', ...
     'derivatives_root', 'Z:\pb\KPP_KPN_joined\Aperiodic\Saskia\derivatives');
 
 cfg.paths.profile_paths.server_windows = struct( ...
-    'source_eeg_root',  '', ...
+    'source_eeg_root',  'Z:\pb\KLPSY1\KLPSY1-RTG\PROOF - Data\Real\EEG\Baseline', ...
     'source_beh_root',  '', ...
     'bids_root',         'Z:\pb\KPP_KPN_joined\Aperiodic\Saskia\sourcedata', ...
     'derivatives_root', 'Z:\pb\KPP_KPN_joined\Aperiodic\Saskia\derivatives');
@@ -78,7 +78,7 @@ cfg.paths.profile_paths.hpc_hummel = struct( ...
     'source_eeg_root',  '', ...
     'source_beh_root',  '', ...
     'bids_root',        fullfile('/beegfs/u/bbf7366/sourcedata', char(cfg.bids.dataset_folder_name)), ...
-    'derivatives_root', '/beegfs/u/bbf7366/derivatives/preprocessed_eeg');
+    'derivatives_root', '/beegfs/u/bbf7366/derivatives/preprocessed_eeg_baseline');
 
 cfg.paths.bids_root_override        = "";
 cfg.paths.derivatives_root_override = "";
@@ -244,22 +244,22 @@ cfg.steps.prep_01_bids_formatting = struct( ...
     'overwrite_if_older_than', "");
 
 cfg.steps.prep_02_triggerfix = struct( ...
-    'run', true, ...
+    'run', false, ...
     'overwrite_mode', "", ...
     'overwrite_if_older_than', "");
 
 cfg.steps.prep_03_until_ica = struct( ...
-    'run', true, ...
+    'run', false, ...
     'overwrite_mode', "if_older_than", ...
     'overwrite_if_older_than', "2026-03-15");
 
 cfg.steps.prep_04_ica = struct( ...
-    'run', true, ...
+    'run', false, ...
     'overwrite_mode', "delete", ...
     'overwrite_if_older_than', "");
 
 cfg.steps.prep_05_after_ica = struct( ...
-    'run', true, ...
+    'run', false, ...
     'overwrite_mode', "delete", ...
     'overwrite_if_older_than', "");
 
@@ -499,7 +499,7 @@ cfg.prep_03.shared_epoch_rejection.ptp_uV_thresh = 800;
 % =========================================================================
 cfg.prep_04 = struct();
 
-cfg.prep_04.ica_method                   = "amica";
+cfg.prep_04.ica_method                   = "runica"; %"runica" | "amica" -CURRENTLY BROKEN DO NOT USE WILL BE FIXED
 cfg.prep_04.use_extended_infomax         = true;
 cfg.prep_04.interrupt_ica                = 'off';
 cfg.prep_04.use_pca_rank_if_interpolated = true;
@@ -537,10 +537,46 @@ cfg.prep_05.qc_table_delimiter          = ';';
 % =========================================================================
 cfg.prep_06 = struct();
 
-cfg.prep_06.epoching_mode = "baseline"; % "baseline" | "event_locked"
-cfg.prep_06.reference_mode = "keep";
+% -------------------------------------------------------------------------
+% General mode selection
+% -------------------------------------------------------------------------
+cfg.prep_06.epoching_mode  = "baseline";   % "baseline" | "event_locked"
+cfg.prep_06.overwrite_mode = "";
 
-% baseline-specfic
+% -------------------------------------------------------------------------
+% Saving
+% -------------------------------------------------------------------------
+cfg.prep_06.save_final_only         = true;
+cfg.prep_06.save_intermediate_steps = false;
+cfg.prep_06.savemode                = 'twofiles';
+
+% -------------------------------------------------------------------------
+% Referencing in Step 06
+% Default is KEEP because rereferencing usually already happened in Step 03.
+% Only change this if you explicitly want a second rereference here.
+% -------------------------------------------------------------------------
+cfg.prep_06.reference_mode         = "keep";   % "keep" | "avg" | "mastoid"
+cfg.prep_06.mastoid_channel_labels = {'T9','T10'};
+
+% -------------------------------------------------------------------------
+% EVENT-LOCKED mode settings
+% Used only when cfg.prep_06.epoching_mode == "event_locked"
+% -------------------------------------------------------------------------
+cfg.prep_06.events_phase = { ...
+    'S 201','S 241', ...
+    'S 2021','S 2421','S 2022','S 2422', ...
+    'S 203','S 213','S 223','S 233','S 243', ...
+    'S 2041','S 2441','S 2042','S 2442','S 2043','S 2443', ...
+    'S 205','S 245' ...
+    };
+
+cfg.prep_06.epoch_start_s = -0.4;
+cfg.prep_06.epoch_end_s   =  2.6;
+
+% -------------------------------------------------------------------------
+% BASELINE mode settings
+% Used only when cfg.prep_06.epoching_mode == "baseline"
+% -------------------------------------------------------------------------
 cfg.prep_06.regepoch_length_sec = 10;
 cfg.prep_06.regepoch_step_sec   = 10;
 
@@ -549,82 +585,55 @@ cfg.prep_06.baseline_open_marker_prefixes   = {'S 1'};
 cfg.prep_06.baseline_closed_marker_prefixes = {'S 2'};
 cfg.prep_06.baseline_end_markers            = {'S 99'};
 
-% event-locked-specific
-cfg.prep_06.events_phase = { ...
-    'S 201','S 241', ...
-    'S 2021','S 2421','S 2022','S 2422', ...
-    'S 203','S 213','S 223','S 233','S 243', ...
-    'S 2041','S 2441','S 2042','S 2442','S 2043','S 2443', ...
-    'S 205','S 245' ...
-    };
-
-cfg.prep_06.epoch_start_s = -0.4;
-cfg.prep_06.epoch_end_s   =  2.6;
-
-% general
+% -------------------------------------------------------------------------
+% Artifact rejection
+% -------------------------------------------------------------------------
 cfg.prep_06.do_artifact_rejection               = true;
 cfg.prep_06.do_initial_hard_threshold_rejection = true;
 cfg.prep_06.initial_hard_threshold_uv           = 100;
 
-cfg.prep_06.do_baseline_correction = false;
-cfg.prep_06.base_start_ms          = -200;
-cfg.prep_06.base_end_ms            = 0;
-
-cfg.prep_06.max_reject_prop = 0;
-
-cfg.prep_06.split_non_eeg_channels = false;
-cfg.prep_06.eeg_only_keep_eog      = false;
-
-cfg.prep_06.shared_epoch_rejection = struct();
-cfg.prep_06.shared_epoch_rejection.enable        = true;
-cfg.prep_06.shared_epoch_rejection.use_faster    = true;
-cfg.prep_06.shared_epoch_rejection.faster_z      = 2;
-cfg.prep_06.shared_epoch_rejection.use_robust_z  = false;
-cfg.prep_06.shared_epoch_rejection.use_ptp       = true;
-cfg.prep_06.shared_epoch_rejection.ptp_uV_thresh = 300;
-cfg.prep_06.shared_epoch_rejection.max_reject_prop = 0;
-
-cfg.prep_06.save_final_only         = true;
-cfg.prep_06.save_intermediate_steps = false;
-cfg.prep_06.savemode                = 'twofiles';
-
-cfg.prep_06.reference_mode         = "keep"; % second spot where you can rereference
-cfg.prep_06.mastoid_channel_labels = {'T9','T10'};
-
-cfg.prep_06.epoch_start_s = -0.4;
-cfg.prep_06.epoch_end_s   =  2.6;
-
-cfg.prep_06.do_artifact_rejection               = true;
-cfg.prep_06.do_initial_hard_threshold_rejection = true;
-cfg.prep_06.initial_hard_threshold_uv           = 100;
-
+cfg.prep_06.use_faster                    = true;
 cfg.prep_06.faster_z_thresh               = 3;
 cfg.prep_06.faster_use_robust_z           = true;
 cfg.prep_06.faster_warn_if_reject_prop_gt = 0.25;
-cfg.prep_06.max_reject_prop               = 0.25;
 
+cfg.prep_06.use_ptp       = true;
+cfg.prep_06.ptp_uV_thresh = 600;
+
+% Subject-level exclusion after epoch rejection
+% 1 means disabled
+cfg.prep_06.max_reject_prop = 1;
+
+% -------------------------------------------------------------------------
+% Baseline correction
+% -------------------------------------------------------------------------
 cfg.prep_06.do_baseline_correction = false;
 cfg.prep_06.base_start_ms          = -200;
 cfg.prep_06.base_end_ms            = 0;
 
+% -------------------------------------------------------------------------
+% Final output channel splitting
+% -------------------------------------------------------------------------
+cfg.prep_06.split_non_eeg_channels = false;
+cfg.prep_06.eeg_only_keep_eog      = false;
+
+% -------------------------------------------------------------------------
+% Shared epoch rejection helper
+% This is the preferred rejection block if your Step 06 uses the shared helper.
+% -------------------------------------------------------------------------
 cfg.prep_06.shared_epoch_rejection = struct();
-cfg.prep_06.shared_epoch_rejection.enable        = true;
-cfg.prep_06.shared_epoch_rejection.use_faster    = true;
-cfg.prep_06.shared_epoch_rejection.faster_z      = 2;
-cfg.prep_06.shared_epoch_rejection.use_robust_z  = false;
-cfg.prep_06.shared_epoch_rejection.use_ptp       = true;
-cfg.prep_06.shared_epoch_rejection.ptp_uV_thresh = 300;
+cfg.prep_06.shared_epoch_rejection.enable          = true;
+cfg.prep_06.shared_epoch_rejection.use_faster      = true;
+cfg.prep_06.shared_epoch_rejection.faster_z        = 2;
+cfg.prep_06.shared_epoch_rejection.use_robust_z    = false;
+cfg.prep_06.shared_epoch_rejection.use_ptp         = true;
+cfg.prep_06.shared_epoch_rejection.ptp_uV_thresh   = 300;
 
-cfg.prep_06.events_phase = { ...
-    'S 201','S 241', ...
-    'S 2021','S 2421','S 2022','S 2422', ...
-    'S 203','S 213','S 223','S 233','S 243', ...
-    'S 2041','S 2441','S 2042','S 2442','S 2043','S 2443', ...
-    'S 205','S 245' ...
-    };
-
-cfg.prep_06.write_run_summary_table     = true;
-cfg.prep_06.write_subject_summary_table = true;
+% -------------------------------------------------------------------------
+% Summary tables
+% -------------------------------------------------------------------------
+cfg.prep_06.write_run_summary_table     = false;
+cfg.prep_06.write_subject_summary_table = false;
 cfg.prep_06.qc_table_delimiter          = ';';
 
 end

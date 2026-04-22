@@ -20,77 +20,72 @@ function step_out = eeg_prep01_bids_formatting(subj_id, cfg, paths, helpers)
 %   step_out.message : short status/error message
 %
 % Saskia Wilken Dez 2025
+% Refactor: cleaned path handling without compatibility aliases
 
 step_out = struct('ok', false, 'message', '');
 
 try
+    if ~isfield(cfg, 'prep_01') || ~isstruct(cfg.prep_01)
+        error('Step 01: cfg.prep_01 is missing.');
+    end
+
     step_cfg = cfg.prep_01;
 
     subj_id       = char(string(subj_id));
     task_label    = char(string(step_cfg.task_label));
     session_label = char(string(step_cfg.session_label));
 
-    do_eeg = logical(step_cfg.do_eeg);
-    do_beh = logical(step_cfg.do_beh);
+    do_eeg = isfield(step_cfg, 'do_eeg') && logical(step_cfg.do_eeg);
+    do_beh = isfield(step_cfg, 'do_beh') && logical(step_cfg.do_beh);
 
-    try_export_bids            = logical(step_cfg.try_eeglab_bids_export);
-    write_readme_if_needed     = logical(step_cfg.write_readme_if_exporter_did_not);
-    copy_sidecar_log_to_events = logical(step_cfg.copy_eeg_sidecar_log_to_events);
-
-    % ---------------------------------------------------------------------
-    % Resolve input roots
-    % Priority:
-    %   1) subject-specific paths built by runner
-    %   2) cfg.paths.*
-    %   3) compatibility aliases in cfg.prep_01
-    % ---------------------------------------------------------------------
-    if isfield(paths, 'source_eeg_root') && strlength(string(paths.source_eeg_root)) > 0
-        raw_eeg_dir = char(string(paths.source_eeg_root));
-    elseif isfield(cfg, 'paths') && isfield(cfg.paths, 'source_eeg_root') && ...
-            strlength(string(cfg.paths.source_eeg_root)) > 0
-        raw_eeg_dir = char(string(cfg.paths.source_eeg_root));
-    else
-        raw_eeg_dir = char(string(step_cfg.raw_eeg_dir));
-    end
-
-    if isfield(paths, 'source_beh_root') && strlength(string(paths.source_beh_root)) > 0
-        raw_beh_dir = char(string(paths.source_beh_root));
-    elseif isfield(cfg, 'paths') && isfield(cfg.paths, 'source_beh_root') && ...
-            strlength(string(cfg.paths.source_beh_root)) > 0
-        raw_beh_dir = char(string(cfg.paths.source_beh_root));
-    else
-        raw_beh_dir = char(string(step_cfg.raw_beh_dir));
-    end
+    try_export_bids            = isfield(step_cfg, 'try_eeglab_bids_export') && logical(step_cfg.try_eeglab_bids_export);
+    write_readme_if_needed     = isfield(step_cfg, 'write_readme_if_exporter_did_not') && logical(step_cfg.write_readme_if_exporter_did_not);
+    copy_sidecar_log_to_events = isfield(step_cfg, 'copy_eeg_sidecar_log_to_events') && logical(step_cfg.copy_eeg_sidecar_log_to_events);
 
     re_vhdr      = char(string(step_cfg.raw_eeg_regex));
     re_bids_vhdr = char(string(step_cfg.existing_bids_vhdr_regex));
 
-    bids_root = char(string(paths.bids_root));
-    sub_label = char(string(paths.subj_label));
-    ses_label = ['ses-' session_label];
+    % ---------------------------------------------------------------------
+    % Resolve paths
+    % No compatibility aliases. Only paths.* and cfg.paths.* are valid.
+    % ---------------------------------------------------------------------
+    raw_eeg_dir = resolve_path_local(paths, cfg, 'source_eeg_root');
+    raw_beh_dir = resolve_path_local(paths, cfg, 'source_beh_root');
 
-    eeg_dir = fullfile(paths.bids_ses_dir, 'eeg');
-    beh_dir = fullfile(paths.bids_ses_dir, 'beh');
+    bids_root = resolve_required_path_local(paths, cfg, 'bids_root');
+    sub_label = resolve_required_char_local(paths, 'subj_label');
+    bids_ses_dir = resolve_required_path_from_paths_local(paths, 'bids_ses_dir');
+
+    ses_label = ['ses-' session_label];
+    eeg_dir   = fullfile(bids_ses_dir, 'eeg');
+    beh_dir   = fullfile(bids_ses_dir, 'beh');
 
     helpers.log_msg_default('Step 01 start for sub-%s', subj_id);
-    helpers.log_msg_default('Step 01 source_eeg_root: %s', raw_eeg_dir);
-    helpers.log_msg_default('Step 01 source_beh_root: %s', raw_beh_dir);
-    helpers.log_msg_default('Step 01 bids_root      : %s', bids_root);
-    helpers.log_msg_default('Target session folder : %s', paths.bids_ses_dir);
+    helpers.log_msg_default('Step 01 do_eeg          : %d', do_eeg);
+    helpers.log_msg_default('Step 01 do_beh          : %d', do_beh);
+    helpers.log_msg_default('Step 01 source_eeg_root : %s', char(string(raw_eeg_dir)));
+    helpers.log_msg_default('Step 01 source_beh_root : %s', char(string(raw_beh_dir)));
+    helpers.log_msg_default('Step 01 bids_root       : %s', bids_root);
+    helpers.log_msg_default('Target session folder   : %s', bids_ses_dir);
 
     % ---------------------------------------------------------------------
     % Basic checks / folder creation
     % ---------------------------------------------------------------------
     helpers.ensure_dir(bids_root);
-    helpers.ensure_dir(paths.bids_ses_dir);
+    helpers.ensure_dir(bids_ses_dir);
 
-    if do_eeg && ~exist(raw_eeg_dir, 'dir')
-        error('Step 01: raw EEG directory does not exist: %s', raw_eeg_dir);
+    if do_eeg
+        if strlength(string(raw_eeg_dir)) == 0
+            error('Step 01: cfg.paths.source_eeg_root is empty but do_eeg=true.');
+        end
+        if exist(char(string(raw_eeg_dir)), 'dir') ~= 7
+            error('Step 01: source_eeg_root does not exist: %s', char(string(raw_eeg_dir)));
+        end
     end
 
     if do_beh
-        if strlength(string(raw_beh_dir)) == 0 || exist(raw_beh_dir, 'dir') ~= 7
-            helpers.log_msg_default('WARNING: project-specific behavior folder missing or empty: %s', raw_beh_dir);
+        if strlength(string(raw_beh_dir)) == 0 || exist(char(string(raw_beh_dir)), 'dir') ~= 7
+            helpers.log_msg_default('WARNING: do_beh=true but source_beh_root is missing/empty: %s', char(string(raw_beh_dir)));
             helpers.log_msg_default('Behavior copy disabled for sub-%s.', subj_id);
             do_beh = false;
         end
@@ -102,7 +97,7 @@ try
     % Resolve EEG source files
     % ---------------------------------------------------------------------
     if do_eeg
-        all_vhdr_files = dir(fullfile(raw_eeg_dir, '*.vhdr'));
+        all_vhdr_files = dir(fullfile(char(string(raw_eeg_dir)), '*.vhdr'));
         subject_vhdr_files = [];
 
         for k = 1:numel(all_vhdr_files)
@@ -118,7 +113,7 @@ try
         end
 
         if isempty(subject_vhdr_files)
-            error('Step 01: no raw .vhdr files found for sub-%s in %s', subj_id, raw_eeg_dir);
+            error('Step 01: no raw .vhdr files found for sub-%s in %s', subj_id, char(string(raw_eeg_dir)));
         end
 
         [~, sort_ix] = sort({subject_vhdr_files.name});
@@ -141,6 +136,8 @@ try
     % ---------------------------------------------------------------------
     % Process each run / header
     % ---------------------------------------------------------------------
+    n_processed = 0;
+
     for k = 1:numel(subject_vhdr_files)
 
         has_run = false;
@@ -148,6 +145,7 @@ try
         run_tag = '';
         bids_base = '';
         task_label_this_file = task_label;
+        subj_num = subj_id;
 
         if do_eeg
             src_vhdr = subject_vhdr_files(k).name;
@@ -172,15 +170,15 @@ try
             [~, src_base_noext] = fileparts(src_vhdr);
             src_vmrk = [src_base_noext '.vmrk'];
 
-            if exist(fullfile(raw_eeg_dir, [src_base_noext '.eeg']), 'file') == 2
+            if exist(fullfile(char(string(raw_eeg_dir)), [src_base_noext '.eeg']), 'file') == 2
                 src_data = [src_base_noext '.eeg'];
-            elseif exist(fullfile(raw_eeg_dir, [src_base_noext '.dat']), 'file') == 2
+            elseif exist(fullfile(char(string(raw_eeg_dir)), [src_base_noext '.dat']), 'file') == 2
                 src_data = [src_base_noext '.dat'];
             else
                 src_data = '';
             end
 
-            if exist(fullfile(raw_eeg_dir, src_vmrk), 'file') ~= 2
+            if exist(fullfile(char(string(raw_eeg_dir)), src_vmrk), 'file') ~= 2
                 error('Step 01: missing .vmrk for %s', src_vhdr);
             end
 
@@ -202,21 +200,20 @@ try
                 'Copying BrainVision triplet for sub-%s: %s -> %s', ...
                 subj_id, src_vhdr, dst_vhdr_name);
 
-            copyfile(fullfile(raw_eeg_dir, src_vhdr), dst_vhdr);
-            copyfile(fullfile(raw_eeg_dir, src_vmrk), dst_vmrk);
-            copyfile(fullfile(raw_eeg_dir, src_data), dst_data);
+            copyfile(fullfile(char(string(raw_eeg_dir)), src_vhdr), dst_vhdr);
+            copyfile(fullfile(char(string(raw_eeg_dir)), src_vmrk), dst_vmrk);
+            copyfile(fullfile(char(string(raw_eeg_dir)), src_data), dst_data);
 
             rewrite_vhdr_links_impl(dst_vhdr, dst_data_name, dst_vmrk_name);
             rewrite_vmrk_links_impl(dst_vmrk, dst_data_name);
 
             % -------------------------------------------------------------
-            % PROJECT-SPECIFIC OPTIONAL LOG COPY
-            % This is RTGMN/CF-specific and intentionally not generic.
+            % Optional project-specific EEG-side log copy
             % -------------------------------------------------------------
             if copy_sidecar_log_to_events
                 log_candidates = [ ...
-                    dir(fullfile(raw_eeg_dir, sprintf('CF_%s*.log', subj_id))); ...
-                    dir(fullfile(raw_eeg_dir, sprintf('CF_%s*.txt', subj_id))) ...
+                    dir(fullfile(char(string(raw_eeg_dir)), sprintf('CF_%s*.log', subj_id))); ...
+                    dir(fullfile(char(string(raw_eeg_dir)), sprintf('CF_%s*.txt', subj_id))) ...
                 ];
 
                 if ~isempty(log_candidates)
@@ -234,12 +231,13 @@ try
             tokens = regexp(src_vhdr, re_bids_vhdr, 'tokens', 'once');
 
             if isempty(tokens)
+                helpers.log_msg_default('WARNING: skipping BIDS vhdr with unexpected name: %s', src_vhdr);
                 continue;
             end
 
-            subj_num = sprintf('%03d', str2double(tokens{1}));
-            ses_from_name  = tokens{2};
-            task_from_name = tokens{3};
+            subj_num        = sprintf('%03d', str2double(tokens{1}));
+            ses_from_name   = tokens{2};
+            task_from_name  = tokens{3};
 
             has_run = (numel(tokens) >= 4) && ~isempty(tokens{4});
             if has_run
@@ -252,16 +250,14 @@ try
         end
 
         % -------------------------------------------------------------
-        % PROJECT-SPECIFIC OPTIONAL BEHAVIOR COPY
-        % This is RTGMN/CF-specific and intentionally not generic.
-        % It is expected to stay OFF by default for normal users.
+        % Optional project-specific behavior copy
         % -------------------------------------------------------------
         if do_beh
             helpers.ensure_dir(beh_dir);
 
             beh_candidates = [ ...
-                dir(fullfile(raw_beh_dir, sprintf('CF_%s-*.log', subj_id))); ...
-                dir(fullfile(raw_beh_dir, sprintf('CF_%s-*.txt', subj_id))) ...
+                dir(fullfile(char(string(raw_beh_dir)), sprintf('CF_%s-*.log', subj_id))); ...
+                dir(fullfile(char(string(raw_beh_dir)), sprintf('CF_%s-*.txt', subj_id))) ...
             ];
 
             for b = 1:numel(beh_candidates)
@@ -320,6 +316,12 @@ try
                     bids_base, ME_export.message);
             end
         end
+
+        n_processed = n_processed + 1;
+    end
+
+    if n_processed == 0
+        error('Step 01: no valid EEG files could be processed for sub-%s.', subj_id);
     end
 
     % ---------------------------------------------------------------------
@@ -356,6 +358,46 @@ end
 % =========================================================================
 % LOCAL HELPERS
 % =========================================================================
+function out_path = resolve_path_local(paths, cfg, field_name)
+out_path = "";
+
+if isfield(paths, field_name) && strlength(string(paths.(field_name))) > 0
+    out_path = string(paths.(field_name));
+    return;
+end
+
+if isfield(cfg, 'paths') && isfield(cfg.paths, field_name) && strlength(string(cfg.paths.(field_name))) > 0
+    out_path = string(cfg.paths.(field_name));
+    return;
+end
+end
+
+function out_path = resolve_required_path_local(paths, cfg, field_name)
+out_path = resolve_path_local(paths, cfg, field_name);
+
+if strlength(string(out_path)) == 0
+    error('Step 01: required path "%s" is missing or empty.', field_name);
+end
+
+out_path = char(string(out_path));
+end
+
+function out_value = resolve_required_path_from_paths_local(paths, field_name)
+if ~isfield(paths, field_name) || strlength(string(paths.(field_name))) == 0
+    error('Step 01: paths.%s is missing or empty.', field_name);
+end
+
+out_value = char(string(paths.(field_name)));
+end
+
+function out_value = resolve_required_char_local(S, field_name)
+if ~isfield(S, field_name) || strlength(string(S.(field_name))) == 0
+    error('Step 01: paths.%s is missing or empty.', field_name);
+end
+
+out_value = char(string(S.(field_name)));
+end
+
 function rewrite_vhdr_links_impl(vhdr_path, data_filename, vmrk_filename)
 txt = fileread(vhdr_path);
 lines = regexp(txt, '\r\n|\n|\r', 'split');

@@ -6,7 +6,6 @@ function helpers = eeg_pipeline_helpers(default_log_file)
 %
 % WHAT THIS FILE DOES
 %   - Returns a struct of helper handles used by the runner and step files
-%   - Preserves older helper names as compatibility aliases where useful
 %
 % INPUT
 %   - default_log_file : log file used by helpers.log_msg_default(...)
@@ -20,21 +19,18 @@ helpers = struct();
 
 % -------------------------------------------------------------------------
 % Config-building helpers
-% These are used by eeg_pipeline_config.m so that config expansion logic
-% also lives here rather than in private config-local functions.
 % -------------------------------------------------------------------------
-helpers.pick_value                    = @pick_value_impl;
-helpers.add_cfg_compatibility_aliases = @add_cfg_compatibility_aliases_impl;
-helpers.detect_env_mode               = @detect_env_mode_impl;
-helpers.detect_machine_kind           = @detect_machine_kind_impl;
-helpers.default_profile_for_mode      = @default_profile_for_mode_impl;
-helpers.get_hostname                  = @get_hostname_impl;
-helpers.get_env_first_nonempty        = @get_env_first_nonempty_impl;
-helpers.get_raw_trigger_from_key     = @get_raw_trigger_from_key_impl;
-helpers.map_trigger_by_table         = @map_trigger_by_table_impl;
+helpers.pick_value               = @pick_value_impl;
+helpers.detect_env_mode          = @detect_env_mode_impl;
+helpers.detect_machine_kind      = @detect_machine_kind_impl;
+helpers.default_profile_for_mode = @default_profile_for_mode_impl;
+helpers.get_hostname             = @get_hostname_impl;
+helpers.get_env_first_nonempty   = @get_env_first_nonempty_impl;
+helpers.get_raw_trigger_from_key = @get_raw_trigger_from_key_impl;
+helpers.map_trigger_by_table     = @map_trigger_by_table_impl;
 
 % -------------------------------------------------------------------------
-% Logging and basic filesystem helpers.
+% Logging and basic filesystem helpers
 % -------------------------------------------------------------------------
 helpers.log_msg                  = @(log_file, varargin) log_msg_impl(log_file, varargin{:});
 helpers.log_msg_default          = @(varargin) log_msg_impl(default_log_file, varargin{:});
@@ -42,14 +38,14 @@ helpers.ensure_dir               = @ensure_dir_impl;
 helpers.clear_directory_contents = @clear_directory_contents_impl;
 
 % -------------------------------------------------------------------------
-% Environment / worker helpers.
+% Environment / worker helpers
 % -------------------------------------------------------------------------
 helpers.get_env_or_empty          = @get_env_or_empty_impl;
 helpers.get_slurm_cpus_per_task   = @get_slurm_cpus_per_task_impl;
 helpers.is_parallel_license_error = @is_parallel_license_error_impl;
 
 % -------------------------------------------------------------------------
-% Runner/planning helpers.
+% Runner / planning helpers
 % -------------------------------------------------------------------------
 helpers.init_toolboxes                      = @init_toolboxes_impl;
 helpers.discover_subjects                   = @discover_subjects_impl;
@@ -61,7 +57,7 @@ helpers.sort_subject_plans_by_expected_cost = @sort_subject_plans_by_expected_co
 helpers.run_one_subject                     = @run_one_subject_impl;
 
 % -------------------------------------------------------------------------
-% Overwrite / rerun helpers.
+% Overwrite / rerun helpers
 % -------------------------------------------------------------------------
 helpers.resolve_overwrite_mode      = @resolve_overwrite_mode_impl;
 helpers.resolve_overwrite_policy    = @resolve_overwrite_policy_impl;
@@ -70,7 +66,7 @@ helpers.step_should_run_from_folder = @step_should_run_from_folder_impl;
 helpers.get_step_subject_folder     = @get_step_subject_folder_impl;
 
 % -------------------------------------------------------------------------
-% EEG load/save / BIDS helpers.
+% EEG load / save / BIDS helpers
 % -------------------------------------------------------------------------
 helpers.safe_delete_set = @safe_delete_set_impl;
 helpers.safe_save_set   = @safe_save_set_impl;
@@ -78,53 +74,54 @@ helpers.safe_load_set   = @safe_load_set_impl;
 helpers.find_bids_vhdr  = @find_bids_vhdr_impl;
 helpers.safe_load_bv    = @safe_load_bv_impl;
 
-% Compatibility aliases.
-helpers.safe_saveset = helpers.safe_save_set;
-helpers.safe_loadset = helpers.safe_load_set;
-helpers.safe_loadbv  = helpers.safe_load_bv;
-
 % -------------------------------------------------------------------------
-% EEG comment / trigger helpers.
+% EEG comment / trigger helpers
 % -------------------------------------------------------------------------
 helpers.append_eeg_comment     = @append_eeg_comment_impl;
 helpers.normalize_trigger_type = @normalize_trigger_type_impl;
 
 % -------------------------------------------------------------------------
-% EEG utility helpers used by the step files.
+% EEG utility helpers used by step files
 % -------------------------------------------------------------------------
 helpers.normalize_event_types                 = @normalize_event_types_impl;
-helpers.get_channel_indices_by_type          = @get_channel_indices_by_type_impl;
-helpers.apply_reference_mode                 = @apply_reference_mode_impl;
-helpers.build_epoching_output_paths          = @build_epoching_output_paths_impl;
-helpers.save_intermediate_set                = @save_intermediate_set_impl;
-helpers.apply_hard_epoch_threshold_rejection = @apply_hard_epoch_threshold_rejection_impl;
-helpers.apply_fallback_epoch_rejection       = @apply_fallback_epoch_rejection_impl;
-helpers.create_baseline_condition_datasets   = @create_baseline_condition_datasets_impl;
-helpers.finalize_epoched_dataset             = @finalize_epoched_dataset_impl;
-helpers.save_final_epoched_outputs           = @save_final_epoched_outputs_impl;
-helpers.build_eeg_key_token_stream_with_time = @build_eeg_key_token_stream_with_time_impl;
-helpers.find_first_event_latency               = @find_first_event_latency_impl;
-helpers.ensure_channel_types                   = @ensure_channel_types_impl;
-helpers.find_flat_or_invalid_channels          = @find_flat_or_invalid_channels_impl;
-helpers.detect_bad_channels_emulation_style    = @detect_bad_channels_emulation_style_impl;
-helpers.apply_filter_to_subset_only            = @apply_filter_to_subset_only_impl;
-helpers.apply_pop_cleanline_to_subset          = @apply_pop_cleanline_to_subset_impl;
-helpers.apply_jointprob_safely                 = @apply_jointprob_safely_impl;
-helpers.apply_shared_epoch_rejection           = @apply_shared_epoch_rejection_impl;
+helpers.normalize_epoching_mode_value        = @normalize_epoching_mode_value_impl;
+helpers.get_channel_indices_by_type           = @get_channel_indices_by_type_impl;
+helpers.apply_reference_mode                  = @apply_reference_mode_impl;
+helpers.build_epoching_output_paths           = @build_epoching_output_paths_impl;
+helpers.normalize_event_list                  = @normalize_event_list_impl;
+helpers.get_present_events                    = @get_present_events_impl;
+helpers.preview_event_types                   = @preview_event_types_impl;
+helpers.build_step06_summary_row              = @build_step06_summary_row_impl;
+helpers.save_intermediate_set                 = @save_intermediate_set_impl;
+helpers.apply_hard_epoch_threshold_rejection  = @apply_hard_epoch_threshold_rejection_impl;
+helpers.apply_fallback_epoch_rejection        = @apply_fallback_epoch_rejection_impl;
+helpers.create_baseline_condition_datasets    = @create_baseline_condition_datasets_impl;
+helpers.finalize_epoched_dataset              = @finalize_epoched_dataset_impl;
+helpers.save_final_epoched_outputs            = @save_final_epoched_outputs_impl;
+helpers.build_eeg_key_token_stream_with_time  = @build_eeg_key_token_stream_with_time_impl;
+helpers.find_first_event_latency              = @find_first_event_latency_impl;
+helpers.ensure_channel_types                  = @ensure_channel_types_impl;
+helpers.find_flat_or_invalid_channels         = @find_flat_or_invalid_channels_impl;
+helpers.detect_bad_channels_emulation_style   = @detect_bad_channels_emulation_style_impl;
+helpers.apply_filter_to_subset_only           = @apply_filter_to_subset_only_impl;
+helpers.apply_pop_cleanline_to_subset         = @apply_pop_cleanline_to_subset_impl;
+helpers.apply_jointprob_safely                = @apply_jointprob_safely_impl;
+helpers.apply_shared_epoch_rejection          = @apply_shared_epoch_rejection_impl;
 helpers.reject_ica_prep_epochs_by_mad_variance = @reject_ica_prep_epochs_by_mad_variance_impl;
-helpers.compute_data_rank_svd                  = @compute_data_rank_svd_impl;
-helpers.make_unique_amica_tmpdir               = @make_unique_amica_tmpdir_impl;
-helpers.safe_rmdir                             = @safe_rmdir_impl;
-helpers.write_ic_topography_pngs               = @write_ic_topography_pngs_impl;
+helpers.compute_data_rank_svd                 = @compute_data_rank_svd_impl;
+helpers.make_unique_amica_tmpdir              = @make_unique_amica_tmpdir_impl;
+helpers.safe_rmdir                            = @safe_rmdir_impl;
+helpers.write_ic_topography_pngs              = @write_ic_topography_pngs_impl;
+helpers.merge_structs_recursive = @merge_structs_recursive_impl;
 
 % -------------------------------------------------------------------------
-% Behavior-log helpers.
+% Behavior-log helpers
 % -------------------------------------------------------------------------
 helpers.find_behavior_log = @find_behavior_log_impl;
 helpers.read_behavior_log = @read_behavior_log_impl;
 
 % -------------------------------------------------------------------------
-% Raw QC helper.
+% Raw QC helper
 % -------------------------------------------------------------------------
 helpers.raw_qc_behavior_vs_eeg_and_write_csv = @raw_qc_behavior_vs_eeg_and_write_csv_impl;
 
@@ -159,32 +156,6 @@ if condition
 else
     value = value_if_false;
 end
-end
-
-function cfg = add_cfg_compatibility_aliases_impl(cfg)
-% Step toggle aliases.
-cfg.steps.prep01_bids_formatting = cfg.steps.prep_01_bids_formatting;
-cfg.steps.prep02_triggerfix      = cfg.steps.prep_02_triggerfix;
-cfg.steps.prep03_untilica        = cfg.steps.prep_03_until_ica;
-cfg.steps.prep04_ica             = cfg.steps.prep_04_ica;
-cfg.steps.prep05_after_ica       = cfg.steps.prep_05_after_ica;
-cfg.steps.prep06_epoching        = cfg.steps.prep_06_epoching;
-
-% Step config aliases.
-cfg.prep01 = cfg.prep_01;
-cfg.prep02 = cfg.prep_02;
-cfg.prep03 = cfg.prep_03;
-cfg.prep04 = cfg.prep_04;
-cfg.prep05 = cfg.prep_05;
-cfg.prep06 = cfg.prep_06;
-
-% Step function aliases.
-cfg.step_fns.prep01_bids_formatting = cfg.step_fns.prep_01_bids_formatting;
-cfg.step_fns.prep02_triggerfix      = cfg.step_fns.prep_02_triggerfix;
-cfg.step_fns.prep03_untilica        = cfg.step_fns.prep_03_until_ica;
-cfg.step_fns.prep04_ica             = cfg.step_fns.prep_04_ica;
-cfg.step_fns.prep05_after_ica       = cfg.step_fns.prep_05_after_ica;
-cfg.step_fns.prep06_epoching        = cfg.step_fns.prep_06_epoching;
 end
 
 function hn = get_hostname_impl()
@@ -297,11 +268,46 @@ switch mode
         if machine_kind == "server_windows"
             profile = "server_windows";
         else
-            profile = "pc_shared";
+            profile = "pc";
         end
 
     otherwise
-        profile = "pc_shared";
+        profile = "pc";
+end
+end
+
+function out = merge_structs_recursive_impl(base, override)
+if nargin < 1 || isempty(base)
+    out = override;
+    return;
+end
+
+if nargin < 2 || isempty(override)
+    out = base;
+    return;
+end
+
+if ~isstruct(base) || ~isstruct(override)
+    out = override;
+    return;
+end
+
+out = base;
+override_fields = fieldnames(override);
+
+for i = 1:numel(override_fields)
+    fn = override_fields{i};
+
+    if ~isfield(out, fn)
+        out.(fn) = override.(fn);
+        continue;
+    end
+
+    if isstruct(out.(fn)) && isstruct(override.(fn))
+        out.(fn) = merge_structs_recursive_impl(out.(fn), override.(fn));
+    else
+        out.(fn) = override.(fn);
+    end
 end
 end
 
@@ -560,7 +566,7 @@ switch machine_kind
         switch profile
             case "server_windows"
                 n_workers = 4;
-            case {"pc_now","pc_shared"}
+            case "pc"
                 n_workers = 2;
             case "hpc_hummel"
                 tmp = get_slurm_cpus_per_task_impl();
@@ -594,9 +600,11 @@ end
 function paths = build_paths_impl(cfg, subj_id)
 paths = struct();
 
-paths.root_dir  = cfg.root_dir;
-paths.bids_root = cfg.paths.bids_root;
-paths.out_root  = cfg.paths.out_root;
+paths.root_dir         = cfg.root_dir;
+paths.source_eeg_root  = char(string(cfg.paths.source_eeg_root));
+paths.source_beh_root  = char(string(cfg.paths.source_beh_root));
+paths.bids_root        = char(string(cfg.paths.bids_root));
+paths.derivatives_root = char(string(cfg.paths.derivatives_root));
 
 paths.subj_label = sprintf('sub-%s', subj_id);
 
@@ -610,19 +618,18 @@ if isfield(cfg, 'bids') && isfield(cfg.bids, 'task_label') && strlength(string(c
     task_label = string(cfg.bids.task_label);
 end
 
-paths.session_label   = session_label;
-paths.bids_task_label = task_label;
+paths.session_label   = char(session_label);
+paths.bids_task_label = char(task_label);
 
-% BIDS locations.
+% BIDS locations
 paths.bids_sub_dir = fullfile(paths.bids_root, paths.subj_label);
-paths.bids_ses_dir = fullfile(paths.bids_sub_dir, "ses-" + session_label);
-% Step 01 writes the BIDS-formatted session folder that later steps use.
+paths.bids_ses_dir = fullfile(paths.bids_sub_dir, ['ses-' char(session_label)]);
 paths.prep_01_out_dir = paths.bids_ses_dir;
 
-% Output step roots.
-paths.step_02_root          = fullfile(paths.out_root, '01_trigger_fix');
-paths.step_03_until_ica_root = fullfile(paths.out_root, '02_until_ica');
-paths.step_03_for_ica_root   = fullfile(paths.out_root, '03_for_ica');
+% Derivatives roots
+paths.step_02_root           = fullfile(paths.derivatives_root, '01_trigger_fix');
+paths.step_03_until_ica_root = fullfile(paths.derivatives_root, '02_until_ica');
+paths.step_03_for_ica_root   = fullfile(paths.derivatives_root, '03_for_ica');
 
 ica_tag = "runica";
 if isfield(cfg, 'prep_04') && isfield(cfg.prep_04, 'ica_method')
@@ -634,9 +641,9 @@ if isfield(cfg.paths, 'branch_by_ica_method') && cfg.paths.branch_by_ica_method
     suffix = "_" + ica_tag;
 end
 
-paths.step_04_root = fullfile(paths.out_root, "04_after_ica"      + suffix);
-paths.step_05_root = fullfile(paths.out_root, "05_until_epoching" + suffix);
-paths.step_06_root = fullfile(paths.out_root, "06_epoched"        + suffix);
+paths.step_04_root = fullfile(paths.derivatives_root, char("04_after_ica"      + suffix));
+paths.step_05_root = fullfile(paths.derivatives_root, char("05_until_epoching" + suffix));
+paths.step_06_root = fullfile(paths.derivatives_root, char("06_epoched"        + suffix));
 
 ensure_dir_impl(paths.step_02_root);
 ensure_dir_impl(paths.step_03_until_ica_root);
@@ -645,13 +652,13 @@ ensure_dir_impl(paths.step_04_root);
 ensure_dir_impl(paths.step_05_root);
 ensure_dir_impl(paths.step_06_root);
 
-% Subject-specific step folders.
-paths.prep_02_out_dir          = fullfile(paths.step_02_root, paths.subj_label);
+% Subject-specific step folders
+paths.prep_02_out_dir           = fullfile(paths.step_02_root, paths.subj_label);
 paths.prep_03_out_dir_until_ica = fullfile(paths.step_03_until_ica_root, paths.subj_label);
 paths.prep_03_out_dir_for_ica   = fullfile(paths.step_03_for_ica_root, paths.subj_label);
-paths.prep_04_out_dir          = fullfile(paths.step_04_root, paths.subj_label);
-paths.prep_05_out_dir          = fullfile(paths.step_05_root, paths.subj_label);
-paths.prep_06_out_dir          = fullfile(paths.step_06_root, paths.subj_label);
+paths.prep_04_out_dir           = fullfile(paths.step_04_root, paths.subj_label);
+paths.prep_05_out_dir           = fullfile(paths.step_05_root, paths.subj_label);
+paths.prep_06_out_dir           = fullfile(paths.step_06_root, paths.subj_label);
 
 ensure_dir_impl(paths.prep_02_out_dir);
 ensure_dir_impl(paths.prep_03_out_dir_until_ica);
@@ -660,8 +667,8 @@ ensure_dir_impl(paths.prep_04_out_dir);
 ensure_dir_impl(paths.prep_05_out_dir);
 ensure_dir_impl(paths.prep_06_out_dir);
 
-% QA / checks roots.
-paths.checks_root = fullfile(paths.out_root, 'checks');
+% QA / checks
+paths.checks_root = fullfile(paths.derivatives_root, 'checks');
 ensure_dir_impl(paths.checks_root);
 
 paths.checks_ica_components_root = fullfile(paths.checks_root, 'ica_comps');
@@ -675,36 +682,11 @@ ensure_dir_impl(paths.checks_ica_components_subj_dir);
 ensure_dir_impl(paths.checks_ica_components_rej_dir);
 ensure_dir_impl(paths.checks_ica_components_edge_dir);
 
-paths.qc_root = fullfile(paths.out_root, 'qc');
+paths.qc_root = fullfile(paths.derivatives_root, 'qc');
 ensure_dir_impl(paths.qc_root);
 
 paths.qc_dir = fullfile(paths.qc_root, paths.subj_label);
 ensure_dir_impl(paths.qc_dir);
-
-% Compatibility aliases for older step files.
-paths = add_path_compatibility_aliases_impl(paths);
-end
-
-function paths = add_path_compatibility_aliases_impl(paths)
-paths.prep01_out_dir = paths.prep_01_out_dir;
-paths.step02_root = paths.step_02_root;
-paths.step03_untilica_root = paths.step_03_until_ica_root;
-paths.step03_forica_root   = paths.step_03_for_ica_root;
-paths.step04_root = paths.step_04_root;
-paths.step05_root = paths.step_05_root;
-paths.step06_root = paths.step_06_root;
-
-paths.prep02_out_dir = paths.prep_02_out_dir;
-paths.prep03_out_dir_untilica = paths.prep_03_out_dir_until_ica;
-paths.prep03_out_dir_forica   = paths.prep_03_out_dir_for_ica;
-paths.prep04_out_dir = paths.prep_04_out_dir;
-paths.prep05_out_dir = paths.prep_05_out_dir;
-paths.prep06_out_dir = paths.prep_06_out_dir;
-
-paths.checks_ica_comps_root = paths.checks_ica_components_root;
-paths.checks_ica_comps_subj_dir = paths.checks_ica_components_subj_dir;
-paths.checks_ica_comps_rej_dir  = paths.checks_ica_components_rej_dir;
-paths.checks_ica_comps_edge_dir = paths.checks_ica_components_edge_dir;
 end
 
 function subject_plans = build_subject_plans_impl(cfg, sub_ids, master_log)
@@ -979,7 +961,7 @@ else
 end
 end
 
-function maybe_clear_step_folder_impl(paths, step_name, subject_plan, helpers, cfg, log_file)
+function maybe_clear_step_folder_impl(paths, step_name, subject_plan, helpers, cfg, log_file) %#ok<INUSD>
 info = subject_plan.steps.(step_name);
 
 if ~info.delete_before_run
@@ -987,11 +969,6 @@ if ~info.delete_before_run
 end
 
 step_folder = get_step_subject_folder_impl(paths, step_name);
-
-if cfg.io.dry_run
-    helpers.log_msg(log_file, 'DRY RUN: would clear step folder before rerun: %s', step_folder);
-    return;
-end
 
 helpers.log_msg(log_file, 'Clearing step folder before rerun: %s', step_folder);
 clear_directory_contents_impl(step_folder);
@@ -1252,14 +1229,7 @@ for ext = {'.set', '.fdt'}
 end
 end
 
-function EEG = safe_save_set_impl(EEG, out_dir, out_fname, helpers, cfg)
-if nargin < 5 || isempty(cfg)
-    cfg = struct();
-end
-if ~isfield(cfg, 'io') || ~isfield(cfg.io, 'dry_run')
-    cfg.io.dry_run = false;
-end
-
+function EEG = safe_save_set_impl(EEG, out_dir, out_fname, helpers, cfg) %#ok<INUSD>
 out_dir   = force_char_scalar_impl(out_dir);
 out_fname = force_char_scalar_impl(out_fname);
 
@@ -1272,12 +1242,11 @@ if contains(EEG.filename, filesep) || contains(EEG.filename, '/')
     EEG.filename = '';
 end
 
-if cfg.io.dry_run
-    helpers.log_msg_default('DRY RUN: would pop_saveset to %s', fullfile(out_dir, out_fname));
-    return;
-end
-
 EEG = pop_saveset(EEG, 'filename', out_fname, 'filepath', out_dir);
+
+if nargin >= 4 && isstruct(helpers) && isfield(helpers, 'log_msg_default')
+    helpers.log_msg_default('Saved set: %s', fullfile(out_dir, out_fname));
+end
 end
 
 function EEG = safe_load_set_impl(in_dir, in_fname, helpers)
@@ -1533,6 +1502,11 @@ if isfield(EEG, 'event') && ~isempty(EEG.event)
 end
 end
 
+function mode = normalize_epoching_mode_value_impl(mode_in)
+mode = lower(strtrim(char(string(mode_in))));
+mode = regexprep(mode, '\s+', ' ');
+end
+
 function [idx_eeg, idx_eog, idx_non_eeg] = get_channel_indices_by_type_impl(EEG)
 idx_eeg = [];
 idx_eog = [];
@@ -1619,32 +1593,33 @@ function output_spec = build_epoching_output_paths_impl(run_base, out_dir, step_
 output_spec = struct();
 output_spec.all_paths = {};
 
-mode = string(step_cfg.epoching_mode);
+mode_raw = step_cfg.epoching_mode;
+mode = normalize_epoching_mode_value_impl(mode_raw);
 
-switch mode
-    case "regular"
-        base_stem = string(run_base) + "_epoched_final";
-        output_spec.all_paths = build_output_paths_for_base_stem_epoching_impl( ...
-            base_stem, out_dir, step_cfg, idx_eeg, idx_eog, idx_non_eeg);
+if strcmp(mode, 'event_locked')
+    base_stem = string(run_base) + "_epoched_final";
+    output_spec.all_paths = build_output_paths_for_base_stem_epoching_impl( ...
+        base_stem, out_dir, step_cfg, idx_eeg, idx_eog, idx_non_eeg);
 
-    case "baseline_open_closed"
-        base_stem_open   = string(run_base) + "_cond-open_epoched_final";
-        base_stem_closed = string(run_base) + "_cond-closed_epoched_final";
+elseif strcmp(mode, 'baseline')
+    base_stem_open   = string(run_base) + "_cond-open_epoched_final";
+    base_stem_closed = string(run_base) + "_cond-closed_epoched_final";
 
-        paths_open = build_output_paths_for_base_stem_epoching_impl( ...
-            base_stem_open, out_dir, step_cfg, idx_eeg, idx_eog, idx_non_eeg);
+    paths_open = build_output_paths_for_base_stem_epoching_impl( ...
+        base_stem_open, out_dir, step_cfg, idx_eeg, idx_eog, idx_non_eeg);
 
-        paths_closed = build_output_paths_for_base_stem_epoching_impl( ...
-            base_stem_closed, out_dir, step_cfg, idx_eeg, idx_eog, idx_non_eeg);
+    paths_closed = build_output_paths_for_base_stem_epoching_impl( ...
+        base_stem_closed, out_dir, step_cfg, idx_eeg, idx_eog, idx_non_eeg);
 
-        output_spec.all_paths = [paths_open(:); paths_closed(:)];
+    output_spec.all_paths = [paths_open(:); paths_closed(:)];
 
-    otherwise
-        error('Unsupported cfg.prep_06.epoching_mode: %s', char(mode));
+else
+    error('Unsupported cfg.prep_06.epoching_mode: raw=>>%s<< | normalized=>>%s<<', ...
+        char(string(mode_raw)), mode);
 end
 end
 
-function out_path = save_intermediate_set_impl(EEG, out_dir, base_stem, overwrite_mode, cfg, savemode, helpers)
+function out_path = save_intermediate_set_impl(EEG, out_dir, base_stem, overwrite_mode, cfg, savemode, helpers) %#ok<INUSD>
 if nargin < 6 || isempty(savemode)
     savemode = 'twofiles';
 end
@@ -1656,19 +1631,18 @@ if exist(out_path, 'file') == 2 && overwrite_mode == "skip"
     return;
 end
 
-if overwrite_mode == "delete" && exist(out_path, 'file') == 2 && ~cfg.io.dry_run
-    helpers.safe_delete_set(out_path);
-end
-
-if cfg.io.dry_run
-    helpers.logmsg_default('prep_06_epoching: DRY RUN would save intermediate: %s', out_path);
-    return;
+if overwrite_mode == "delete" && exist(out_path, 'file') == 2
+    safe_delete_set_impl(out_path);
 end
 
 EEG = pop_saveset(EEG, ...
     'filename', out_name, ...
     'filepath', out_dir, ...
     'savemode', savemode);
+
+if nargin >= 7 && isstruct(helpers) && isfield(helpers, 'log_msg_default')
+    helpers.log_msg_default('Saved intermediate set: %s', out_path);
+end
 end
 
 function [EEG_out, info] = apply_hard_epoch_threshold_rejection_impl(EEG_in, idx_eeg, thresh_uv)
@@ -1767,7 +1741,7 @@ info.n_kept     = EEG_out.trials;
 end
 
 function [EEG_open, EEG_closed] = create_baseline_condition_datasets_impl(EEG, step_cfg, helpers, run_base)
-EEG_open = [];
+EEG_open   = [];
 EEG_closed = [];
 
 if ~isfield(EEG, 'event') || isempty(EEG.event)
@@ -1852,7 +1826,7 @@ if isempty(seg_t1)
     error('Could not derive any baseline segments.');
 end
 
-helpers.logmsg_default( ...
+helpers.log_msg_default( ...
     'prep_06_epoching: %s | derived %d baseline segments', ...
     char(string(run_base)), numel(seg_t1));
 
@@ -1896,7 +1870,7 @@ for s = 1:numel(seg_t1)
     end
 end
 
-EEG_open = merge_eeg_sets_impl(open_parts);
+EEG_open   = merge_eeg_sets_impl(open_parts);
 EEG_closed = merge_eeg_sets_impl(closed_parts);
 end
 
@@ -1942,7 +1916,7 @@ if step_cfg.do_artifact_rejection
                 hard_info.n_total, ...
                 hard_info.n_kept));
 
-            helpers.logmsg_default( ...
+            helpers.log_msg_default( ...
                 'prep_06_epoching: %s | %s | hard rejection=%d/%d | kept=%d | threshold=%.1f uV', ...
                 char(string(subj_label)), char(string(run_label)), ...
                 hard_info.n_rejected, hard_info.n_total, hard_info.n_kept, ...
@@ -1976,7 +1950,7 @@ if step_cfg.do_artifact_rejection
                     'prep_06_epoching: shared rejection after hard threshold | rejected=%d/%d | kept=%d', ...
                     shared_info.n_rejected, shared_info.n_before, EEG_work.trials));
 
-                helpers.logmsg_default( ...
+                helpers.log_msg_default( ...
                     'prep_06_epoching: %s | %s | shared rejection=%d/%d | kept=%d', ...
                     char(string(subj_label)), char(string(run_label)), ...
                     shared_info.n_rejected, shared_info.n_before, EEG_work.trials);
@@ -1992,7 +1966,7 @@ if step_cfg.do_artifact_rejection
                     'prep_06_epoching: fallback rejection after hard threshold | rejected=%d/%d | kept=%d | robust=%d', ...
                     soft_info.n_rejected, soft_info.n_total, soft_info.n_kept, soft_info.robust_z));
 
-                helpers.logmsg_default( ...
+                helpers.log_msg_default( ...
                     'prep_06_epoching: %s | %s | fallback rejection=%d/%d | kept=%d', ...
                     char(string(subj_label)), char(string(run_label)), ...
                     soft_info.n_rejected, soft_info.n_total, soft_info.n_kept);
@@ -2004,7 +1978,7 @@ if step_cfg.do_artifact_rejection
                     "delete", cfg, step_cfg.savemode, helpers);
             end
         else
-            helpers.logmsg_default( ...
+            helpers.log_msg_default( ...
                 'prep_06_epoching: %s | %s | no epochs left after hard threshold rejection', ...
                 char(string(subj_label)), char(string(run_label)));
         end
@@ -2023,7 +1997,14 @@ else
     prop_rejected = 0;
 end
 
-if prop_rejected > step_cfg.max_reject_prop
+apply_max_reject_exclusion = ...
+    isfield(step_cfg, 'max_reject_prop') && ...
+    ~isempty(step_cfg.max_reject_prop) && ...
+    isscalar(step_cfg.max_reject_prop) && ...
+    isfinite(step_cfg.max_reject_prop) && ...
+    (step_cfg.max_reject_prop >= 0);
+
+if apply_max_reject_exclusion && (prop_rejected > step_cfg.max_reject_prop)
     rej_info.excluded = true;
 
     EEG_work = helpers.append_eeg_comment(EEG_work, sprintf( ...
@@ -2034,7 +2015,7 @@ if prop_rejected > step_cfg.max_reject_prop
         rej_info.n_rejected_hard, ...
         rej_info.n_rejected_sophisticated));
 
-    helpers.logmsg_default( ...
+    helpers.log_msg_default( ...
         'prep_06_epoching: %s | %s | dataset excluded | rejected %.1f%% of epochs', ...
         char(string(subj_label)), char(string(run_label)), 100 * prop_rejected);
 
@@ -2082,12 +2063,8 @@ if step_cfg.split_non_eeg_channels
     primary_name = char(string(base_stem) + "_EEG.set");
     primary_path = fullfile(out_dir, primary_name);
 
-    if cfg.io.dry_run
-        helpers.logmsg_default('prep_06_epoching: DRY RUN would save: %s', primary_path);
-    else
-        EEG_primary = helpers.safe_saveset(EEG_primary, out_dir, primary_name, helpers, cfg);
-        helpers.logmsg_default('prep_06_epoching: saved: %s', primary_path);
-    end
+    EEG_primary = helpers.safe_save_set(EEG_primary, out_dir, primary_name, helpers, cfg);
+    helpers.log_msg_default('prep_06_epoching: saved: %s', primary_path);
 
     saved_paths{end+1,1} = primary_path; %#ok<AGROW>
 
@@ -2099,12 +2076,8 @@ if step_cfg.split_non_eeg_channels
         secondary_name = char(string(base_stem) + "_NON_EEG.set");
         secondary_path = fullfile(out_dir, secondary_name);
 
-        if cfg.io.dry_run
-            helpers.logmsg_default('prep_06_epoching: DRY RUN would save: %s', secondary_path);
-        else
-            EEG_secondary = helpers.safe_saveset(EEG_secondary, out_dir, secondary_name, helpers, cfg);
-            helpers.logmsg_default('prep_06_epoching: saved: %s', secondary_path);
-        end
+        EEG_secondary = helpers.safe_save_set(EEG_secondary, out_dir, secondary_name, helpers, cfg);
+        helpers.log_msg_default('prep_06_epoching: saved: %s', secondary_path);
 
         saved_paths{end+1,1} = secondary_path; %#ok<AGROW>
     end
@@ -2115,12 +2088,8 @@ else
     out_name = char(string(base_stem) + ".set");
     out_path = fullfile(out_dir, out_name);
 
-    if cfg.io.dry_run
-        helpers.logmsg_default('prep_06_epoching: DRY RUN would save: %s', out_path);
-    else
-        EEG_full = helpers.safe_saveset(EEG_full, out_dir, out_name, helpers, cfg);
-        helpers.logmsg_default('prep_06_epoching: saved: %s', out_path);
-    end
+    EEG_full = helpers.safe_save_set(EEG_full, out_dir, out_name, helpers, cfg);
+    helpers.log_msg_default('prep_06_epoching: saved: %s', out_path);
 
     saved_paths{end+1,1} = out_path; %#ok<AGROW>
 end
@@ -2727,6 +2696,155 @@ for ii = 1:numel(ic_list)
     close(fig);
 end
 end
+
+function target_events = normalize_event_list_impl(event_list)
+target_events = strings(0,1);
+
+if isempty(event_list)
+    return;
+end
+
+if ischar(event_list) || isstring(event_list)
+    event_list = cellstr(string(event_list));
+end
+
+for i = 1:numel(event_list)
+    tok = string(normalize_trigger_type_impl(event_list{i}));
+    if strlength(tok) > 0
+        target_events(end+1,1) = tok; %#ok<AGROW>
+    end
+end
+
+target_events = unique(target_events, 'stable');
+end
+
+function present_events = get_present_events_impl(EEG, target_events)
+present_events = strings(0,1);
+
+if ~isfield(EEG, 'event') || isempty(EEG.event)
+    return;
+end
+
+all_types = strings(0,1);
+for k = 1:numel(EEG.event)
+    tok = string(normalize_trigger_type_impl(EEG.event(k).type));
+    if tok == "boundary" || strlength(tok) == 0
+        continue;
+    end
+    all_types(end+1,1) = tok; %#ok<AGROW>
+end
+
+all_types = unique(all_types, 'stable');
+present_events = intersect(target_events, all_types, 'stable');
+end
+
+function preview = preview_event_types_impl(EEG, n_max)
+preview = strings(0,1);
+
+if nargin < 2 || isempty(n_max)
+    n_max = 25;
+end
+
+if ~isfield(EEG, 'event') || isempty(EEG.event)
+    return;
+end
+
+all_types = strings(0,1);
+for k = 1:numel(EEG.event)
+    tok = string(normalize_trigger_type_impl(EEG.event(k).type));
+    if tok == "boundary" || strlength(tok) == 0
+        continue;
+    end
+    all_types(end+1,1) = tok; %#ok<AGROW>
+end
+
+all_types = unique(all_types, 'stable');
+preview = all_types(1:min(n_max, numel(all_types)));
+end
+
+function row = build_step06_summary_row_impl( ...
+    subj_label, run_base, ica_method, step_cfg, ...
+    epoching_mode, condition_label, ...
+    input_name, rej_info, saved_paths, status_label, ...
+    n_eeg, n_eog, n_non_eeg)
+
+if nargin < 9 || isempty(saved_paths)
+    saved_paths = {};
+end
+
+output_paths_joined = "";
+if ~isempty(saved_paths)
+    output_paths_joined = strjoin(string(saved_paths), ' | ');
+end
+
+prop_rejected_total = NaN;
+if isfield(rej_info, 'n_total') && rej_info.n_total > 0
+    prop_rejected_total = rej_info.n_rejected_total / rej_info.n_total;
+end
+
+shared_enable   = false;
+shared_faster_z = NaN;
+shared_ptp      = NaN;
+shared_robust   = false;
+
+if isfield(step_cfg, 'shared_epoch_rejection') && isstruct(step_cfg.shared_epoch_rejection)
+    if isfield(step_cfg.shared_epoch_rejection, 'enable')
+        shared_enable = logical(step_cfg.shared_epoch_rejection.enable);
+    end
+    if isfield(step_cfg.shared_epoch_rejection, 'faster_z')
+        shared_faster_z = step_cfg.shared_epoch_rejection.faster_z;
+    end
+    if isfield(step_cfg.shared_epoch_rejection, 'ptp_uV_thresh')
+        shared_ptp = step_cfg.shared_epoch_rejection.ptp_uV_thresh;
+    end
+    if isfield(step_cfg.shared_epoch_rejection, 'use_robust_z')
+        shared_robust = logical(step_cfg.shared_epoch_rejection.use_robust_z);
+    end
+end
+
+row = table( ...
+    string(subj_label), ...
+    string(run_base), ...
+    string(ica_method), ...
+    string(epoching_mode), ...
+    string(condition_label), ...
+    string(status_label), ...
+    string(input_name), ...
+    n_eeg, ...
+    n_eog, ...
+    n_non_eeg, ...
+    rej_info.n_total, ...
+    rej_info.n_rejected_hard, ...
+    rej_info.n_rejected_sophisticated, ...
+    rej_info.n_rejected_total, ...
+    rej_info.n_kept, ...
+    prop_rejected_total, ...
+    logical(rej_info.excluded), ...
+    logical(step_cfg.do_artifact_rejection), ...
+    logical(step_cfg.do_initial_hard_threshold_rejection), ...
+    step_cfg.initial_hard_threshold_uv, ...
+    logical(step_cfg.do_baseline_correction), ...
+    step_cfg.base_start_ms, ...
+    step_cfg.base_end_ms, ...
+    step_cfg.max_reject_prop, ...
+    shared_enable, ...
+    shared_faster_z, ...
+    shared_ptp, ...
+    shared_robust, ...
+    string(output_paths_joined), ...
+    'VariableNames', { ...
+        'subject_id', 'run_base', 'ica_method', 'epoching_mode', 'condition', 'status', ...
+        'input_set_name', ...
+        'n_eeg_channels', 'n_eog_channels', 'n_non_eeg_channels', ...
+        'n_epochs_total', 'n_rejected_hard', 'n_rejected_sophisticated', 'n_rejected_total', 'n_epochs_kept', ...
+        'prop_rejected_total', 'excluded_by_max_reject_prop', ...
+        'artifact_rejection_enabled', 'hard_threshold_enabled', 'hard_threshold_uv', ...
+        'baseline_correction_applied', 'baseline_start_ms', 'baseline_end_ms', ...
+        'max_reject_prop', ...
+        'shared_rejection_enabled', 'shared_faster_z', 'shared_ptp_uV_thresh', 'shared_use_robust_z', ...
+        'output_set_paths'});
+end
+
 
 % =========================================================================
 % BEHAVIOR LOG HELPERS
