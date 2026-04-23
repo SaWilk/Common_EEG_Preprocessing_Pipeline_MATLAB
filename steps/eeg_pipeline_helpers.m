@@ -2905,7 +2905,7 @@ for k = 1:numel(cands)
     end
 end
 
-meta = [[scores(:), [cands.datenum](:)]];
+meta = [scores(:), vertcat(cands.datenum)];
 [~, order] = sortrows(meta, [-1 -2]);
 
 best = cands(order(1));
@@ -3202,9 +3202,11 @@ end
 n_rows = height(beh);
 time_s_all = nan(n_rows, 1);
 
+time_col = beh.(char(col_time));
+
 for r = 1:n_rows
     time_s_all(r) = convert_behavior_time_to_seconds_impl( ...
-        beh.(char(col_time))(r), opts.behavior_time_unit);
+        time_col(r), opts.behavior_time_unit);
 end
 
 [~, ix] = sort(time_s_all);
@@ -3219,9 +3221,12 @@ if isempty(map_table)
     return;
 end
 
+event_col = beh.(char(col_event));
+code_col  = beh.(char(col_code));
+
 for r = 1:height(beh)
-    event_type = string(beh.(char(col_event))(r));
-    code       = string(beh.(char(col_code))(r));
+    event_type = string(event_col(r));
+    code       = string(code_col(r));
     t          = time_s_all(r);
 
     for m = 1:size(map_table, 1)
