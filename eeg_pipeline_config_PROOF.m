@@ -37,15 +37,15 @@ cfg = struct();
 % Project identity
 % -------------------------------------------------------------------------
 cfg.pipeline = struct();
-cfg.pipeline.name        = "aperiodic_pipeline"; % project name used in cfg
+cfg.pipeline.name        = "matrics_classical_pipeline"; % project name used in cfg
 cfg.pipeline.step_prefix = "eeg";                % step 02-06 function prefix
 
 cfg.constants = struct();
-cfg.constants.log_prefix_master = "run_eeg_pipeline_aperiodic"; % master log filename prefix
+cfg.constants.log_prefix_master = "run_eeg_pipeline_classical"; % master log filename prefix
 
 cfg.bids = struct();
-cfg.bids.dataset_folder_name = "baseline"; % BIDS dataset folder name (if you have multiple datasets in teh same raw folder)
-cfg.bids.task_label          = "baseline";   % BIDS task label of EEG dataset
+cfg.bids.dataset_folder_name = "BIDS_RTGMN_Classic"; % BIDS dataset folder name (if you have multiple datasets in teh same raw folder)
+cfg.bids.task_label          = "classical";   % BIDS task label of EEG dataset
 cfg.bids.session_label       = "01";         % BIDS session label
 
 % -------------------------------------------------------------------------
@@ -63,22 +63,22 @@ cfg.paths.profile_override = ""; % leave empty for automatic profile selection
 cfg.paths.profile_paths = struct();
 
 cfg.paths.profile_paths.pc = struct( ...
-    'source_eeg_root',  'Z:\pb\KLPSY1\KLPSY1-RTG\PROOF - Data\Real\EEG\Baseline', ...
-    'source_beh_root',  '', ...
-    'bids_root',        'Z:\pb\KPP_KPN_joined\Aperiodic\Saskia\sourcedata', ...
-    'derivatives_root', 'Z:\pb\KPP_KPN_joined\Aperiodic\Saskia\derivatives');
+    'source_eeg_root',  'Z:\pb\KLPSY1\KLPSY1-RTG\PROOF - Data\Real\EEG\Classical', ...
+    'source_beh_root',  'Z:\pb\KLPSY1\KLPSY1-RTG\PROOF - Data\Real\LOGFILES\Classical', ...
+    'bids_root',        'Z:\pb\KLPSY1\KLPSY1-RTG\MATRICS\sourcedata', ...
+    'derivatives_root', 'Z:\pb\KLPSY1\KLPSY1-RTG\MATRICS\derivatives\preprocessed_eeg');
 
 cfg.paths.profile_paths.server_windows = struct( ...
-    'source_eeg_root',  'Z:\pb\KLPSY1\KLPSY1-RTG\PROOF - Data\Real\EEG\Baseline', ...
-    'source_beh_root',  '', ...
-    'bids_root',         'Z:\pb\KPP_KPN_joined\Aperiodic\Saskia\sourcedata', ...
-    'derivatives_root', 'Z:\pb\KPP_KPN_joined\Aperiodic\Saskia\derivatives');
+    'source_eeg_root',  'Z:\pb\KLPSY1\KLPSY1-RTG\PROOF - Data\Real\EEG\Classical', ...
+    'source_beh_root',  'Z:\pb\KLPSY1\KLPSY1-RTG\PROOF - Data\Real\LOGFILES\Classical', ...
+    'bids_root',         'Z:\pb\KLPSY1\KLPSY1-RTG\MATRICS\sourcedata', ...
+    'derivatives_root', 'Z:\pb\KLPSY1\KLPSY1-RTG\MATRICS\derivatives\preprocessed_eeg');
 
 cfg.paths.profile_paths.hpc_hummel = struct( ...
     'source_eeg_root',  '', ...
     'source_beh_root',  '', ...
     'bids_root',        fullfile('/beegfs/u/bbf7366/sourcedata', char(cfg.bids.dataset_folder_name)), ...
-    'derivatives_root', '/beegfs/u/bbf7366/derivatives/preprocessed_eeg_baseline');
+    'derivatives_root', '/beegfs/u/bbf7366/derivatives/preprocessed_eeg_classical');
 
 cfg.paths.bids_root_override        = "";
 cfg.paths.derivatives_root_override = "";
@@ -89,7 +89,7 @@ cfg.paths.source_beh_root_override  = "";
 % Overwrite behavior
 % -------------------------------------------------------------------------
 cfg.io = struct();
-cfg.io.overwrite_mode          = "delete"; % "skip" | "delete" | "if_older_than"
+cfg.io.overwrite_mode          = "skip"; % "skip" | "delete" | "if_older_than"
 cfg.io.overwrite_if_older_than = "";       % cutoff date for "if_older_than"
 
 % =========================================================================
@@ -244,22 +244,22 @@ cfg.steps.prep_01_bids_formatting = struct( ...
     'overwrite_if_older_than', "");
 
 cfg.steps.prep_02_triggerfix = struct( ...
-    'run', false, ...
+    'run', true, ...
     'overwrite_mode', "", ...
     'overwrite_if_older_than', "");
 
 cfg.steps.prep_03_until_ica = struct( ...
-    'run', false, ...
+    'run', true, ...
     'overwrite_mode', "if_older_than", ...
     'overwrite_if_older_than', "2026-03-15");
 
 cfg.steps.prep_04_ica = struct( ...
-    'run', false, ...
+    'run', true, ...
     'overwrite_mode', "delete", ...
     'overwrite_if_older_than', "");
 
 cfg.steps.prep_05_after_ica = struct( ...
-    'run', false, ...
+    'run', true, ...
     'overwrite_mode', "delete", ...
     'overwrite_if_older_than', "");
 
@@ -289,14 +289,14 @@ cfg.prep_01.session_label = cfg.bids.session_label; % BIDS session label
 cfg.prep_01.task_label    = cfg.bids.task_label;    % BIDS task label
 
 cfg.prep_01.do_eeg = true;  % copy/rename raw BrainVision EEG into BIDS
-cfg.prep_01.do_beh = false; % copy project-specific CF behavior files
+cfg.prep_01.do_beh = true; % copy project-specific CF behavior files
 
 cfg.prep_01.try_eeglab_bids_export           = true; % additionally try pop_exportbids after copying
 cfg.prep_01.write_readme_if_exporter_did_not = true; % write README if exporter did not create dataset-level description
 
 cfg.prep_01.copy_eeg_sidecar_log_to_events = false; % copy project-specific CF log as *_events.log
 
-cfg.prep_01.raw_eeg_regex = '^B_(\d{3})(?:_(\d{3}))?\.vhdr$'; % raw EEG filename pattern: subject + optional run
+cfg.prep_01.raw_eeg_regex = '_(\d{3})(?:_(\d{3}))?\.vhdr$'; % raw EEG filename pattern: subject + optional run
 
 cfg.prep_01.existing_bids_vhdr_regex = ...
     '^sub-(\d+)_ses-(\d+)_task-([A-Za-z0-9]+)(?:_run-(\d+))?_eeg\.vhdr$'; % existing BIDS EEG header pattern used when do_eeg=false
@@ -442,12 +442,12 @@ cfg.prep_03.ekg_channel_labels     = {'EKG'};
 
 cfg.prep_03.downsample_hz = 250;
 
-cfg.prep_03.highpass_hz          = 0.1;
-cfg.prep_03.lowpass_hz           = 100;
+cfg.prep_03.highpass_hz          = 0.01;
+cfg.prep_03.lowpass_hz           = 30;
 cfg.prep_03.ica_prep_highpass_hz = 1;
 
 cfg.prep_03.detect_bad_channels_mode = "auto";
-cfg.prep_03.auto_badchan_z_threshold  = 2.5;
+cfg.prep_03.auto_badchan_z_threshold  = 3.29;
 cfg.prep_03.auto_badchan_freqrange_hz = [1, cfg.prep_03.lowpass_hz + 10];
 
 cfg.prep_03.emu_flatline_sec           = 5;
@@ -492,7 +492,7 @@ cfg.prep_03.shared_epoch_rejection.use_faster    = true;
 cfg.prep_03.shared_epoch_rejection.faster_z      = 4;
 cfg.prep_03.shared_epoch_rejection.use_robust_z  = true;
 cfg.prep_03.shared_epoch_rejection.use_ptp       = true;
-cfg.prep_03.shared_epoch_rejection.ptp_uV_thresh = 800;
+cfg.prep_03.shared_epoch_rejection.ptp_uV_thresh = 200;
 
 % =========================================================================
 % STEP 04: ICA
@@ -540,7 +540,7 @@ cfg.prep_06 = struct();
 % -------------------------------------------------------------------------
 % General mode selection
 % -------------------------------------------------------------------------
-cfg.prep_06.epoching_mode  = "baseline";   % "baseline" | "event_locked"
+cfg.prep_06.epoching_mode  = "event_locked";   % "baseline" | "event_locked"
 cfg.prep_06.overwrite_mode = "";
 
 % -------------------------------------------------------------------------
@@ -607,7 +607,7 @@ cfg.prep_06.max_reject_prop = 1;
 % -------------------------------------------------------------------------
 % Baseline correction
 % -------------------------------------------------------------------------
-cfg.prep_06.do_baseline_correction = false;
+cfg.prep_06.do_baseline_correction = true;
 cfg.prep_06.base_start_ms          = -200;
 cfg.prep_06.base_end_ms            = 0;
 
@@ -625,7 +625,7 @@ cfg.prep_06.shared_epoch_rejection = struct();
 cfg.prep_06.shared_epoch_rejection.enable          = true;
 cfg.prep_06.shared_epoch_rejection.use_faster      = true;
 cfg.prep_06.shared_epoch_rejection.faster_z        = 3;
-cfg.prep_06.shared_epoch_rejection.use_robust_z    = false;
+cfg.prep_06.shared_epoch_rejection.use_robust_z    = true;
 cfg.prep_06.shared_epoch_rejection.use_ptp         = true;
 cfg.prep_06.shared_epoch_rejection.ptp_uV_thresh   = 300;
 

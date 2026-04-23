@@ -450,14 +450,66 @@ end
 
 function sub_ids = discover_subjects_impl(cfg)
 sub_ids = {};
+discovery_root = "";
 
+    % -------------------------------------------------------------------------
+    % 1) Explicit subject list always wins
+    % -------------------------------------------------------------------------
 if isfield(cfg, 'subjects') && isfield(cfg.subjects, 'list') && ~isempty(cfg.subjects.list)
     sub_ids = cfg.subjects.list;
+    discovery_root = "cfg.subjects.list";
+
 else
-    dir_info = dir(fullfile(cfg.paths.bids_root, 'sub-*'));
-    dir_info = dir_info([dir_info.isdir]);
-    sub_ids = {dir_info.name};
-    sub_ids = cellfun(@(x) erase(x, 'sub-'), sub_ids, 'UniformOutput', false);
+        % ---------------------------------------------------------------------
+        % 2) Decide where discovery should happen
+        %    - If Step 01 runs, discover from raw EEG source files
+        %    - Otherwise discover from existing BIDS sub-* folders
+        % ---------------------------------------------------------------------
+    use_step01_source_discovery = ...
+        isfield(cfg, 'steps') && ...
+        isfield(cfg.steps, 'prep_01_bids_formatting') && ...
+        isfield(cfg.steps.prep_01_bids_formatting, 'run') && ...
+        cfg.steps.prep_01_bids_formatting.run;
+
+    if use_step01_source_discovery
+        source_root = char(string(cfg.paths.source_eeg_root));
+        discovery_root = string(source_root);
+
+        if exist(source_root, 'dir') ~= 7
+            error('Step 01 subject discovery failed: source_eeg_root does not exist: %s', source_root);
+        end
+
+        if isfield(cfg, 'prep_01') && isfield(cfg.prep_01, 'raw_eeg_regex') && ...
+                strlength(string(cfg.prep_01.raw_eeg_regex)) > 0
+            raw_regex = char(string(cfg.prep_01.raw_eeg_regex));
+        else
+            raw_regex = '^.*?(\d{3})(?:_(\d{3}))?\.vhdr$';
+        end
+
+        dir_info = dir(fullfile(source_root, '*.vhdr'));
+        tmp_ids = {};
+
+        for k = 1:numel(dir_info)
+            this_name = dir_info(k).name;
+            tok = regexp(this_name, raw_regex, 'tokens', 'once');
+
+            if ~isempty(tok) && ~isempty(tok{1})
+                tmp_ids{end+1} = char(string(tok{1})); %#ok<AGROW>
+            end
+        end
+
+        sub_ids = unique(tmp_ids, 'stable');
+
+    else
+        bids_root = char(string(cfg.paths.bids_root));
+        discovery_root = string(bids_root);
+
+        dir_info = dir(fullfile(bids_root, 'sub-*'));
+        dir_info = dir_info([dir_info.isdir]);
+
+        sub_ids = {dir_info.name};
+        sub_ids = cellfun(@(x) erase(x, 'sub-'), sub_ids, 'UniformOutput', false);
+    end
 end
 
 if isstring(sub_ids)
@@ -474,7 +526,7 @@ keep_mask = ~cellfun(@isempty, regexp(sub_ids, valid_regex, 'once'));
 sub_ids = sub_ids(keep_mask);
 
 if isempty(sub_ids)
-    error('No valid subject IDs found in %s (after regex filter).', cfg.paths.bids_root);
+    error('No valid subject IDs found in %s (after regex filter).', char(string(discovery_root)));
 end
 
 sub_num = cellfun(@str2double, sub_ids);

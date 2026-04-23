@@ -227,8 +227,11 @@ if use_parallel
 
         if ~isempty(pool_obj) && ~cfg.parallel.pool_is_thread
             try
-                pctRunOnAll addpath(root_dir);
-                pctRunOnAll addpath(steps_dir);
+                cmd_root  = sprintf('addpath(''%s'');', strrep(root_dir,  '''', ''''''));
+                cmd_steps = sprintf('addpath(''%s'');', strrep(steps_dir, '''', ''''''));
+
+                pctRunOnAll(cmd_root);
+                pctRunOnAll(cmd_steps);
                 helpers.log_msg(master_log, 'Worker paths updated: root + steps');
             catch me_path
                 helpers.log_msg(master_log, ...
