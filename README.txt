@@ -1,5 +1,5 @@
 What this is: 
-This EEG preprocessing Pipeline is intended to represent a Standard prreprocessing procedure for the KPP, KPN and RU5389 as decided in our Meeting regarding the preprocessing steps. It is set to sensible defaults - namely the ones we agreed on plus some common practices - but fully configurable so you can adjust it to your specific setup. 
+This EEG preprocessing Pipeline is intended to represent a Standard preprocessing procedure for the KPP, KPN and RU5389 as decided in a joint meeting in January 2026, in which common practises in preprocessing EEG data were agreed upon. It is set to these sensible defaults - plus some common practices - but fully configurable so you can adjust it to your specific setup. 
 
 How to use: 
 
