@@ -10,7 +10,7 @@ function [t_all, t_by_method, t_pair] = eeg_collect_prep06_summary(cfg_or_qc_roo
 % INPUT
 %   cfg_or_qc_root
 %       - [] or omitted: uses eeg_pipeline_config()
-%       - cfg struct:     uses fullfile(cfg.paths.out_root, 'qc')
+%       - cfg struct:     uses fullfile(cfg.paths.derivatives_root, 'qc')
 %       - char/string:    interpreted as qc root folder
 %
 % OUTPUT
@@ -37,9 +37,9 @@ function [t_all, t_by_method, t_pair] = eeg_collect_prep06_summary(cfg_or_qc_roo
 % -------------------------------------------------------------------------
 if nargin < 1 || isempty(cfg_or_qc_root)
     cfg = eeg_pipeline_config();
-    qc_root = fullfile(cfg.paths.out_root, 'qc');
+    qc_root = fullfile(cfg.paths.derivatives_root, 'qc');
 elseif isstruct(cfg_or_qc_root)
-    qc_root = fullfile(cfg_or_qc_root.paths.out_root, 'qc');
+    qc_root = fullfile(cfg_or_qc_root.paths.derivatives_root, 'qc');
 else
     qc_root = char(string(cfg_or_qc_root));
 end

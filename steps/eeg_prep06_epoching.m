@@ -13,9 +13,10 @@ function step_out = eeg_prep06_epoching(subj_id, cfg, paths, helpers)
 %      - create regular regepochs within each chunk
 %
 % ARTIFACT HANDLING ORDER
-%   1) initial hard absolute-threshold rejection
-%   2) sophisticated epoch rejection
+%   1) optional initial hard absolute-threshold rejection
+%   2) sophisticated epoch rejection (preferred: EEG-only shared helper)
 %   3) optional baseline correction
+%   4) optional subject exclusion by per-condition minimum trial counts
 %
 % INPUT
 %   paths.prep_05_out_dir
@@ -34,10 +35,10 @@ function step_out = eeg_prep06_epoching(subj_id, cfg, paths, helpers)
 %
 % NOTES
 %   - reference_mode defaults to "keep"
-%   - max_reject_prop = 0 means: if anything gets rejected, exclude dataset
 %   - output split keeps current "_NON_EEG" naming
 %
 % Saskia Wilken Dez 2025
+% Updated Apr 2026
 
 step_out = struct( ...
     'ok', false, ...
@@ -75,29 +76,19 @@ if isfield(cfg, 'steps') && isfield(cfg.steps, 'prep_06_epoching') && isstruct(c
     end
 end
 
+step_cfg.epoching_mode = string(step_cfg.epoching_mode);
+step_cfg.epoching_mode = step_cfg.epoching_mode(1);
+step_cfg.epoching_mode = string(helpers.normalize_epoching_mode_value(step_cfg.epoching_mode));
+
 OVERWRITE_MODE = helpers.resolve_overwrite_mode(cfg, step_cfg.overwrite_mode);
 
-%% ========================================================================
-%  DEBUG: merged epoching mode
-% ========================================================================
-debug_mode_class = class(step_cfg.epoching_mode);
-debug_mode_size  = mat2str(size(step_cfg.epoching_mode));
-
-try
-    debug_mode_string = string(step_cfg.epoching_mode);
-    debug_mode_joined = strjoin(cellstr(debug_mode_string(:)), ' | ');
-catch me_debug_mode
-    debug_mode_joined = sprintf('<string-conversion-failed: %s>', me_debug_mode.message);
+if step_cfg.epoching_mode == MODE_EVENT_LOCKED && ...
+        isfield(step_cfg, 'min_trials_per_condition_enable') && ...
+        step_cfg.min_trials_per_condition_enable && ...
+        isempty(step_cfg.min_trials_per_condition_codes)
+    error(['cfg.prep_06.min_trials_per_condition_codes is empty, but ' ...
+           'cfg.prep_06.min_trials_per_condition_enable=true.']);
 end
-
-helpers.log_msg_default( ...
-    'prep_06_epoching DEBUG AFTER MERGE | epoching_mode value="[%s]" | class=%s | size=%s', ...
-    debug_mode_joined, debug_mode_class, debug_mode_size);
-
-disp('DEBUG STEP06 AFTER MERGE: step_cfg.epoching_mode');
-disp(step_cfg.epoching_mode);
-disp(class(step_cfg.epoching_mode));
-disp(size(step_cfg.epoching_mode));
 
 %% ========================================================================
 %  PATHS
@@ -160,29 +151,6 @@ try
 
         [idx_eeg, idx_eog, idx_non_eeg] = helpers.get_channel_indices_by_type(EEG_in);
 
-        %% ----------------------------------------------------------------
-        % DEBUG: mode before build_epoching_output_paths
-        % -----------------------------------------------------------------
-        debug_mode_class = class(step_cfg.epoching_mode);
-        debug_mode_size  = mat2str(size(step_cfg.epoching_mode));
-
-        try
-            debug_mode_string = string(step_cfg.epoching_mode);
-            debug_mode_joined = strjoin(cellstr(debug_mode_string(:)), ' | ');
-        catch me_debug_mode
-            debug_mode_joined = sprintf('<string-conversion-failed: %s>', me_debug_mode.message);
-        end
-
-        helpers.log_msg_default( ...
-            ['prep_06_epoching DEBUG BEFORE build_epoching_output_paths | ' ...
-             'subj=%s | run=%s | epoching_mode value="[%s]" | class=%s | size=%s'], ...
-            SUBJ_LABEL, run_base_c, debug_mode_joined, debug_mode_class, debug_mode_size);
-
-        disp('DEBUG STEP06 BEFORE build_epoching_output_paths: step_cfg.epoching_mode');
-        disp(step_cfg.epoching_mode);
-        disp(class(step_cfg.epoching_mode));
-        disp(size(step_cfg.epoching_mode));
-
         output_spec = helpers.build_epoching_output_paths( ...
             run_base, OUT_DIR, step_cfg, idx_eeg, idx_eog, idx_non_eeg);
 
@@ -217,30 +185,7 @@ try
 
         run_summary_rows = table();
 
-        %% ----------------------------------------------------------------
-        % DEBUG: mode before switch
-        % -----------------------------------------------------------------
-        debug_mode_class = class(step_cfg.epoching_mode);
-        debug_mode_size  = mat2str(size(step_cfg.epoching_mode));
-
-        try
-            debug_mode_string = string(step_cfg.epoching_mode);
-            debug_mode_joined = strjoin(cellstr(debug_mode_string(:)), ' | ');
-        catch me_debug_mode
-            debug_mode_joined = sprintf('<string-conversion-failed: %s>', me_debug_mode.message);
-        end
-
-        helpers.log_msg_default( ...
-            ['prep_06_epoching DEBUG BEFORE SWITCH | ' ...
-             'subj=%s | run=%s | epoching_mode value="[%s]" | class=%s | size=%s'], ...
-            SUBJ_LABEL, run_base_c, debug_mode_joined, debug_mode_class, debug_mode_size);
-
-        disp('DEBUG STEP06 BEFORE SWITCH: step_cfg.epoching_mode');
-        disp(step_cfg.epoching_mode);
-        disp(class(step_cfg.epoching_mode));
-        disp(size(step_cfg.epoching_mode));
-
-        switch string(step_cfg.epoching_mode)
+        switch step_cfg.epoching_mode
 
             case MODE_EVENT_LOCKED
 
@@ -297,6 +242,46 @@ try
 
                 saved_paths  = {};
                 status_label = "empty_after_rejection";
+
+                if ~rej_info.excluded && EEG_final.trials > 0 && step_cfg.min_trials_per_condition_enable
+                    [min_ok, min_info] = helpers.evaluate_min_trials_per_condition( ...
+                        EEG_final, ...
+                        step_cfg.min_trials_per_condition_codes, ...
+                        step_cfg.min_trials_per_condition_min_n, ...
+                        step_cfg.min_trials_per_condition_zero_tol_ms);
+
+                    rej_info.min_trials_required               = min_info.min_required;
+                    rej_info.min_trials_condition_counts       = min_info.counts_joined;
+                    rej_info.min_trials_insufficient_conditions = min_info.insufficient_joined;
+
+                    if min_ok
+                        helpers.log_msg_default( ...
+                            'prep_06_epoching: %s | %s | min-trials PASS | required=%d | counts=%s', ...
+                            SUBJ_LABEL, run_base_c, min_info.min_required, char(min_info.counts_joined));
+
+                        EEG_final = helpers.append_eeg_comment(EEG_final, sprintf( ...
+                            'prep_06_epoching: min-trials rule passed | min_n=%d | counts=%s', ...
+                            min_info.min_required, char(min_info.counts_joined)));
+                    else
+                        rej_info.excluded                   = true;
+                        rej_info.excluded_by_min_trials_rule = true;
+                        rej_info.exclusion_reason           = "min_trials_per_condition";
+                        status_label                        = "excluded";
+
+                        helpers.log_msg_default( ...
+                            ['prep_06_epoching: %s | %s | dataset excluded by min-trials rule | ' ...
+                             'required=%d | counts=%s | insufficient=%s'], ...
+                            SUBJ_LABEL, run_base_c, min_info.min_required, ...
+                            char(min_info.counts_joined), char(min_info.insufficient_joined));
+
+                        EEG_final = helpers.append_eeg_comment(EEG_final, sprintf( ...
+                            ['prep_06_epoching: dataset excluded by min-trials rule | ' ...
+                             'min_n=%d | counts=%s | insufficient=%s'], ...
+                            min_info.min_required, ...
+                            char(min_info.counts_joined), ...
+                            char(min_info.insufficient_joined)));
+                    end
+                end
 
                 if ~rej_info.excluded && EEG_final.trials > 0
                     saved_paths = helpers.save_final_epoched_outputs( ...
@@ -433,7 +418,7 @@ try
                 end
 
             otherwise
-                error('Unsupported cfg.prep_06.epoching_mode: %s', char(string(step_cfg.epoching_mode)));
+                error('Unsupported cfg.prep_06.epoching_mode: %s', char(step_cfg.epoching_mode));
         end
 
         if ~isempty(run_summary_rows)
@@ -512,8 +497,8 @@ step_cfg.savemode                = 'twofiles';
 % -------------------------------------------------------------------------
 % REFERENCING
 % -------------------------------------------------------------------------
-step_cfg.reference_mode         = "keep";
-step_cfg.mastoid_channel_labels = {'T9','T10'};
+step_cfg.reference_mode            = "keep";
+step_cfg.mastoid_channel_labels    = {'T9','T10'};
 step_cfg.reference_exclude_non_eeg = true;
 
 % -------------------------------------------------------------------------
@@ -537,20 +522,19 @@ step_cfg.baseline_end_markers            = {'S 99'};
 % -------------------------------------------------------------------------
 % ARTIFACT REJECTION
 % -------------------------------------------------------------------------
-step_cfg.do_artifact_rejection = true;
-
-step_cfg.do_initial_hard_threshold_rejection = true;
+step_cfg.do_artifact_rejection               = true;
+step_cfg.do_initial_hard_threshold_rejection = false;
 step_cfg.initial_hard_threshold_uv           = 100;
 
 step_cfg.use_faster                    = true;
 step_cfg.faster_z_thresh               = 3;
-step_cfg.faster_use_robust_z           = false;
+step_cfg.faster_use_robust_z           = true;
 step_cfg.faster_warn_if_reject_prop_gt = 0.25;
 
 step_cfg.use_ptp       = true;
-step_cfg.ptp_uV_thresh = 600;
+step_cfg.ptp_uV_thresh = 300;
 
-step_cfg.max_reject_prop = 0;
+step_cfg.max_reject_prop = 1;
 
 % -------------------------------------------------------------------------
 % BASELINE CORRECTION
@@ -569,13 +553,21 @@ step_cfg.eeg_only_keep_eog      = false;
 % SHARED EPOCH REJECTION
 % -------------------------------------------------------------------------
 step_cfg.shared_epoch_rejection = struct();
-step_cfg.shared_epoch_rejection.enable          = false;
+step_cfg.shared_epoch_rejection.enable          = true;
 step_cfg.shared_epoch_rejection.use_faster      = true;
 step_cfg.shared_epoch_rejection.faster_z        = 3;
-step_cfg.shared_epoch_rejection.use_robust_z    = false;
+step_cfg.shared_epoch_rejection.use_robust_z    = true;
 step_cfg.shared_epoch_rejection.use_ptp         = true;
-step_cfg.shared_epoch_rejection.ptp_uV_thresh   = 600;
-step_cfg.shared_epoch_rejection.max_reject_prop = 0;
+step_cfg.shared_epoch_rejection.ptp_uV_thresh   = 300;
+step_cfg.shared_epoch_rejection.max_reject_prop = 1;
+
+% -------------------------------------------------------------------------
+% MINIMUM TRIALS PER CONDITION (event_locked only)
+% -------------------------------------------------------------------------
+step_cfg.min_trials_per_condition_enable      = false;
+step_cfg.min_trials_per_condition_min_n       = 3;
+step_cfg.min_trials_per_condition_zero_tol_ms = 2;
+step_cfg.min_trials_per_condition_codes       = {};
 
 % -------------------------------------------------------------------------
 % SUMMARY TABLES

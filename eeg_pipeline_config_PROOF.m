@@ -589,7 +589,7 @@ cfg.prep_06.baseline_end_markers            = {'S 99'};
 % Artifact rejection
 % -------------------------------------------------------------------------
 cfg.prep_06.do_artifact_rejection               = true;
-cfg.prep_06.do_initial_hard_threshold_rejection = true;
+cfg.prep_06.do_initial_hard_threshold_rejection = false;
 cfg.prep_06.initial_hard_threshold_uv           = 200;
 
 cfg.prep_06.use_faster                    = true;
@@ -598,7 +598,7 @@ cfg.prep_06.faster_use_robust_z           = true;
 cfg.prep_06.faster_warn_if_reject_prop_gt = 0.25;
 
 cfg.prep_06.use_ptp       = true;
-cfg.prep_06.ptp_uV_thresh = 600;
+cfg.prep_06.ptp_uV_thresh = 300;
 
 % Subject-level exclusion after epoch rejection
 % 1 means disabled
@@ -630,10 +630,22 @@ cfg.prep_06.shared_epoch_rejection.use_ptp         = true;
 cfg.prep_06.shared_epoch_rejection.ptp_uV_thresh   = 300;
 
 % -------------------------------------------------------------------------
+% Subject exclusion by minimum trials per relevant condition
+% -------------------------------------------------------------------------
+cfg.prep_06.min_trials_per_condition_enable      = true;
+cfg.prep_06.min_trials_per_condition_min_n       = 3;
+cfg.prep_06.min_trials_per_condition_zero_tol_ms = 2;
+cfg.prep_06.min_trials_per_condition_codes = { ...
+    'S 2021','S 2421','S 2022','S 2422', ...
+    'S 203','S 213','S 223','S 233','S 243', ...
+    'S 2041','S 2441','S 2042','S 2442','S 2043','S 2443' ...
+    };
+
+% -------------------------------------------------------------------------
 % Summary tables
 % -------------------------------------------------------------------------
-cfg.prep_06.write_run_summary_table     = false;
-cfg.prep_06.write_subject_summary_table = false;
+cfg.prep_06.write_run_summary_table     = true;
+cfg.prep_06.write_subject_summary_table = true;
 cfg.prep_06.qc_table_delimiter          = ';';
 
 end
