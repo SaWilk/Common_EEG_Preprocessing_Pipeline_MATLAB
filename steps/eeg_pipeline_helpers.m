@@ -91,6 +91,7 @@ helpers.build_epoching_output_paths           = @build_epoching_output_paths_imp
 helpers.normalize_event_list                  = @normalize_event_list_impl;
 helpers.get_present_events                    = @get_present_events_impl;
 helpers.preview_event_types                   = @preview_event_types_impl;
+helpers.evaluate_min_trials_per_condition     = @evaluate_min_trials_per_condition_impl;
 helpers.build_step06_summary_row              = @build_step06_summary_row_impl;
 helpers.save_intermediate_set                 = @save_intermediate_set_impl;
 helpers.apply_hard_epoch_threshold_rejection  = @apply_hard_epoch_threshold_rejection_impl;
@@ -1932,12 +1933,18 @@ function [EEG_final, rej_info] = finalize_epoched_dataset_impl( ...
 EEG_final = EEG_ep;
 
 rej_info = struct();
-rej_info.excluded = false;
-rej_info.n_total  = EEG_ep.trials;
-rej_info.n_rejected_hard = 0;
-rej_info.n_rejected_sophisticated = 0;
-rej_info.n_rejected_total = 0;
-rej_info.n_kept = EEG_ep.trials;
+rej_info.excluded                        = false;
+rej_info.excluded_by_max_reject_prop     = false;
+rej_info.excluded_by_min_trials_rule     = false;
+rej_info.exclusion_reason                = "";
+rej_info.n_total                         = EEG_ep.trials;
+rej_info.n_rejected_hard                 = 0;
+rej_info.n_rejected_sophisticated        = 0;
+rej_info.n_rejected_total                = 0;
+rej_info.n_kept                          = EEG_ep.trials;
+rej_info.min_trials_required             = NaN;
+rej_info.min_trials_condition_counts     = "";
+rej_info.min_trials_insufficient_conditions = "";
 
 if step_cfg.save_intermediate_steps && ~step_cfg.save_final_only
     save_intermediate_set_impl( ...
@@ -2057,7 +2064,9 @@ apply_max_reject_exclusion = ...
     (step_cfg.max_reject_prop >= 0);
 
 if apply_max_reject_exclusion && (prop_rejected > step_cfg.max_reject_prop)
-    rej_info.excluded = true;
+    rej_info.excluded                    = true;
+    rej_info.excluded_by_max_reject_prop = true;
+    rej_info.exclusion_reason            = "max_reject_prop";
 
     EEG_work = helpers.append_eeg_comment(EEG_work, sprintf( ...
         ['prep_06_epoching: dataset excluded | rejected %.1f%% of epochs ' ...
@@ -2814,6 +2823,202 @@ all_types = unique(all_types, 'stable');
 preview = all_types(1:min(n_max, numel(all_types)));
 end
 
+function [ok, info] = evaluate_min_trials_per_condition_impl(EEG, condition_codes, min_trials_required, zero_tol_ms)
+info = struct();
+info.ok                 = true;
+info.min_required       = min_trials_required;
+info.zero_tol_ms        = zero_tol_ms;
+info.condition_codes    = normalize_event_list_impl(condition_codes);
+info.counts             = zeros(numel(info.condition_codes), 1);
+info.counts_joined      = "";
+info.insufficient_codes = strings(0,1);
+info.insufficient_joined = "";
+
+if nargin < 3 || isempty(min_trials_required) || ~isscalar(min_trials_required) || ...
+        ~isfinite(min_trials_required) || min_trials_required < 0
+    min_trials_required = 0;
+end
+min_trials_required   = round(double(min_trials_required));
+info.min_required     = min_trials_required;
+
+if nargin < 4 || isempty(zero_tol_ms) || ~isscalar(zero_tol_ms) || ~isfinite(zero_tol_ms) || zero_tol_ms < 0
+    zero_tol_ms = 2;
+end
+info.zero_tol_ms = double(zero_tol_ms);
+
+if isempty(info.condition_codes)
+    ok = true;
+    info.ok = ok;
+    return;
+end
+
+if ~isfield(EEG, 'epoch') || isempty(EEG.epoch) || EEG.trials < 1
+    info.counts = zeros(numel(info.condition_codes), 1);
+    info.counts_joined = format_condition_count_map_impl(info.condition_codes, info.counts);
+    info.insufficient_codes = info.condition_codes;
+    info.insufficient_joined = strjoin(cellstr(info.insufficient_codes), ', ');
+    ok = false;
+    info.ok = ok;
+    return;
+end
+
+n_epoch = min(double(EEG.trials), numel(EEG.epoch));
+
+for e = 1:n_epoch
+    matched_code = extract_epoch_time_locking_condition_code_impl( ...
+        EEG.epoch(e), info.condition_codes, info.zero_tol_ms);
+
+    if strlength(matched_code) == 0
+        continue;
+    end
+
+    ix = find(info.condition_codes == matched_code, 1, 'first');
+    if ~isempty(ix)
+        info.counts(ix) = info.counts(ix) + 1;
+    end
+end
+
+info.counts_joined = format_condition_count_map_impl(info.condition_codes, info.counts);
+info.insufficient_codes = info.condition_codes(info.counts < min_trials_required);
+
+if isempty(info.insufficient_codes)
+    info.insufficient_joined = "";
+    ok = true;
+else
+    info.insufficient_joined = strjoin(cellstr(info.insufficient_codes), ', ');
+    ok = false;
+end
+
+info.ok = ok;
+end
+
+function code = extract_epoch_time_locking_condition_code_impl(epoch_info, relevant_codes, zero_tol_ms)
+code = "";
+
+if nargin < 3 || isempty(zero_tol_ms) || ~isscalar(zero_tol_ms) || ~isfinite(zero_tol_ms)
+    zero_tol_ms = 2;
+end
+
+event_types = {};
+event_lats  = {};
+
+if isstruct(epoch_info)
+    if isfield(epoch_info, 'eventtype')
+        event_types = coerce_to_cell_impl(epoch_info.eventtype);
+    end
+    if isfield(epoch_info, 'eventlatency')
+        event_lats = coerce_to_cell_impl(epoch_info.eventlatency);
+    end
+end
+
+if isempty(event_types)
+    return;
+end
+
+n_items = max(numel(event_types), max(1, numel(event_lats)));
+type_vec = strings(n_items, 1);
+lat_vec  = nan(n_items, 1);
+
+for i = 1:n_items
+    this_type = event_types{min(i, numel(event_types))};
+    type_vec(i) = string(normalize_trigger_type_impl(this_type));
+
+    if ~isempty(event_lats)
+        this_lat = event_lats{min(i, numel(event_lats))};
+        lat_vec(i) = scalarize_latency_ms_impl(this_lat);
+    end
+end
+
+relevant_mask = ismember(type_vec, relevant_codes);
+
+if ~any(relevant_mask)
+    return;
+end
+
+zero_hits = find(relevant_mask & isfinite(lat_vec) & abs(lat_vec) <= zero_tol_ms, 1, 'first');
+if ~isempty(zero_hits)
+    code = type_vec(zero_hits);
+    return;
+end
+
+relevant_hits = find(relevant_mask);
+
+if numel(relevant_hits) == 1
+    code = type_vec(relevant_hits);
+    return;
+end
+
+finite_hits = relevant_hits(isfinite(lat_vec(relevant_hits)));
+if ~isempty(finite_hits)
+    [~, ix] = min(abs(lat_vec(finite_hits)));
+    code = type_vec(finite_hits(ix));
+    return;
+end
+
+code = type_vec(relevant_hits(1));
+end
+
+function c = coerce_to_cell_impl(x)
+if isempty(x)
+    c = {};
+elseif iscell(x)
+    c = x(:);
+elseif isstring(x)
+    c = cellstr(x(:));
+elseif ischar(x)
+    c = {x};
+elseif isnumeric(x) || islogical(x)
+    c = num2cell(x(:));
+else
+    c = {x};
+end
+end
+
+function lat_ms = scalarize_latency_ms_impl(x)
+lat_ms = NaN;
+
+if iscell(x) && numel(x) == 1
+    x = x{1};
+end
+
+if isempty(x)
+    return;
+end
+
+if isstring(x) || ischar(x)
+    lat_ms = str2double(strrep(char(string(x)), ',', '.'));
+    return;
+end
+
+if isnumeric(x) || islogical(x)
+    x = double(x);
+    lat_ms = x(1);
+    return;
+end
+
+try
+    x = double(x);
+    lat_ms = x(1);
+catch
+    lat_ms = NaN;
+end
+end
+
+function joined = format_condition_count_map_impl(condition_codes, counts)
+if isempty(condition_codes)
+    joined = "";
+    return;
+end
+
+parts = strings(numel(condition_codes), 1);
+
+for i = 1:numel(condition_codes)
+    parts(i) = string(sprintf('%s=%d', char(condition_codes(i)), counts(i)));
+end
+
+joined = strjoin(cellstr(parts), ' | ');
+end
+
 function row = build_step06_summary_row_impl( ...
     subj_label, run_base, ica_method, step_cfg, ...
     epoching_mode, condition_label, ...
@@ -2854,6 +3059,16 @@ if isfield(step_cfg, 'shared_epoch_rejection') && isstruct(step_cfg.shared_epoch
     end
 end
 
+excluded_by_max_reject_prop = logical(getfield_safe_impl(rej_info, 'excluded_by_max_reject_prop', false));
+excluded_by_min_trials_rule = logical(getfield_safe_impl(rej_info, 'excluded_by_min_trials_rule', false));
+excluded_any_rule           = logical(getfield_safe_impl(rej_info, 'excluded', false));
+exclusion_reason            = string(getfield_safe_impl(rej_info, 'exclusion_reason', ""));
+
+min_trials_rule_enabled = logical(getfield_safe_impl(step_cfg, 'min_trials_per_condition_enable', false));
+min_trials_min_n        = getfield_safe_impl(step_cfg, 'min_trials_per_condition_min_n', NaN);
+min_trials_counts       = string(getfield_safe_impl(rej_info, 'min_trials_condition_counts', ""));
+min_trials_insufficient = string(getfield_safe_impl(rej_info, 'min_trials_insufficient_conditions', ""));
+
 row = table( ...
     string(subj_label), ...
     string(run_base), ...
@@ -2871,7 +3086,10 @@ row = table( ...
     rej_info.n_rejected_total, ...
     rej_info.n_kept, ...
     prop_rejected_total, ...
-    logical(rej_info.excluded), ...
+    excluded_any_rule, ...
+    excluded_by_max_reject_prop, ...
+    excluded_by_min_trials_rule, ...
+    exclusion_reason, ...
     logical(step_cfg.do_artifact_rejection), ...
     logical(step_cfg.do_initial_hard_threshold_rejection), ...
     step_cfg.initial_hard_threshold_uv, ...
@@ -2883,17 +3101,23 @@ row = table( ...
     shared_faster_z, ...
     shared_ptp, ...
     shared_robust, ...
+    min_trials_rule_enabled, ...
+    min_trials_min_n, ...
+    min_trials_counts, ...
+    min_trials_insufficient, ...
     string(output_paths_joined), ...
     'VariableNames', { ...
         'subject_id', 'run_base', 'ica_method', 'epoching_mode', 'condition', 'status', ...
         'input_set_name', ...
         'n_eeg_channels', 'n_eog_channels', 'n_non_eeg_channels', ...
         'n_epochs_total', 'n_rejected_hard', 'n_rejected_sophisticated', 'n_rejected_total', 'n_epochs_kept', ...
-        'prop_rejected_total', 'excluded_by_max_reject_prop', ...
+        'prop_rejected_total', ...
+        'excluded_any_rule', 'excluded_by_max_reject_prop', 'excluded_by_min_trials_rule', 'exclusion_reason', ...
         'artifact_rejection_enabled', 'hard_threshold_enabled', 'hard_threshold_uv', ...
         'baseline_correction_applied', 'baseline_start_ms', 'baseline_end_ms', ...
         'max_reject_prop', ...
         'shared_rejection_enabled', 'shared_faster_z', 'shared_ptp_uV_thresh', 'shared_use_robust_z', ...
+        'min_trials_rule_enabled', 'min_trials_min_n', 'min_trials_condition_counts', 'min_trials_insufficient_conditions', ...
         'output_set_paths'});
 end
 
