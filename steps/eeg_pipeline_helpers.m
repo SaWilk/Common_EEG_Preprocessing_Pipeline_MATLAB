@@ -51,6 +51,7 @@ helpers.init_toolboxes                      = @init_toolboxes_impl;
 helpers.discover_subjects                   = @discover_subjects_impl;
 helpers.resolve_parallel_enable             = @resolve_parallel_enable_impl;
 helpers.resolve_worker_count                = @resolve_worker_count_impl;
+helpers.resolve_config_function             = @resolve_config_function_impl;
 helpers.build_paths                         = @build_paths_impl;
 helpers.build_subject_plans                 = @build_subject_plans_impl;
 helpers.sort_subject_plans_by_expected_cost = @sort_subject_plans_by_expected_cost_impl;
@@ -659,6 +660,66 @@ end
 log_msg_impl(master_log, ...
     'Resolved worker count=%d (machine_kind=%s, profile=%s)', ...
     n_workers, machine_kind, profile);
+end
+
+function [config_fn, config_name, config_file] = resolve_config_function_impl(config_spec, root_dir)
+config_file = "";
+
+if isa(config_spec, 'function_handle')
+    config_fn   = config_spec;
+    config_name = func2str(config_spec);
+    config_file = which(config_name);
+    return;
+end
+
+config_text = char(string(config_spec));
+config_text = strtrim(config_text);
+
+if isempty(config_text)
+    error('Config argument is empty.');
+end
+
+config_dir = '';
+[maybe_dir, maybe_name, maybe_ext] = fileparts(config_text);
+
+if ~isempty(maybe_dir)
+    config_dir  = maybe_dir;
+    config_name = maybe_name;
+else
+    config_name = config_text;
+    if endsWith(config_name, '.m', 'IgnoreCase', true)
+        [~, config_name] = fileparts(config_name);
+    end
+end
+
+if ~isempty(config_dir)
+    if exist(config_dir, 'dir') ~= 7
+        error('Config directory not found: %s', config_dir);
+    end
+    addpath(config_dir);
+end
+
+if exist(config_name, 'file') ~= 2
+    candidate_in_root = fullfile(root_dir, [config_name '.m']);
+    if exist(candidate_in_root, 'file') == 2
+        addpath(root_dir);
+    end
+end
+
+if exist(config_name, 'file') ~= 2
+    if ~isempty(maybe_ext)
+        error('Config file not found: %s', config_text);
+    else
+        error('Config function not found on path: %s', config_name);
+    end
+end
+
+config_fn   = str2func(config_name);
+config_file = which(config_name);
+
+if isempty(config_file)
+    error('Could not resolve config function file for: %s', config_name);
+end
 end
 
 function paths = build_paths_impl(cfg, subj_id)

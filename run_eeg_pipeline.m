@@ -63,10 +63,13 @@ if nargin < 1 || isempty(config_spec)
         'run_eeg_pipeline(''eeg_pipeline_config_baseline'').']);
 end
 
+bootstrap_log = fullfile(tempdir, 'run_eeg_pipeline_bootstrap.log');
+helpers = eeg_pipeline_helpers(bootstrap_log);
+
 % =========================================================================
 % RESOLVE CONFIG FUNCTION
 % =========================================================================
-[config_fn, config_name, config_file] = resolve_config_function_local(config_spec, root_dir);
+[config_fn, config_name, config_file] = helpers.resolve_config_function(config_spec, root_dir);
 
 % =========================================================================
 % LOAD CONFIG
