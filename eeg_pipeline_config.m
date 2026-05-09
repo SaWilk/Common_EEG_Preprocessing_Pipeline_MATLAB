@@ -13,6 +13,12 @@ function cfg = eeg_pipeline_config()
 % OUTPUT
 %   cfg : full configuration struct for run_eeg_pipeline.m
 %
+% REQUIREMENTS
+%   - EEGLAB
+%   - FASTER
+%   - (AMICA - optional)
+%   - (cleanline - optional)
+
 % Saskia Wilken Dec 2025
 
 bootstrap_log = fullfile(tempdir, 'eeg_pipeline_config_bootstrap.log');
