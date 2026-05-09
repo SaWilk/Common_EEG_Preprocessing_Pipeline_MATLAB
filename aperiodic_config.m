@@ -225,7 +225,7 @@ if strlength(string(cfg.paths.source_beh_root_override)) > 0
     cfg.paths.source_beh_root = string(cfg.paths.source_beh_root_override);
 end
 
-cfg.paths.logs_dir = fullfile(cfg.root_dir, 'logs', 'runlog_pipeline'); % folder for pipeline logs
+cfg.paths.logs_dir = fullfile(fileparts(cfg.paths.derivatives_root), 'logs', 'runlog_pipeline'); % log folder in data-directory
 cfg.paths.branch_by_ica_method = true; % create separate 04/05/06 folders per ICA method
 
 % =========================================================================
@@ -239,7 +239,7 @@ cfg.subjects.min_id = []; % [] = no lower cutoff | numeric/string ID
 % PARALLEL
 % =========================================================================
 cfg.parallel = struct();
-cfg.parallel.enable         = true;   % allow parallel execution
+cfg.parallel.enable         = false;   % allow parallel execution
 cfg.parallel.force_workers  = [];     % explicit worker count or []
 cfg.parallel.pool_is_thread = false;  % runner-internal flag
 cfg.parallel.pool_type      = "none"; % runner-internal flag
