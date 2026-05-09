@@ -796,7 +796,9 @@ for i = 1:numel(sub_ids)
         plan.steps.(step_name) = info;
     end
 
-    plan = propagate_downstream_reruns_impl(plan, step_names);
+    if cfg.steps.enable_downstream_rerun
+        plan = propagate_downstream_reruns_impl(plan, step_names);
+    end
 
     run_flags = false(1, numel(step_names));
     for s = 1:numel(step_names)
@@ -835,6 +837,15 @@ for s = 1:numel(step_names)
         if isfield(info, 'policy') && ~isempty(info.policy)
             info.run = true;
             info.reason = "rerun forced because earlier enabled step will be regenerated";
+
+            log_msg_impl(master_log, ...
+                'Forced rerun of downstream steps: 01=%d | 02=%d | 03=%d | 04=%d | 05=%d | 06=%d', ...
+                plan.steps.prep_01_bids_formatting.run, ...
+                plan.steps.prep_02_triggerfix.run, ...
+                plan.steps.prep_03_until_ica.run, ...
+                plan.steps.prep_04_ica.run, ...
+                plan.steps.prep_05_after_ica.run, ...
+                plan.steps.prep_06_epoching.run);
 
             if isfield(info, 'folder_info') && isstruct(info.folder_info) && ...
                     isfield(info.folder_info, 'exists') && isfield(info.folder_info, 'is_empty')
