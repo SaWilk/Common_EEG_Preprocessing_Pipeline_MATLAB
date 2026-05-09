@@ -559,7 +559,6 @@ step_cfg.shared_epoch_rejection.faster_z        = 3;
 step_cfg.shared_epoch_rejection.use_robust_z    = true;
 step_cfg.shared_epoch_rejection.use_ptp         = true;
 step_cfg.shared_epoch_rejection.ptp_uV_thresh   = 300;
-step_cfg.shared_epoch_rejection.max_reject_prop = 1;
 
 % -------------------------------------------------------------------------
 % MINIMUM TRIALS PER CONDITION (event_locked only)

@@ -63,10 +63,13 @@ if nargin < 1 || isempty(config_spec)
         'run_eeg_pipeline(''eeg_pipeline_config_baseline'').']);
 end
 
+bootstrap_log = fullfile(tempdir, 'run_eeg_pipeline_bootstrap.log');
+helpers = eeg_pipeline_helpers(bootstrap_log);
+
 % =========================================================================
 % RESOLVE CONFIG FUNCTION
 % =========================================================================
-[config_fn, config_name, config_file] = resolve_config_function_local(config_spec, root_dir);
+[config_fn, config_name, config_file] = helpers.resolve_config_function(config_spec, root_dir);
 
 % =========================================================================
 % LOAD CONFIG
@@ -375,75 +378,48 @@ helpers.log_msg(master_log, '=== PIPELINE END %s ===', datestr(now));
 helpers.log_msg(master_log, 'Completed: %d ok | %d failed', n_ok, n_fail);
 
 if n_fail > 0
+    fail_idx = find(~ok_mask);
+    expected_exclusion_mask = false(size(fail_idx));
+
     helpers.log_msg(master_log, 'Failed subjects:');
-    for k = find(~ok_mask)
+
+    for ii = 1:numel(fail_idx)
+        k = fail_idx(ii);
+
+        this_msg   = string(status(k).message);
+        this_msg_l = lower(strtrim(this_msg));
+
+        is_expected_exclusion = ...
+            contains(this_msg_l, 'prep_06_epoching failed for sub-') && ...
+            ( ...
+                contains(this_msg_l, 'prep_06_epoching: no outputs written for sub-') || ...
+                (contains(this_msg_l, 'prep_06_epoching: error: dataset') && contains(this_msg_l, 'is empty')) ...
+            );
+
+        expected_exclusion_mask(ii) = is_expected_exclusion;
+
         helpers.log_msg(master_log, ...
-            '  sub-%s | %s | log=%s', ...
+            '  sub-%s | expected_exclusion=%d | %s | log=%s', ...
             char(string(status(k).subj)), ...
-            char(string(status(k).message)), ...
+            is_expected_exclusion, ...
+            char(this_msg), ...
             char(string(status(k).logfile)));
     end
-    error('Pipeline finished with failures (%d/%d). See logs.', n_fail, n_sub);
-end
 
-end
+    n_expected   = sum(expected_exclusion_mask);
+    n_unexpected = n_fail - n_expected;
 
-function [config_fn, config_name, config_file] = resolve_config_function_local(config_spec, root_dir)
-config_file = "";
+    helpers.log_msg(master_log, ...
+        'Failure breakdown: %d expected exclusions | %d unexpected failures', ...
+        n_expected, n_unexpected);
 
-if isa(config_spec, 'function_handle')
-    config_fn   = config_spec;
-    config_name = func2str(config_spec);
-    config_file = which(config_name);
-    return;
-end
-
-config_text = char(string(config_spec));
-config_text = strtrim(config_text);
-
-if isempty(config_text)
-    error('Config argument is empty.');
-end
-
-config_dir = '';
-[maybe_dir, maybe_name, maybe_ext] = fileparts(config_text);
-
-if ~isempty(maybe_dir)
-    config_dir  = maybe_dir;
-    config_name = maybe_name;
-else
-    config_name = config_text;
-    if endsWith(config_name, '.m', 'IgnoreCase', true)
-        [~, config_name] = fileparts(config_name);
-    end
-end
-
-if ~isempty(config_dir)
-    if exist(config_dir, 'dir') ~= 7
-        error('Config directory not found: %s', config_dir);
-    end
-    addpath(config_dir);
-end
-
-if exist(config_name, 'file') ~= 2
-    candidate_in_root = fullfile(root_dir, [config_name '.m']);
-    if exist(candidate_in_root, 'file') == 2
-        addpath(root_dir);
-    end
-end
-
-if exist(config_name, 'file') ~= 2
-    if ~isempty(maybe_ext)
-        error('Config file not found: %s', config_text);
+    if n_unexpected == 0
+        warning( ...
+            'run_eeg_pipeline:ExpectedSubjectExclusions', ...
+            ['Pipeline finished with %d expected Step-06 exclusion(s)/empty-dataset case(s) ' ...
+             '(%d/%d subjects not written). See logs.'], ...
+            n_expected, n_fail, n_sub);
     else
-        error('Config function not found on path: %s', config_name);
+        error('Pipeline finished with failures (%d/%d). See logs.', n_fail, n_sub);
     end
-end
-
-config_fn   = str2func(config_name);
-config_file = which(config_name);
-
-if isempty(config_file)
-    error('Could not resolve config function file for: %s', config_name);
-end
 end

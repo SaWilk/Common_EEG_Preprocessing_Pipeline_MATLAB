@@ -51,6 +51,7 @@ helpers.init_toolboxes                      = @init_toolboxes_impl;
 helpers.discover_subjects                   = @discover_subjects_impl;
 helpers.resolve_parallel_enable             = @resolve_parallel_enable_impl;
 helpers.resolve_worker_count                = @resolve_worker_count_impl;
+helpers.resolve_config_function             = @resolve_config_function_impl;
 helpers.build_paths                         = @build_paths_impl;
 helpers.build_subject_plans                 = @build_subject_plans_impl;
 helpers.sort_subject_plans_by_expected_cost = @sort_subject_plans_by_expected_cost_impl;
@@ -320,6 +321,17 @@ message_text = sprintf(varargin{:});
 timestamp    = datestr(now, 'yyyy-mm-dd HH:MM:SS');
 
 fprintf('[%s] %s\n', timestamp, message_text);
+
+fid = fopen(log_file, 'a');
+if fid >= 0
+    fprintf(fid, '[%s] %s\n', timestamp, message_text);
+    fclose(fid);
+end
+end
+
+function log_msg_file_only_impl(log_file, varargin)
+message_text = sprintf(varargin{:});
+timestamp    = datestr(now, 'yyyy-mm-dd HH:MM:SS');
 
 fid = fopen(log_file, 'a');
 if fid >= 0
@@ -650,6 +662,66 @@ log_msg_impl(master_log, ...
     n_workers, machine_kind, profile);
 end
 
+function [config_fn, config_name, config_file] = resolve_config_function_impl(config_spec, root_dir)
+config_file = "";
+
+if isa(config_spec, 'function_handle')
+    config_fn   = config_spec;
+    config_name = func2str(config_spec);
+    config_file = which(config_name);
+    return;
+end
+
+config_text = char(string(config_spec));
+config_text = strtrim(config_text);
+
+if isempty(config_text)
+    error('Config argument is empty.');
+end
+
+config_dir = '';
+[maybe_dir, maybe_name, maybe_ext] = fileparts(config_text);
+
+if ~isempty(maybe_dir)
+    config_dir  = maybe_dir;
+    config_name = maybe_name;
+else
+    config_name = config_text;
+    if endsWith(config_name, '.m', 'IgnoreCase', true)
+        [~, config_name] = fileparts(config_name);
+    end
+end
+
+if ~isempty(config_dir)
+    if exist(config_dir, 'dir') ~= 7
+        error('Config directory not found: %s', config_dir);
+    end
+    addpath(config_dir);
+end
+
+if exist(config_name, 'file') ~= 2
+    candidate_in_root = fullfile(root_dir, [config_name '.m']);
+    if exist(candidate_in_root, 'file') == 2
+        addpath(root_dir);
+    end
+end
+
+if exist(config_name, 'file') ~= 2
+    if ~isempty(maybe_ext)
+        error('Config file not found: %s', config_text);
+    else
+        error('Config function not found on path: %s', config_name);
+    end
+end
+
+config_fn   = str2func(config_name);
+config_file = which(config_name);
+
+if isempty(config_file)
+    error('Could not resolve config function file for: %s', config_name);
+end
+end
+
 function paths = build_paths_impl(cfg, subj_id)
 paths = struct();
 
@@ -675,8 +747,8 @@ paths.session_label   = char(session_label);
 paths.bids_task_label = char(task_label);
 
 % BIDS locations
-paths.bids_sub_dir = fullfile(paths.bids_root, paths.subj_label);
-paths.bids_ses_dir = fullfile(paths.bids_sub_dir, ['ses-' char(session_label)]);
+paths.bids_sub_dir    = fullfile(paths.bids_root, paths.subj_label);
+paths.bids_ses_dir    = fullfile(paths.bids_sub_dir, ['ses-' char(session_label)]);
 paths.prep_01_out_dir = paths.bids_ses_dir;
 
 % Derivatives roots
@@ -698,6 +770,9 @@ paths.step_04_root = fullfile(paths.derivatives_root, char("04_after_ica"      +
 paths.step_05_root = fullfile(paths.derivatives_root, char("05_until_epoching" + suffix));
 paths.step_06_root = fullfile(paths.derivatives_root, char("06_epoched"        + suffix));
 
+% Only create shared roots here.
+% Do NOT create subject-specific folders eagerly, otherwise empty folders
+% appear already during preplanning or for excluded subjects.
 ensure_dir_impl(paths.step_02_root);
 ensure_dir_impl(paths.step_03_until_ica_root);
 ensure_dir_impl(paths.step_03_for_ica_root);
@@ -713,14 +788,7 @@ paths.prep_04_out_dir           = fullfile(paths.step_04_root, paths.subj_label)
 paths.prep_05_out_dir           = fullfile(paths.step_05_root, paths.subj_label);
 paths.prep_06_out_dir           = fullfile(paths.step_06_root, paths.subj_label);
 
-ensure_dir_impl(paths.prep_02_out_dir);
-ensure_dir_impl(paths.prep_03_out_dir_until_ica);
-ensure_dir_impl(paths.prep_03_out_dir_for_ica);
-ensure_dir_impl(paths.prep_04_out_dir);
-ensure_dir_impl(paths.prep_05_out_dir);
-ensure_dir_impl(paths.prep_06_out_dir);
-
-% QA / checks
+% QA / checks roots
 paths.checks_root = fullfile(paths.derivatives_root, 'checks');
 ensure_dir_impl(paths.checks_root);
 
@@ -731,15 +799,10 @@ paths.checks_ica_components_subj_dir = fullfile(paths.checks_ica_components_root
 paths.checks_ica_components_rej_dir  = fullfile(paths.checks_ica_components_subj_dir, 'rej');
 paths.checks_ica_components_edge_dir = fullfile(paths.checks_ica_components_subj_dir, 'edge');
 
-ensure_dir_impl(paths.checks_ica_components_subj_dir);
-ensure_dir_impl(paths.checks_ica_components_rej_dir);
-ensure_dir_impl(paths.checks_ica_components_edge_dir);
-
 paths.qc_root = fullfile(paths.derivatives_root, 'qc');
 ensure_dir_impl(paths.qc_root);
 
 paths.qc_dir = fullfile(paths.qc_root, paths.subj_label);
-ensure_dir_impl(paths.qc_dir);
 end
 
 function subject_plans = build_subject_plans_impl(cfg, sub_ids, master_log)
@@ -888,6 +951,7 @@ sub_log = fullfile( ...
 out.logfile = sub_log;
 
 helpers = eeg_pipeline_helpers(sub_log);
+paths = struct();
 
 try
     helpers.log_msg(sub_log, '--- START sub-%s ---', subj_id);
@@ -967,17 +1031,24 @@ try
         'Step 06: epoching + final rejection', ...
         subject_plan, cfg, paths, helpers, sub_log, subj_id);
 
+    cleanup_empty_subject_dirs_impl(paths, sub_log);
+
     helpers.log_msg(sub_log, 'TOTAL subject runtime: %.2f min', toc(t_subject) / 60);
     helpers.log_msg(sub_log, '--- END sub-%s OK ---', subj_id);
 
     out.ok = true;
 
 catch me
+    try
+        cleanup_empty_subject_dirs_impl(paths, sub_log);
+    catch
+    end
+
     out.ok = false;
     out.message = me.message;
 
     helpers.log_msg(sub_log, 'ERROR: %s', me.message);
-    helpers.log_msg(sub_log, '%s', getReport(me, 'extended', 'hyperlinks', 'off'));
+log_msg_file_only_impl(sub_log, '%s', getReport(me, 'extended', 'hyperlinks', 'off'));
 
     try
         [parent_dir, base_name, ext] = fileparts(sub_log);
@@ -1026,6 +1097,67 @@ step_folder = get_step_subject_folder_impl(paths, step_name);
 helpers.log_msg(log_file, 'Clearing step folder before rerun: %s', step_folder);
 clear_directory_contents_impl(step_folder);
 end
+
+function cleanup_empty_subject_dirs_impl(paths, log_file)
+if nargin < 1 || ~isstruct(paths) || isempty(fieldnames(paths))
+    return;
+end
+
+candidate_fields = { ...
+    'checks_ica_components_rej_dir', ...
+    'checks_ica_components_edge_dir', ...
+    'checks_ica_components_subj_dir', ...
+    'qc_dir', ...
+    'prep_06_out_dir', ...
+    'prep_05_out_dir', ...
+    'prep_04_out_dir', ...
+    'prep_03_out_dir_for_ica', ...
+    'prep_03_out_dir_until_ica', ...
+    'prep_02_out_dir'};
+
+for i = 1:numel(candidate_fields)
+    fn = candidate_fields{i};
+    if isfield(paths, fn)
+        prune_empty_dir_tree_impl(paths.(fn), log_file);
+    end
+end
+end
+
+function was_removed = prune_empty_dir_tree_impl(path_in, log_file)
+was_removed = false;
+
+path_in = char(string(path_in));
+if isempty(path_in) || exist(path_in, 'dir') ~= 7
+    return;
+end
+
+dir_info = dir(path_in);
+real_mask = ~ismember({dir_info.name}, {'.','..'});
+dir_info = dir_info(real_mask);
+
+for k = 1:numel(dir_info)
+    if dir_info(k).isdir
+        prune_empty_dir_tree_impl(fullfile(path_in, dir_info(k).name), log_file);
+    end
+end
+
+dir_info = dir(path_in);
+real_mask = ~ismember({dir_info.name}, {'.','..'});
+dir_info = dir_info(real_mask);
+
+if isempty(dir_info)
+    try
+        rmdir(path_in);
+        was_removed = true;
+
+        if nargin >= 2 && ~isempty(log_file)
+            log_msg_impl(log_file, 'Removed empty directory: %s', path_in);
+        end
+    catch
+    end
+end
+end
+
 
 % =========================================================================
 % OVERWRITE / RERUN HELPERS
@@ -2823,39 +2955,47 @@ all_types = unique(all_types, 'stable');
 preview = all_types(1:min(n_max, numel(all_types)));
 end
 
-function [ok, info] = evaluate_min_trials_per_condition_impl(EEG, condition_codes, min_trials_required, zero_tol_ms)
+function [ok, info] = evaluate_min_trials_per_condition_impl(EEG, condition_spec, min_trials_required, zero_tol_ms)
 info = struct();
-info.ok                 = true;
-info.min_required       = min_trials_required;
-info.zero_tol_ms        = zero_tol_ms;
-info.condition_codes    = normalize_event_list_impl(condition_codes);
-info.counts             = zeros(numel(info.condition_codes), 1);
-info.counts_joined      = "";
-info.insufficient_codes = strings(0,1);
-info.insufficient_joined = "";
+info.ok                    = true;
+info.min_required          = NaN;
+info.zero_tol_ms           = NaN;
+info.condition_codes       = strings(0,1);
+info.raw_condition_codes   = strings(0,1);
+info.counts                = zeros(0,1);
+info.counts_joined         = "";
+info.insufficient_codes    = strings(0,1);
+info.insufficient_joined   = "";
 
 if nargin < 3 || isempty(min_trials_required) || ~isscalar(min_trials_required) || ...
         ~isfinite(min_trials_required) || min_trials_required < 0
     min_trials_required = 0;
 end
-min_trials_required   = round(double(min_trials_required));
-info.min_required     = min_trials_required;
+min_trials_required = round(double(min_trials_required));
+info.min_required   = min_trials_required;
 
-if nargin < 4 || isempty(zero_tol_ms) || ~isscalar(zero_tol_ms) || ~isfinite(zero_tol_ms) || zero_tol_ms < 0
+if nargin < 4 || isempty(zero_tol_ms) || ~isscalar(zero_tol_ms) || ...
+        ~isfinite(zero_tol_ms) || zero_tol_ms < 0
     zero_tol_ms = 2;
 end
 info.zero_tol_ms = double(zero_tol_ms);
 
-if isempty(info.condition_codes)
+[group_names, group_members, flat_raw_codes] = parse_condition_group_spec_impl(condition_spec);
+
+info.condition_codes     = group_names;
+info.raw_condition_codes = flat_raw_codes;
+info.counts              = zeros(numel(group_names), 1);
+
+if isempty(group_names)
     ok = true;
     info.ok = ok;
     return;
 end
 
 if ~isfield(EEG, 'epoch') || isempty(EEG.epoch) || EEG.trials < 1
-    info.counts = zeros(numel(info.condition_codes), 1);
-    info.counts_joined = format_condition_count_map_impl(info.condition_codes, info.counts);
-    info.insufficient_codes = info.condition_codes;
+    info.counts = zeros(numel(group_names), 1);
+    info.counts_joined = format_condition_count_map_impl(group_names, info.counts);
+    info.insufficient_codes = group_names;
     info.insufficient_joined = strjoin(cellstr(info.insufficient_codes), ', ');
     ok = false;
     info.ok = ok;
@@ -2865,21 +3005,23 @@ end
 n_epoch = min(double(EEG.trials), numel(EEG.epoch));
 
 for e = 1:n_epoch
-    matched_code = extract_epoch_time_locking_condition_code_impl( ...
-        EEG.epoch(e), info.condition_codes, info.zero_tol_ms);
+    matched_raw_code = extract_epoch_time_locking_condition_code_impl( ...
+        EEG.epoch(e), flat_raw_codes, info.zero_tol_ms);
 
-    if strlength(matched_code) == 0
+    if strlength(matched_raw_code) == 0
         continue;
     end
 
-    ix = find(info.condition_codes == matched_code, 1, 'first');
-    if ~isempty(ix)
-        info.counts(ix) = info.counts(ix) + 1;
+    for g = 1:numel(group_names)
+        if any(group_members{g} == matched_raw_code)
+            info.counts(g) = info.counts(g) + 1;
+            break;
+        end
     end
 end
 
-info.counts_joined = format_condition_count_map_impl(info.condition_codes, info.counts);
-info.insufficient_codes = info.condition_codes(info.counts < min_trials_required);
+info.counts_joined = format_condition_count_map_impl(group_names, info.counts);
+info.insufficient_codes = group_names(info.counts < min_trials_required);
 
 if isempty(info.insufficient_codes)
     info.insufficient_joined = "";
@@ -2890,6 +3032,57 @@ else
 end
 
 info.ok = ok;
+end
+
+
+function [group_names, group_members, flat_raw_codes] = parse_condition_group_spec_impl(condition_spec)
+group_names   = strings(0,1);
+group_members = {};
+flat_raw_codes = strings(0,1);
+
+if isempty(condition_spec)
+    return;
+end
+
+if ischar(condition_spec) || isstring(condition_spec)
+    condition_spec = cellstr(string(condition_spec));
+end
+
+if ~iscell(condition_spec)
+    error('min_trials condition spec must be a cell, string, or char array.');
+end
+
+is_grouped_cell = ismatrix(condition_spec) && size(condition_spec,2) == 2 && ~isvector(condition_spec);
+
+if is_grouped_cell
+    for r = 1:size(condition_spec, 1)
+        this_name = string(strtrim(char(string(condition_spec{r,1}))));
+        this_codes = normalize_event_list_impl(condition_spec{r,2});
+
+        if strlength(this_name) == 0
+            error('Grouped min-trials condition spec contains an empty group name in row %d.', r);
+        end
+
+        if isempty(this_codes)
+            error('Grouped min-trials condition spec contains no event codes in row %d.', r);
+        end
+
+        group_names(end+1,1) = this_name; %#ok<AGROW>
+        group_members{end+1,1} = this_codes(:); %#ok<AGROW>
+        flat_raw_codes = [flat_raw_codes; this_codes(:)]; %#ok<AGROW>
+    end
+
+    flat_raw_codes = unique(flat_raw_codes, 'stable');
+
+else
+    flat_raw_codes = normalize_event_list_impl(condition_spec);
+    group_names = flat_raw_codes;
+    group_members = cell(numel(flat_raw_codes), 1);
+
+    for i = 1:numel(flat_raw_codes)
+        group_members{i} = flat_raw_codes(i);
+    end
+end
 end
 
 function code = extract_epoch_time_locking_condition_code_impl(epoch_info, relevant_codes, zero_tol_ms)
