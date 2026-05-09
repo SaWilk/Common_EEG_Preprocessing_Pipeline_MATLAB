@@ -797,7 +797,7 @@ for i = 1:numel(sub_ids)
     end
 
     if cfg.steps.enable_downstream_rerun
-        plan = propagate_downstream_reruns_impl(plan, step_names);
+        plan = propagate_downstream_reruns_impl(plan, step_names, master_log);
     end
 
     run_flags = false(1, numel(step_names));
@@ -820,7 +820,7 @@ for i = 1:numel(sub_ids)
 end
 end
 
-function plan = propagate_downstream_reruns_impl(plan, step_names)
+function plan = propagate_downstream_reruns_impl(plan, step_names, master_log)
 triggered = false;
 
 for s = 1:numel(step_names)
