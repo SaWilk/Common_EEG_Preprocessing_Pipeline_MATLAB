@@ -238,6 +238,8 @@ cfg.parallel.pool_type      = "none"; % runner-internal flag
 % =========================================================================
 cfg.steps = struct();
 
+cfg.steps.enable_downstream_rerun = false; % default should be true
+
 cfg.steps.prep_01_bids_formatting = struct( ...
     'run', false, ...                % Step 01 creates/updates cfg.paths.bids_root from source_*_root
     'overwrite_mode', "", ...

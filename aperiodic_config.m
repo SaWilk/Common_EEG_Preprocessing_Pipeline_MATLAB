@@ -46,13 +46,14 @@ cfg = struct();
 % Project identity
 % -------------------------------------------------------------------------
 project = 'GRK';
+project_og_path = 'Z:\pb\KPN\KPN-Allgemein\Daten\GRK\GRK_Rest_SAVE';
 
 cfg.pipeline = struct();
 cfg.pipeline.name        = ['aperiodic_' project];   % project name used in cfg
 cfg.pipeline.step_prefix = "eeg";            % step 02-06 function prefix
 
 cfg.constants = struct();
-cfg.constants.log_prefix_master = "run_eeg_pipeline_aperiodic"; % master log filename prefix
+cfg.constants.log_prefix_master = "internalising_rest_aperiodic"; % master log filename prefix
 
 cfg.bids = struct();
 cfg.bids.dataset_folder_name = string(project);      % BIDS dataset folder name (if you have multiple datasets in teh same raw folder)
@@ -74,7 +75,7 @@ cfg.paths.profile_override = ""; % leave empty for automatic profile selection
 cfg.paths.profile_paths = struct();
 
 cfg.paths.profile_paths.pc = struct( ...
-    'source_eeg_root',  'Z:\pb\KPN\KPN-Allgemein\Daten\GRK\GRK_Rest_SAVE', ...  %adjust for AD
+    'source_eeg_root',  project_og_path, ... 
     'source_beh_root',  '', ...
     'bids_root',        fullfile('Z:\pb\KPP_KPN_joined\Aperiodic\Alena\Data', project, 'rawdata'), ...
     'derivatives_root', fullfile('Z:\pb\KPP_KPN_joined\Aperiodic\Alena\Data', project, 'derivatives'));
@@ -239,7 +240,7 @@ cfg.subjects.min_id = []; % [] = no lower cutoff | numeric/string ID
 % PARALLEL
 % =========================================================================
 cfg.parallel = struct();
-cfg.parallel.enable         = false;   % allow parallel execution
+cfg.parallel.enable         = true;   % allow parallel execution
 cfg.parallel.force_workers  = [];     % explicit worker count or []
 cfg.parallel.pool_is_thread = false;  % runner-internal flag
 cfg.parallel.pool_type      = "none"; % runner-internal flag
@@ -249,7 +250,7 @@ cfg.parallel.pool_type      = "none"; % runner-internal flag
 % =========================================================================
 cfg.steps = struct();
 
-cfg.steps.enable_downstream_rerun = false; % default should be true
+cfg.steps.enable_downstream_rerun = true; % default should be true
 
 cfg.steps.prep_01_bids_formatting = struct( ...
     'run', false, ...                % Step 01 creates/updates cfg.paths.bids_root from source_*_root
@@ -448,10 +449,12 @@ cfg.prep_03.crop_start_marker    = 'S 91';
 cfg.prep_03.crop_end_marker      = 'S 97';
 cfg.prep_03.crop_padding_sec     = [0 0];
 
+% make sure these include your channel labels for AUX/EOG, otherwise
+% channels will be included as EEG in ICA
 cfg.prep_03.eog_channel_labels     = {'IO1','IO2','LO1','LO2'};
-cfg.prep_03.scr_channel_labels     = {'SCR'};
+cfg.prep_03.scr_channel_labels     = {'EDA', 'SCR', 'GSR_MR_100_xx'};
 cfg.prep_03.startle_channel_labels = {'Startle'};
-cfg.prep_03.ekg_channel_labels     = {'EKG'};
+cfg.prep_03.ekg_channel_labels     = {'ECG', 'EKG'};
 
 cfg.prep_03.downsample_hz = 250;
 
