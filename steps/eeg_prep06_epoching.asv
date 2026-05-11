@@ -532,12 +532,13 @@ step_cfg.do_artifact_rejection               = true;
 step_cfg.do_initial_hard_threshold_rejection = false;
 step_cfg.initial_hard_threshold_uv           = 100;
 
-% Select exactly one final epoch-rejection method:
-%   "erplab"     = ERPLAB pop_artextval/pop_artdiff/pop_artflatline
-%   "faster_ptp" = FASTER epoch_properties + peak-to-peak threshold
-%   "mad_variance" = original MAD variance rejection helper
-%   "none"       = no final epoch rejection
-step_cfg.epoch_rejection_method = "erplab";
+% Select ONE sophisticated epoch-rejection backend:
+%   "auto"     = old behavior: shared helper if enabled, otherwise fallback
+%   "shared"   = shared FASTER/PTP helper only
+%   "fallback" = local FASTER/PTP fallback only
+%   "erplab"   = ERPLAB pop_artextval/pop_artdiff/pop_artflatline only
+%   "none"     = no sophisticated epoch rejection
+step_cfg.epoch_rejection_backend = "auto";
 
 % Legacy / fallback settings
 step_cfg.use_faster                    = true;
@@ -550,16 +551,11 @@ step_cfg.ptp_uV_thresh = 300;
 
 step_cfg.max_reject_prop = 1;
 
-% MAD variance rejection settings.
-% Only used when epoch_rejection_method="mad_variance".
-% Reuses reject_ica_prep_epochs_by_mad_variance_impl.
-step_cfg.mad_z_threshold = 3;
-step_cfg.mad_use_logvar  = true;
-
 % -------------------------------------------------------------------------
 % ERPLAB EPOCH REJECTION
 % -------------------------------------------------------------------------
 step_cfg.erplab_epoch_rejection = struct();
+step_cfg.erplab_epoch_rejection.enable = false;
 
 % "eeg" checks only EEG channels; "all" checks all channels.
 step_cfg.erplab_epoch_rejection.channel_scope = "eeg";
@@ -606,14 +602,13 @@ step_cfg.eeg_only_keep_eog      = false;
 % -------------------------------------------------------------------------
 % SHARED EPOCH REJECTION
 % -------------------------------------------------------------------------
-% FASTER/PTP epoch rejection.
-% Only used when epoch_rejection_method="faster_ptp".
-step_cfg.faster_ptp_epoch_rejection = struct();
-step_cfg.faster_ptp_epoch_rejection.use_faster    = true;
-step_cfg.faster_ptp_epoch_rejection.faster_z      = 3;
-step_cfg.faster_ptp_epoch_rejection.use_robust_z  = true;
-step_cfg.faster_ptp_epoch_rejection.use_ptp       = true;
-step_cfg.faster_ptp_epoch_rejection.ptp_uV_thresh = 300;
+step_cfg.shared_epoch_rejection = struct();
+step_cfg.shared_epoch_rejection.enable          = true;
+step_cfg.shared_epoch_rejection.use_faster      = true;
+step_cfg.shared_epoch_rejection.faster_z        = 3;
+step_cfg.shared_epoch_rejection.use_robust_z    = true;
+step_cfg.shared_epoch_rejection.use_ptp         = true;
+step_cfg.shared_epoch_rejection.ptp_uV_thresh   = 300;
 
 % -------------------------------------------------------------------------
 % MINIMUM TRIALS PER CONDITION (event_locked only)
