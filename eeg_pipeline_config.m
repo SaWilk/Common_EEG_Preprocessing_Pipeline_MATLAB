@@ -631,71 +631,46 @@ cfg.prep_06.baseline_end_markers            = {'S 99'};
 % -------------------------------------------------------------------------
 % Artifact rejection
 % -------------------------------------------------------------------------
-cfg.prep_06.do_artifact_rejection               = true; %whether to remove artifactual epochs
-cfg.prep_06.do_initial_hard_threshold_rejection = false; % TODO: I think this setting is outdated... check
-cfg.prep_06.initial_hard_threshold_uv           = 200; % Important: false when using ERPLAB, because ERPLAB already implements
+cfg.prep_06.do_artifact_rejection = true;
+
+% Optional first-pass hard absolute-amplitude rejection.
+% Usually keep this false when using ERPLAB, because ERPLAB's extreme-voltage
+% rule can implement the same kind of threshold.
+cfg.prep_06.do_initial_hard_threshold_rejection = false;
+cfg.prep_06.initial_hard_threshold_uv           = 200;
 
 % Select exactly one final epoch-rejection method.
-%   "erplab"     = use ERPLAB rules below
-%   "faster_ptp" = use FASTER/PTP rules below
-%   "none"       = skip final epoch rejection
-cfg.prep_06.epoch_rejection_method = "erplab"; % "erplab" | "faster_ptp" | "mad_variance" | "none"
+%
+%   "erplab"       = use cfg.prep_06.erplab_epoch_rejection
+%   "faster_ptp"   = use cfg.prep_06.faster_ptp_epoch_rejection
+%   "mad_variance" = use cfg.prep_06.mad_z_threshold / mad_use_logvar
+%   "none"         = skip final epoch rejection
+%
+cfg.prep_06.epoch_rejection_method = "erplab";  % "erplab" | "faster_ptp" | "mad_variance" | "none"
 
-% Legacy FASTER/PTP settings are kept for easy switching back, but they are
-% not used when epoch_rejection_backend="erplab".
-cfg.prep_06.use_faster                    = true; % use package faster for artifact rejection
-cfg.prep_06.faster_z_thresh               = 3;
-cfg.prep_06.faster_use_robust_z           = true;
-cfg.prep_06.faster_warn_if_reject_prop_gt = 0.25; % warn if more than 25 % of trials of a participant are missng
-
-cfg.prep_06.use_ptp       = true;
-cfg.prep_06.ptp_uV_thresh = 600;
-
-% Subject-level exclusion after epoch rejection
-% 1 means disabled
-% Note: in the handout it says 50 %, however I do feel it makes a lot more
-% sense to define a minimum number of trials to use for rejection
+% Subject-level exclusion after epoch rejection.
+% 1 means disabled. Example: 0.50 would exclude subjects with >50% rejected epochs.
 cfg.prep_06.max_reject_prop = 1;
 
 % -------------------------------------------------------------------------
-% Baseline correction
-% -------------------------------------------------------------------------
-cfg.prep_06.do_baseline_correction = false;
-cfg.prep_06.base_start_ms          = -200;
-cfg.prep_06.base_end_ms            = 0;
-
-% -------------------------------------------------------------------------
-% Final output channel splitting
-% -------------------------------------------------------------------------
-cfg.prep_06.split_non_eeg_channels = false; % whether to include non-eeg channels in the output file. Can be nice if they are noisy and unimportant, improves scroll view.
-cfg.prep_06.eeg_only_keep_eog      = false; % same as above but keep also EOG. 
-
-% -------------------------------------------------------------------------
 % ERPLAB epoch rejection
+% Only used when cfg.prep_06.epoch_rejection_method == "erplab".
 % -------------------------------------------------------------------------
 cfg.prep_06.erplab_epoch_rejection = struct();
 
-% Check only EEG channels, not EOG/SCR/Startle/EKG.
 cfg.prep_06.erplab_epoch_rejection.channel_scope = "eeg";
-
-% [] = whole epoch. For event-locked data this would be [-400 2600] ms.
-% For 10 s baseline regepochs this is the whole 10 s segment.
 cfg.prep_06.erplab_epoch_rejection.twindow_ms = [];
-
 cfg.prep_06.erplab_epoch_rejection.clear_existing_flags = true;
 
-% 1) Exclude voltages exceeding +/-200 uV.
 cfg.prep_06.erplab_epoch_rejection.use_extreme_voltage = true;
 cfg.prep_06.erplab_epoch_rejection.extreme_voltage_uV  = 200;
 cfg.prep_06.erplab_epoch_rejection.flag_extreme_voltage = 1;
 
-% 2) Exclude voltage steps above 50 uV between adjacent sampling points.
 cfg.prep_06.erplab_epoch_rejection.use_sample_diff = true;
 cfg.prep_06.erplab_epoch_rejection.sample_diff_uV  = 50;
 cfg.prep_06.erplab_epoch_rejection.flag_sample_diff = 2;
 
-% 3) Exclude flatline/blocking: signal stays within +/-0.5 uV for 100 ms.
-cfg.prep_06.erplab_epoch_rejection.use_flatline = true;
+cfg.prep_06.erplab_epoch_rejection.use_flatline = false;
 cfg.prep_06.erplab_epoch_rejection.flatline_tolerance_uV = 0.5;
 cfg.prep_06.erplab_epoch_rejection.flatline_duration_ms  = 100;
 cfg.prep_06.erplab_epoch_rejection.flag_flatline = 3;
@@ -705,21 +680,28 @@ cfg.prep_06.erplab_epoch_rejection.history = "off";
 cfg.prep_06.erplab_epoch_rejection.lowpass_hz = -1;
 
 % -------------------------------------------------------------------------
-% Shared epoch rejection helper
-% Kept for switching back, but disabled when using ERPLAB.
-% -------------------------------------------------------------------------
-% -------------------------------------------------------------------------
-% Shared epoch rejection helper
-% This is the preferred rejection block if your Step 06 uses the shared helper.
+% FASTER/PTP epoch rejection
+% Only used when cfg.prep_06.epoch_rejection_method == "faster_ptp".
+%
+% To use FASTER only: set use_faster=true and use_ptp=false.
+% To use PTP only:    set use_faster=false and use_ptp=true.
+% To use both:        set both to true.
 % -------------------------------------------------------------------------
 cfg.prep_06.faster_ptp_epoch_rejection = struct();
-cfg.prep_06.faster_ptp_epoch_rejection.enable          = false;
-cfg.prep_06.faster_ptp_epoch_rejection.use_faster      = true;
-cfg.prep_06.faster_ptp_epoch_rejection.faster_z        = 3;
-cfg.prep_06.faster_ptp_epoch_rejection.use_robust_z    = false;
-cfg.prep_06.faster_ptp_epoch_rejection.use_ptp         = true;
-cfg.prep_06.faster_ptp_epoch_rejection.ptp_uV_thresh   = 300;
 
+cfg.prep_06.faster_ptp_epoch_rejection.use_faster    = true;
+cfg.prep_06.faster_ptp_epoch_rejection.faster_z      = 3;
+cfg.prep_06.faster_ptp_epoch_rejection.use_robust_z  = false;
+
+cfg.prep_06.faster_ptp_epoch_rejection.use_ptp       = true;
+cfg.prep_06.faster_ptp_epoch_rejection.ptp_uV_thresh = 300;
+
+% -------------------------------------------------------------------------
+% MAD variance epoch rejection
+% Only used when cfg.prep_06.epoch_rejection_method == "mad_variance".
+% -------------------------------------------------------------------------
+cfg.prep_06.mad_z_threshold = 3;
+cfg.prep_06.mad_use_logvar  = true;
 % -------------------------------------------------------------------------
 % Reject Participants if not enough Trials are present
 % replaces the faster_warn_if_reject_prop_gt setting wiht a more elaborate
