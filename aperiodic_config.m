@@ -43,8 +43,8 @@ cfg = struct();
 % -------------------------------------------------------------------------
 % Project identity
 % -------------------------------------------------------------------------
-project = 'AD1'; %'GRK';
-project_og_path = 'Z:\pb\KPN\KPN-Allgemein\Daten\DFG_Angstdimensionen\Clinical\Data\Rest\raw'; %'Z:\pb\KPN\KPN-Allgemein\Daten\GRK\GRK_Rest_SAVE';
+project = 'GRK';
+project_og_path = 'Z:\pb\KPN\KPN-Allgemein\Daten\GRK\GRK_Rest_SAVE'; %'Z:\pb\KPN\KPN-Allgemein\Daten\DFG_Angstdimensionen\Clinical\Data\Rest\raw'; 
 
 cfg.pipeline = struct();
 cfg.pipeline.name        = ['aperiodic_' project];   % project name used in cfg
@@ -100,13 +100,21 @@ cfg.paths.source_beh_root_override  = "";
 % =========================================================================
 cfg.toolboxes = struct();
 
-cfg.toolboxes.path_eeglab_pc     = "Z:\pb\KPP_KPN_joined\DynBU\analyses\toolboxes\eeglab2025.1.0"; % EEGLAB path on PC
-cfg.toolboxes.path_eeglab_server = "Z:\pb\KPP_KPN_joined\DynBU\analyses\toolboxes\eeglab2025.1.0"; % EEGLAB path on server
-cfg.toolboxes.path_eeglab_hpc    = "/beegfs/u/bbe0557/toolboxes/eeglab2025.1.0";                   % EEGLAB path on HPC
+%# TODO: see if this is necessary if ERPLab is integrated in EEGLab 
+cfg.toolboxes.path_eeglab_pc     = "Z:\pb\KPP_KPN_joined\DynBU\analyses\toolboxes\eeglab2026.0.0"; % EEGLAB path on PC
+cfg.toolboxes.path_eeglab_server = "Z:\pb\KPP_KPN_joined\DynBU\analyses\toolboxes\eeglab2026.0.0"; % EEGLAB path on server
+cfg.toolboxes.path_eeglab_hpc    = "/beegfs/u/bbe0557/toolboxes/eeglab2026.0.0";                   % EEGLAB path on HPC
 
 cfg.toolboxes.path_faster_pc     = "Z:\pb\KPP_KPN_joined\DynBU\analyses\toolboxes\FASTER"; % FASTER path on PC
 cfg.toolboxes.path_faster_server = "Z:\pb\KPP_KPN_joined\DynBU\analyses\toolboxes\FASTER"; % FASTER path on server
 cfg.toolboxes.path_faster_hpc    = "/beegfs/u/bbe0557/toolboxes/FASTER";    % FASTER path on HPC
+
+cfg.toolboxes.path_erplab_pc     = "Z:\pb\KPP_KPN_joined\DynBU\analyses\toolboxes\eeglab2026.0.0\plugins\ERPLAB12.20";
+cfg.toolboxes.path_erplab_server = "Z:\pb\KPP_KPN_joined\DynBU\analyses\toolboxes\eeglab2026.0.0\plugins\ERPLAB12.20";
+cfg.toolboxes.path_erplab_hpc    = "/beegfs/u/bbe0557/toolboxes/eeglab2026.0.0/plugins/erplab";
+
+cfg.toolboxes.erplab = struct();
+cfg.toolboxes.erplab.use_genpath = true;
 
 cfg.toolboxes.use_genpath = false; % add toolbox subfolders recursively
 
@@ -248,10 +256,10 @@ cfg.parallel.pool_type      = "none"; % runner-internal flag
 % =========================================================================
 cfg.steps = struct();
 
-cfg.steps.enable_downstream_rerun = false; % default should be true
+cfg.steps.enable_downstream_rerun = true; % default should be true
 
 cfg.steps.prep_01_bids_formatting = struct( ...
-    'run', true, ...                % Step 01 creates/updates cfg.paths.bids_root from source_*_root
+    'run', false, ...                % Step 01 creates/updates cfg.paths.bids_root from source_*_root
     'overwrite_mode', "delete", ...
     'overwrite_if_older_than', "");
 
@@ -261,22 +269,22 @@ cfg.steps.prep_02_triggerfix = struct( ...
     'overwrite_if_older_than', "");
 
 cfg.steps.prep_03_until_ica = struct( ...
-    'run', false, ...
+    'run', true, ...
     'overwrite_mode', "", ...
     'overwrite_if_older_than', "");
 
 cfg.steps.prep_04_ica = struct( ...
-    'run', false, ...
+    'run', true, ...
     'overwrite_mode', "delete", ...
     'overwrite_if_older_than', "");
 
 cfg.steps.prep_05_after_ica = struct( ...
-    'run', false, ...
+    'run', true, ...
     'overwrite_mode', "delete", ...
     'overwrite_if_older_than', "");
 
 cfg.steps.prep_06_epoching = struct( ...
-    'run', false, ...
+    'run', true, ...
     'overwrite_mode', "delete", ...
     'overwrite_if_older_than', "");
 
@@ -309,7 +317,7 @@ cfg.prep_01.write_readme_if_exporter_did_not = true; % write README if exporter 
 cfg.prep_01.copy_eeg_sidecar_log_to_events = false; % copy project-specific CF log as *_events.log
 
 % # TODO: make this more flexible or more intuitive
-cfg.prep_01.raw_eeg_regex = ['^' project(1:end-1) '_([\d{3}]+)_Rest1\.vhdr$']; % raw EEG filename pattern: starts with project name, then 3-digit number, i.e. sub-ID, task-token and has to end with .vhdr
+cfg.prep_01.raw_eeg_regex = ['^' project '_([\d{3}]+)_Rest\.vhdr$']; % raw EEG filename pattern: starts with project name, then 3-digit number, i.e. sub-ID, task-token and has to end with .vhdr
 
 cfg.prep_01.existing_bids_vhdr_regex = ...
     '^sub-(\d+)_ses-(\d+)_task-([A-Za-z0-9]+)(?:_run-(\d+))?_eeg\.vhdr$'; % existing BIDS EEG header pattern used when do_eeg=false
