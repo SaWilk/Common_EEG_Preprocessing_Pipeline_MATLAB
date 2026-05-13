@@ -591,73 +591,194 @@ if step_cfg.ica_prep_use_regepochs
         step_cfg.ica_prep_regepoch_length_sec));
 end
 
-if step_cfg.ica_prep_use_mad_epoch_rejection
-    [ica_eeg_idx, ~, ~] = helpers.get_channel_indices_by_type(ica_prep_eeg);
-
-    if ~isempty(ica_eeg_idx) && isfield(ica_prep_eeg, 'trials') && ica_prep_eeg.trials >= 3
-        [ica_prep_eeg, mad_info] = helpers.reject_ica_prep_epochs_by_mad_variance( ...
-            ica_prep_eeg, ica_eeg_idx, ...
-            step_cfg.ica_prep_mad_z_threshold, ...
-            step_cfg.ica_prep_mad_use_logvar);
-
-        if isstruct(mad_info) && isfield(mad_info, 'did_apply') && mad_info.did_apply
-            ica_prep_eeg = helpers.append_eeg_comment(ica_prep_eeg, sprintf( ...
-                'prep03_untilica: ICA-prep MAD reject z=%.2f rejected %d/%d', ...
-                mad_info.z_thresh, mad_info.n_rejected, mad_info.n_before));
-        end
-    end
-end
-
-if step_cfg.ica_prep_use_jointprob_rejection
-    [ica_prep_eeg, did_jointprob] = helpers.apply_jointprob_safely( ...
-        ica_prep_eeg, ...
-        step_cfg.ica_prep_jointprob_local, ...
-        step_cfg.ica_prep_jointprob_global);
-
-    ica_prep_eeg = helpers.append_eeg_comment(ica_prep_eeg, sprintf( ...
-        'prep03_untilica: ICA-prep jointprob applied=%d', did_jointprob));
-end
-
 %% ========================================================================
-%  SHARED EPOCH REJECTION FOR ICA
+%  ICA-PREP EPOCH REJECTION
 % ========================================================================
-if isfield(step_cfg, 'shared_epoch_rejection')
-    reject_cfg = step_cfg.shared_epoch_rejection;
+ica_rej_method = "erplab";
+if isfield(step_cfg, 'ica_prep_epoch_rejection_method') && ...
+        strlength(string(step_cfg.ica_prep_epoch_rejection_method)) > 0
+    ica_rej_method = lower(strtrim(string(step_cfg.ica_prep_epoch_rejection_method)));
+end
 
-    if isstruct(reject_cfg) && isfield(reject_cfg, 'enable') && reject_cfg.enable ...
-            && isfield(ica_prep_eeg, 'trials') && ica_prep_eeg.trials > 0
+switch ica_rej_method
 
-        [ica_prep_eeg, rej_info] = helpers.apply_shared_epoch_rejection( ...
-            ica_prep_eeg, reject_cfg);
-
-        ica_prep_eeg = helpers.append_eeg_comment( ...
-            ica_prep_eeg, ...
-            sprintf('prep03_untilica: SHARED rejection applied | rejected %d/%d epochs', ...
-            rej_info.n_rejected, rej_info.n_before));
+    case {"none","off","disabled"}
+        ica_prep_eeg = helpers.append_eeg_comment(ica_prep_eeg, ...
+            'prep03_untilica: ICA-prep epoch rejection skipped by config');
 
         helpers.log_msg_default( ...
-            'prep03_untilica: sub-%s | ICA shared rejection %d/%d epochs rejected', ...
-            subj_id, rej_info.n_rejected, rej_info.n_before);
+            'prep03_untilica: sub-%s | ICA-prep epoch rejection skipped backend=none', ...
+            subj_id);
 
-        if isfield(reject_cfg, 'max_reject_prop') && rej_info.n_before > 0
-            reject_prop = rej_info.n_rejected / rej_info.n_before;
-            if reject_prop > reject_cfg.max_reject_prop
-                msg = sprintf( ...
-                    'prep03_untilica: ICA shared rejection removed %.1f%% of epochs (threshold %.1f%%) -> cannot continue', ...
-                    100 * reject_prop, 100 * reject_cfg.max_reject_prop);
-                helpers.log_msg_default('%s', msg);
-                step_out.message = msg;
-                return;
+    case {"erplab","erplab_artifact","erplab_epoch_rejection"}
+        if ~isfield(step_cfg, 'ica_prep_erplab_epoch_rejection') || ...
+                ~isstruct(step_cfg.ica_prep_erplab_epoch_rejection)
+            error('cfg.prep_03.ica_prep_erplab_epoch_rejection is missing, but ica_prep_epoch_rejection_backend="erplab".');
+        end
+
+        [ica_eeg_idx, ~, ~] = helpers.get_channel_indices_by_type(ica_prep_eeg);
+
+        if isempty(ica_eeg_idx)
+            ica_prep_eeg = helpers.append_eeg_comment(ica_prep_eeg, ...
+                'prep03_untilica: ICA-prep ERPLAB rejection skipped because no EEG channels were found');
+
+            helpers.log_msg_default( ...
+                'prep03_untilica: sub-%s | ICA-prep ERPLAB rejection skipped: no EEG channels', ...
+                subj_id);
+
+        elseif ~isfield(ica_prep_eeg, 'trials') || ica_prep_eeg.trials < 1
+            ica_prep_eeg = helpers.append_eeg_comment(ica_prep_eeg, ...
+                'prep03_untilica: ICA-prep ERPLAB rejection skipped because no epochs were found');
+
+            helpers.log_msg_default( ...
+                'prep03_untilica: sub-%s | ICA-prep ERPLAB rejection skipped: no epochs', ...
+                subj_id);
+
+        else
+            erplab_reject_cfg = step_cfg.ica_prep_erplab_epoch_rejection;
+            erplab_reject_cfg.enable = true; % method selects ERPLAB; no user-facing second switch
+
+            [ica_prep_eeg, erplab_info] = helpers.apply_erplab_epoch_rejection( ...
+                ica_prep_eeg, ...
+                ica_eeg_idx, ...
+                erplab_reject_cfg, ...
+                helpers, ...
+                sprintf('sub-%s', subj_id), ...
+                char(string(run_base_name) + " | ICA-prep"));
+
+            ica_prep_eeg = helpers.append_eeg_comment(ica_prep_eeg, sprintf( ...
+                ['prep03_untilica: ICA-prep ERPLAB rejection | rejected=%d/%d | kept=%d | ' ...
+                 'extreme_voltage=%d | sample_diff=%d | flatline=%d'], ...
+                erplab_info.n_rejected, ...
+                erplab_info.n_before, ...
+                erplab_info.n_kept, ...
+                erplab_info.n_rejected_extreme_voltage, ...
+                erplab_info.n_rejected_sample_diff, ...
+                erplab_info.n_rejected_flatline));
+
+            helpers.log_msg_default( ...
+                ['prep03_untilica: sub-%s | ICA-prep ERPLAB rejection=%d/%d | kept=%d | ' ...
+                 'extreme_voltage=%d | sample_diff=%d | flatline=%d'], ...
+                subj_id, ...
+                erplab_info.n_rejected, ...
+                erplab_info.n_before, ...
+                erplab_info.n_kept, ...
+                erplab_info.n_rejected_extreme_voltage, ...
+                erplab_info.n_rejected_sample_diff, ...
+                erplab_info.n_rejected_flatline);
+        end
+
+              case {"mad","mad_variance","mad_epoch_rejection"}
+
+        [ica_eeg_idx, ~, ~] = helpers.get_channel_indices_by_type(ica_prep_eeg);
+
+        if isempty(ica_eeg_idx)
+            ica_prep_eeg = helpers.append_eeg_comment(ica_prep_eeg, ...
+                'prep03_untilica: ICA-prep MAD rejection skipped because no EEG channels were found');
+
+            helpers.log_msg_default( ...
+                'prep03_untilica: sub-%s | ICA-prep MAD rejection skipped: no EEG channels', ...
+                subj_id);
+
+        elseif ~isfield(ica_prep_eeg, 'trials') || ica_prep_eeg.trials < 1
+            ica_prep_eeg = helpers.append_eeg_comment(ica_prep_eeg, ...
+                'prep03_untilica: ICA-prep MAD rejection skipped because no epochs were found');
+
+            helpers.log_msg_default( ...
+                'prep03_untilica: sub-%s | ICA-prep MAD rejection skipped: no epochs', ...
+                subj_id);
+
+        else
+            z_thresh = 3;
+            if isfield(step_cfg, 'ica_prep_mad_z_threshold') && ...
+                    ~isempty(step_cfg.ica_prep_mad_z_threshold)
+                z_thresh = step_cfg.ica_prep_mad_z_threshold;
+            end
+
+            use_logvar = true;
+            if isfield(step_cfg, 'ica_prep_mad_use_logvar') && ...
+                    ~isempty(step_cfg.ica_prep_mad_use_logvar)
+                use_logvar = logical(step_cfg.ica_prep_mad_use_logvar);
+            end
+
+            [ica_prep_eeg, mad_info] = helpers.reject_ica_prep_epochs_by_mad_variance( ...
+                ica_prep_eeg, ...
+                ica_eeg_idx, ...
+                z_thresh, ...
+                use_logvar);
+
+            n_kept = ica_prep_eeg.trials;
+
+            ica_prep_eeg = helpers.append_eeg_comment(ica_prep_eeg, sprintf( ...
+                ['prep03_untilica: ICA-prep MAD variance rejection | rejected=%d/%d | kept=%d | ' ...
+                 'z=%.2f | logvar=%d'], ...
+                mad_info.n_rejected, ...
+                mad_info.n_before, ...
+                n_kept, ...
+                z_thresh, ...
+                use_logvar));
+
+            helpers.log_msg_default( ...
+                ['prep03_untilica: sub-%s | ICA-prep MAD variance rejection=%d/%d | kept=%d | ' ...
+                 'z=%.2f | logvar=%d'], ...
+                subj_id, ...
+                mad_info.n_rejected, ...
+                mad_info.n_before, ...
+                n_kept, ...
+                z_thresh, ...
+                use_logvar);
+
+            if isfield(step_cfg, 'ica_prep_max_reject_prop') && mad_info.n_before > 0
+                reject_prop = mad_info.n_rejected / mad_info.n_before;
+
+                if reject_prop > step_cfg.ica_prep_max_reject_prop
+                    msg = sprintf( ...
+                        'prep03_untilica: ICA-prep MAD variance rejection removed %.1f%% of epochs (threshold %.1f%%) -> cannot continue', ...
+                        100 * reject_prop, 100 * step_cfg.ica_prep_max_reject_prop);
+                    helpers.log_msg_default('%s', msg);
+                    step_out.message = msg;
+                    return;
+                end
             end
         end
-    end
-end
 
-if ~isfield(ica_prep_eeg, 'trials') || isempty(ica_prep_eeg.trials) || ica_prep_eeg.trials < 1
-    msg = 'prep03_untilica: no ICA-training epochs remain after rejection -> cannot continue';
-    helpers.log_msg_default('%s', msg);
-    step_out.message = msg;
-    return;
+    case {"faster","faster_ptp"}
+        if isfield(step_cfg, 'faster_ptp')
+            reject_cfg = step_cfg.shared_epoch_rejection;
+
+            if isstruct(reject_cfg) && isfield(reject_cfg, 'enable') && reject_cfg.enable ...
+                    && isfield(ica_prep_eeg, 'trials') && ica_prep_eeg.trials > 0
+
+                [ica_prep_eeg, rej_info] = helpers.apply_faster_ptp_epoch_rejection( ...
+                    ica_prep_eeg, reject_cfg);
+
+                ica_prep_eeg = helpers.append_eeg_comment( ...
+                    ica_prep_eeg, ...
+                    sprintf('prep03_untilica: ICA-prep faster_ptp rejection applied | rejected %d/%d epochs', ...
+                    rej_info.n_rejected, rej_info.n_before));
+
+                helpers.log_msg_default( ...
+                    'prep03_untilica: sub-%s | ICA-prep faster_ptp rejection %d/%d epochs rejected', ...
+                    subj_id, rej_info.n_rejected, rej_info.n_before);
+
+                if isfield(reject_cfg, 'max_reject_prop') && rej_info.n_before > 0
+                    reject_prop = rej_info.n_rejected / rej_info.n_before;
+                    if reject_prop > reject_cfg.max_reject_prop
+                        msg = sprintf( ...
+                            'prep03_untilica: ICA-prep faster_ptp rejection removed %.1f%% of epochs (threshold %.1f%%) -> cannot continue', ...
+                            100 * reject_prop, 100 * reject_cfg.max_reject_prop);
+                        helpers.log_msg_default('%s', msg);
+                        step_out.message = msg;
+                        return;
+                    end
+                end
+            end
+        end
+
+    otherwise
+        error(['Unsupported cfg.prep_03.ica_prep_epoch_rejection_method="%s". ' ...
+               'Use "erplab", "faster_ptp", "mad_variance", or "none".'], ...
+               char(ica_rej_method));
 end
 
 %% ========================================================================
@@ -744,26 +865,66 @@ step_cfg.pop_cleanline_computepower      = 0;
 step_cfg.pop_cleanline_verbose           = false;
 
 % ICA-prep: regepochs + rejection
-step_cfg.ica_prep_use_regepochs           = true;
-step_cfg.ica_prep_regepoch_length_sec     = 1;
+step_cfg.ica_prep_use_regepochs       = true;
+step_cfg.ica_prep_regepoch_length_sec = 1;
 
+% Main ICA-prep epoch-rejection method.
+% Select exactly one:
+%   "erplab"     = ERPLAB pop_artextval/pop_artdiff/pop_artflatline
+%   "faster_ptp" = FASTER epoch_properties + peak-to-peak threshold
+%   "mad_variance" = robust MAD rejection on epoch variance
+%   "none"       = no ICA-prep epoch rejection
+step_cfg.ica_prep_epoch_rejection_method = "erplab";
+
+% Legacy jointprob settings.
+% Currently retained for backward compatibility with older configs.
 step_cfg.ica_prep_use_jointprob_rejection = true;
-step_cfg.ica_prep_jointprob_local         = 2;
-step_cfg.ica_prep_jointprob_global        = 2;
+step_cfg.ica_prep_jointprob_local         = 3;
+step_cfg.ica_prep_jointprob_global        = 3;
 
+% MAD ICA-prep rejection settings.
+% Only used when ica_prep_epoch_rejection_method="mad_variance".
+% These are the original scalar settings used by
+% reject_ica_prep_epochs_by_mad_variance_impl.
 step_cfg.ica_prep_use_mad_epoch_rejection = true;
-step_cfg.ica_prep_mad_z_threshold         = 3;
+step_cfg.ica_prep_mad_z_threshold         = 4;
 step_cfg.ica_prep_mad_use_logvar          = true;
+step_cfg.ica_prep_max_reject_prop         = 1.00;
 
-% Shared epoch rejection for ICA-training dataset
-step_cfg.shared_epoch_rejection = struct();
-step_cfg.shared_epoch_rejection.enable          = false;
-step_cfg.shared_epoch_rejection.use_faster      = true;
-step_cfg.shared_epoch_rejection.faster_z        = 4;
-step_cfg.shared_epoch_rejection.use_robust_z    = true;
-step_cfg.shared_epoch_rejection.use_ptp         = true;
-step_cfg.shared_epoch_rejection.ptp_uV_thresh   = 800;
-step_cfg.shared_epoch_rejection.max_reject_prop = 1.00;
+% ERPLAB ICA-prep rejection.
+% Same logic as final Step 06 rejection, but more lenient.
+step_cfg.ica_prep_erplab_epoch_rejection = struct();
+step_cfg.ica_prep_erplab_epoch_rejection.enable = true;
+step_cfg.ica_prep_erplab_epoch_rejection.channel_scope = "eeg";
+step_cfg.ica_prep_erplab_epoch_rejection.twindow_ms = [];
+step_cfg.ica_prep_erplab_epoch_rejection.clear_existing_flags = true;
+
+step_cfg.ica_prep_erplab_epoch_rejection.use_extreme_voltage = true;
+step_cfg.ica_prep_erplab_epoch_rejection.extreme_voltage_uV  = 300;
+step_cfg.ica_prep_erplab_epoch_rejection.flag_extreme_voltage = 1;
+
+step_cfg.ica_prep_erplab_epoch_rejection.use_sample_diff = true;
+step_cfg.ica_prep_erplab_epoch_rejection.sample_diff_uV  = 75;
+step_cfg.ica_prep_erplab_epoch_rejection.flag_sample_diff = 2;
+
+step_cfg.ica_prep_erplab_epoch_rejection.use_flatline = true;
+step_cfg.ica_prep_erplab_epoch_rejection.flatline_tolerance_uV = 0.5;
+step_cfg.ica_prep_erplab_epoch_rejection.flatline_duration_ms  = 200;
+step_cfg.ica_prep_erplab_epoch_rejection.flag_flatline = 3;
+
+step_cfg.ica_prep_erplab_epoch_rejection.review = "off";
+step_cfg.ica_prep_erplab_epoch_rejection.history = "off";
+step_cfg.ica_prep_erplab_epoch_rejection.lowpass_hz = -1;
+
+% FASTER/PTP ICA-prep rejection.
+% Only used when ica_prep_epoch_rejection_method="faster_ptp".
+step_cfg.ica_prep_faster_ptp_epoch_rejection = struct();
+step_cfg.ica_prep_faster_ptp_epoch_rejection.use_faster      = true;
+step_cfg.ica_prep_faster_ptp_epoch_rejection.faster_z        = 4;
+step_cfg.ica_prep_faster_ptp_epoch_rejection.use_robust_z    = true;
+step_cfg.ica_prep_faster_ptp_epoch_rejection.use_ptp         = true;
+step_cfg.ica_prep_faster_ptp_epoch_rejection.ptp_uV_thresh   = 800;
+step_cfg.ica_prep_faster_ptp_epoch_rejection.max_reject_prop = 1.00;
 
 % Overwrite override
 step_cfg.overwrite_mode = "";
