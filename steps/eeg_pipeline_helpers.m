@@ -20,7 +20,6 @@ helpers = struct();
 % -------------------------------------------------------------------------
 % Config-building helpers
 % -------------------------------------------------------------------------
-helpers.pick_value               = @pick_value_impl;
 helpers.detect_env_mode          = @detect_env_mode_impl;
 helpers.detect_machine_kind      = @detect_machine_kind_impl;
 helpers.default_profile_for_mode = @default_profile_for_mode_impl;
@@ -35,6 +34,7 @@ helpers.map_trigger_by_table     = @map_trigger_by_table_impl;
 helpers.log_msg                  = @(log_file, varargin) log_msg_impl(log_file, varargin{:});
 helpers.log_msg_default          = @(varargin) log_msg_impl(default_log_file, varargin{:});
 helpers.ensure_dir               = @ensure_dir_impl;
+helpers.resolve_logs_dir         = @resolve_logs_dir_impl;
 helpers.clear_directory_contents = @clear_directory_contents_impl;
 
 % -------------------------------------------------------------------------
@@ -85,7 +85,7 @@ helpers.normalize_trigger_type = @normalize_trigger_type_impl;
 % EEG utility helpers used by step files
 % -------------------------------------------------------------------------
 helpers.normalize_event_types                 = @normalize_event_types_impl;
-helpers.normalize_epoching_mode_value        = @normalize_epoching_mode_value_impl;
+helpers.normalize_epoching_mode_value         = @normalize_epoching_mode_value_impl;
 helpers.get_channel_indices_by_type           = @get_channel_indices_by_type_impl;
 helpers.apply_reference_mode                  = @apply_reference_mode_impl;
 helpers.build_epoching_output_paths           = @build_epoching_output_paths_impl;
@@ -109,12 +109,14 @@ helpers.apply_filter_to_subset_only           = @apply_filter_to_subset_only_imp
 helpers.apply_pop_cleanline_to_subset         = @apply_pop_cleanline_to_subset_impl;
 helpers.apply_jointprob_safely                = @apply_jointprob_safely_impl;
 helpers.apply_shared_epoch_rejection          = @apply_shared_epoch_rejection_impl;
+helpers.apply_erplab_epoch_rejection          = @apply_erplab_epoch_rejection_impl;
 helpers.reject_ica_prep_epochs_by_mad_variance = @reject_ica_prep_epochs_by_mad_variance_impl;
 helpers.compute_data_rank_svd                 = @compute_data_rank_svd_impl;
 helpers.make_unique_amica_tmpdir              = @make_unique_amica_tmpdir_impl;
 helpers.safe_rmdir                            = @safe_rmdir_impl;
 helpers.write_ic_topography_pngs              = @write_ic_topography_pngs_impl;
-helpers.merge_structs_recursive = @merge_structs_recursive_impl;
+helpers.merge_structs_recursive               = @merge_structs_recursive_impl;
+
 
 % -------------------------------------------------------------------------
 % Behavior-log helpers
@@ -149,14 +151,6 @@ for i = 1:numel(names)
         value = string(tmp);
         return;
     end
-end
-end
-
-function value = pick_value_impl(condition, value_if_true, value_if_false)
-if condition
-    value = value_if_true;
-else
-    value = value_if_false;
 end
 end
 
@@ -322,6 +316,16 @@ timestamp    = datestr(now, 'yyyy-mm-dd HH:MM:SS');
 
 fprintf('[%s] %s\n', timestamp, message_text);
 
+log_file = char(string(log_file));
+
+try
+    [parent_dir, ~, ~] = fileparts(log_file);
+    if ~isempty(parent_dir)
+        ensure_dir_impl(parent_dir);
+    end
+catch
+end
+
 fid = fopen(log_file, 'a');
 if fid >= 0
     fprintf(fid, '[%s] %s\n', timestamp, message_text);
@@ -332,6 +336,16 @@ end
 function log_msg_file_only_impl(log_file, varargin)
 message_text = sprintf(varargin{:});
 timestamp    = datestr(now, 'yyyy-mm-dd HH:MM:SS');
+
+log_file = char(string(log_file));
+
+try
+    [parent_dir, ~, ~] = fileparts(log_file);
+    if ~isempty(parent_dir)
+        ensure_dir_impl(parent_dir);
+    end
+catch
+end
 
 fid = fopen(log_file, 'a');
 if fid >= 0
@@ -344,6 +358,47 @@ function ensure_dir_impl(path_in)
 if exist(path_in, 'dir') ~= 7
     mkdir(path_in);
 end
+end
+
+function logs_dir = resolve_logs_dir_impl(cfg)
+% Resolve the pipeline log folder.
+%
+% Logs are intentionally stored next to the derivative output folders:
+%
+%   <derivatives_root>/logs
+%
+% This keeps run logs together with the generated preprocessing outputs
+% instead of mixing them into the code folder or a temporary bootstrap path.
+
+logs_dir = '';
+
+if nargin < 1 || ~isstruct(cfg)
+    error('resolve_logs_dir: cfg must be a struct.');
+end
+
+if isfield(cfg, 'paths') && isstruct(cfg.paths) && ...
+        isfield(cfg.paths, 'derivatives_root') && ...
+        strlength(string(cfg.paths.derivatives_root)) > 0
+
+    logs_dir = fullfile(char(string(cfg.paths.derivatives_root)), 'logs');
+
+elseif isfield(cfg, 'paths') && isstruct(cfg.paths) && ...
+        isfield(cfg.paths, 'logs_dir') && ...
+        strlength(string(cfg.paths.logs_dir)) > 0
+
+    % Fallback for older configs that do not yet define derivatives_root.
+    logs_dir = char(string(cfg.paths.logs_dir));
+
+elseif isfield(cfg, 'root_dir') && strlength(string(cfg.root_dir)) > 0
+
+    % Last-resort fallback.
+    logs_dir = fullfile(char(string(cfg.root_dir)), 'logs');
+
+else
+    error('resolve_logs_dir: could not resolve logs_dir from cfg.paths.derivatives_root, cfg.paths.logs_dir, or cfg.root_dir.');
+end
+
+ensure_dir_impl(logs_dir);
 end
 
 function clear_directory_contents_impl(path_in)
@@ -421,16 +476,39 @@ addpath(cfg.root_dir);
 
 eeglab_root = resolve_toolbox_root_impl(cfg, "eeglab");
 faster_root = resolve_toolbox_root_impl(cfg, "faster");
+erplab_root = resolve_toolbox_root_impl(cfg, "erplab");
 
 if strlength(eeglab_root) > 0
-    addpath(char(eeglab_root));
+    if exist(char(eeglab_root), 'dir') == 7
+        addpath(char(eeglab_root));
+    end
 end
 
 if strlength(faster_root) > 0
-    if cfg.toolboxes.use_genpath
-        addpath(genpath(char(faster_root)));
-    else
-        addpath(char(faster_root));
+    if exist(char(faster_root), 'dir') == 7
+        if cfg.toolboxes.use_genpath
+            addpath(genpath(char(faster_root)));
+        else
+            addpath(char(faster_root));
+        end
+    end
+end
+
+if strlength(erplab_root) > 0
+    if exist(char(erplab_root), 'dir') == 7
+        erplab_use_genpath = true;
+
+        if isfield(cfg.toolboxes, 'erplab') && ...
+                isstruct(cfg.toolboxes.erplab) && ...
+                isfield(cfg.toolboxes.erplab, 'use_genpath')
+            erplab_use_genpath = logical(cfg.toolboxes.erplab.use_genpath);
+        end
+
+        if erplab_use_genpath
+            addpath(genpath(char(erplab_root)));
+        else
+            addpath(char(erplab_root));
+        end
     end
 end
 
@@ -440,6 +518,7 @@ end
 end
 
 function root = resolve_toolbox_root_impl(cfg, which_toolbox)
+which_toolbox = string(which_toolbox);
 env_name = upper(which_toolbox) + "_ROOT";
 root = string(getenv(env_name));
 
@@ -451,13 +530,19 @@ mode = string(cfg.env.mode);
 
 switch mode
     case "pc"
-        root = string(cfg.toolboxes.("path_" + which_toolbox + "_pc"));
+        field_name = "path_" + which_toolbox + "_pc";
     case "server"
-        root = string(cfg.toolboxes.("path_" + which_toolbox + "_server"));
+        field_name = "path_" + which_toolbox + "_server";
     case "hpc"
-        root = string(cfg.toolboxes.("path_" + which_toolbox + "_hpc"));
+        field_name = "path_" + which_toolbox + "_hpc";
     otherwise
-        root = "";
+        field_name = "";
+end
+
+if strlength(field_name) > 0 && isfield(cfg.toolboxes, char(field_name))
+    root = string(cfg.toolboxes.(char(field_name)));
+else
+    root = "";
 end
 end
 
@@ -465,19 +550,19 @@ function sub_ids = discover_subjects_impl(cfg)
 sub_ids = {};
 discovery_root = "";
 
-    % -------------------------------------------------------------------------
-    % 1) Explicit subject list always wins
-    % -------------------------------------------------------------------------
+% -------------------------------------------------------------------------
+% 1) Explicit subject list always wins
+% -------------------------------------------------------------------------
 if isfield(cfg, 'subjects') && isfield(cfg.subjects, 'list') && ~isempty(cfg.subjects.list)
     sub_ids = cfg.subjects.list;
     discovery_root = "cfg.subjects.list";
 
 else
-        % ---------------------------------------------------------------------
-        % 2) Decide where discovery should happen
-        %    - If Step 01 runs, discover from raw EEG source files
-        %    - Otherwise discover from existing BIDS sub-* folders
-        % ---------------------------------------------------------------------
+    % ---------------------------------------------------------------------
+    % 2) Decide where discovery should happen
+    %    - If Step 01 runs, discover from raw EEG source files
+    %    - Otherwise discover from existing BIDS sub-* folders
+    % ---------------------------------------------------------------------
     use_step01_source_discovery = ...
         isfield(cfg, 'steps') && ...
         isfield(cfg.steps, 'prep_01_bids_formatting') && ...
@@ -730,6 +815,7 @@ paths.source_eeg_root  = char(string(cfg.paths.source_eeg_root));
 paths.source_beh_root  = char(string(cfg.paths.source_beh_root));
 paths.bids_root        = char(string(cfg.paths.bids_root));
 paths.derivatives_root = char(string(cfg.paths.derivatives_root));
+paths.logs_dir         = resolve_logs_dir_impl(cfg);
 
 paths.subj_label = sprintf('sub-%s', subj_id);
 
@@ -939,10 +1025,11 @@ subj_id = subject_plan.subj_id;
 
 out = struct('subj', subj_id, 'ok', false, 'message', '', 'logfile', '');
 
-ensure_dir_impl(cfg.paths.logs_dir);
+logs_dir = resolve_logs_dir_impl(cfg);
+cfg.paths.logs_dir = logs_dir;
 
 sub_log = fullfile( ...
-    cfg.paths.logs_dir, ...
+    logs_dir, ...
     sprintf('%s-%s_%s.log', ...
     cfg.constants.log_prefix_subject, ...
     subj_id, ...
@@ -1048,7 +1135,7 @@ catch me
     out.message = me.message;
 
     helpers.log_msg(sub_log, 'ERROR: %s', me.message);
-log_msg_file_only_impl(sub_log, '%s', getReport(me, 'extended', 'hyperlinks', 'off'));
+    log_msg_file_only_impl(sub_log, '%s', getReport(me, 'extended', 'hyperlinks', 'off'));
 
     try
         [parent_dir, base_name, ext] = fileparts(sub_log);
@@ -1255,6 +1342,20 @@ if nargin < 1 || isempty(out_files)
     out_files = {};
 end
 
+if nargin < 2 || isempty(overwrite_mode)
+    overwrite_mode = "delete";
+end
+
+if nargin < 3 || isempty(cfg)
+    cfg = struct();
+end
+
+overwrite_mode = lower(strtrim(string(overwrite_mode)));
+
+if ~ismember(overwrite_mode, ["delete","skip","if_older_than"])
+    overwrite_mode = "delete";
+end
+
 if ischar(out_files) || isstring(out_files)
     out_files = {out_files};
 end
@@ -1263,15 +1364,35 @@ if ~iscell(out_files)
     out_files = {out_files};
 end
 
-exists_mask = false(size(out_files));
+exists_mask   = false(size(out_files));
+file_datenums = nan(size(out_files));
 
 for k = 1:numel(out_files)
     f = out_files{k};
+
     if iscell(f)
-        f = f{1};
+        if isempty(f)
+            f = '';
+        else
+            f = f{1};
+        end
     end
+
     f = char(string(f));
-    exists_mask(k) = exist(f, 'file') == 2;
+
+    if isempty(f)
+        exists_mask(k) = false;
+        continue;
+    end
+
+    file_info = dir(f);
+
+    if ~isempty(file_info)
+        exists_mask(k) = true;
+        file_datenums(k) = file_info(1).datenum;
+    else
+        exists_mask(k) = false;
+    end
 end
 
 n_exist = sum(exists_mask);
@@ -1282,21 +1403,61 @@ if n_exist == 0
     return;
 end
 
-if n_exist == numel(out_files)
-    if overwrite_mode == "skip" || overwrite_mode == "if_older_than"
-        do_run = false;
-        reason = "all outputs exist -> skip";
-        return;
-    else
-        do_run = true;
-        reason = "all outputs exist -> delete + regenerate";
-        return;
-    end
+if n_exist < numel(out_files)
+    needs_regen = true;
+    do_run = true;
+    reason = sprintf('partial outputs exist (%d/%d) -> regenerate', n_exist, numel(out_files));
+    return;
 end
 
-needs_regen = true;
-do_run = true;
-reason = sprintf('partial outputs exist (%d/%d) -> regenerate', n_exist, numel(out_files));
+switch overwrite_mode
+
+    case "skip"
+        do_run = false;
+        reason = "all outputs exist -> skip";
+
+    case "delete"
+        do_run = true;
+        reason = "all outputs exist -> delete + regenerate";
+
+    case "if_older_than"
+        cutoff_raw = "";
+
+        if isfield(cfg, 'io') && isstruct(cfg.io) && ...
+                isfield(cfg.io, 'overwrite_if_older_than')
+            cutoff_raw = string(cfg.io.overwrite_if_older_than);
+        end
+
+        cutoff_datenum = parse_cutoff_to_datenum_impl(cutoff_raw);
+
+        if isnan(cutoff_datenum)
+            error('overwrite_mode="if_older_than" requires a valid cutoff date. Got: %s', cutoff_raw);
+        end
+
+        if any(isnan(file_datenums))
+            do_run = true;
+            reason = "one or more output file dates unavailable -> regenerate";
+            return;
+        end
+
+        oldest_output_datenum = min(file_datenums);
+
+        if oldest_output_datenum < cutoff_datenum
+            do_run = true;
+            reason = sprintf( ...
+                'one or more outputs older than cutoff %s -> regenerate', ...
+                datestr(cutoff_datenum, 'yyyy-mm-dd HH:MM:SS'));
+        else
+            do_run = false;
+            reason = sprintf( ...
+                'all outputs newer than cutoff %s -> skip', ...
+                datestr(cutoff_datenum, 'yyyy-mm-dd HH:MM:SS'));
+        end
+
+    otherwise
+        do_run = true;
+        reason = "unknown overwrite mode -> regenerate";
+end
 end
 
 function [do_run, reason, info] = step_should_run_from_folder_impl(step_folder, policy)
@@ -1427,7 +1588,7 @@ if contains(EEG.filename, filesep) || contains(EEG.filename, '/')
     EEG.filename = '';
 end
 
-EEG = pop_saveset(EEG, 'filename', out_fname, 'filepath', out_dir);
+EEG = pop_saveset(EEG, 'filename', out_fname, 'filepath', out_dir, 'savemode', 'twofiles');
 
 if nargin >= 4 && isstruct(helpers) && isfield(helpers, 'log_msg_default')
     helpers.log_msg_default('Saved set: %s', fullfile(out_dir, out_fname));
@@ -1718,6 +1879,11 @@ EEG_out = EEG_in;
 [idx_eeg, ~, ~] = get_channel_indices_by_type_impl(EEG_out);
 reference_mode = lower(string(step_cfg.reference_mode));
 
+reference_exclude_non_eeg = true;
+if isfield(step_cfg, 'reference_exclude_non_eeg')
+    reference_exclude_non_eeg = logical(step_cfg.reference_exclude_non_eeg);
+end
+
 switch reference_mode
     case {"keep","none"}
         EEG_out = helpers.append_eeg_comment(EEG_out, ...
@@ -1730,7 +1896,7 @@ switch reference_mode
             return;
         end
 
-        if isfield(step_cfg, 'reference_exclude_non_eeg') && step_cfg.reference_exclude_non_eeg
+        if isfield(step_cfg, 'reference_exclude_non_eeg')
             exclude_idx = setdiff(1:EEG_out.nbchan, idx_eeg);
             EEG_out = pop_reref(EEG_out, [], 'exclude', exclude_idx);
         else
@@ -1757,7 +1923,7 @@ switch reference_mode
             mastoid_idx(k) = this_idx;
         end
 
-        if isfield(step_cfg, 'reference_exclude_non_eeg') && step_cfg.reference_exclude_non_eeg && ~isempty(idx_eeg)
+        if isfield(step_cfg, 'reference_exclude_non_eeg')
             exclude_idx = setdiff(1:EEG_out.nbchan, idx_eeg);
             EEG_out = pop_reref(EEG_out, mastoid_idx, 'exclude', exclude_idx);
         else
@@ -1948,8 +2114,8 @@ for k = 1:numel(EEG.event)
     end
 
     if matches_any_prefix_impl(code, step_cfg.baseline_open_marker_prefixes) || ...
-       matches_any_prefix_impl(code, step_cfg.baseline_closed_marker_prefixes) || ...
-       matches_any_exact_impl(code, step_cfg.baseline_end_markers)
+            matches_any_prefix_impl(code, step_cfg.baseline_closed_marker_prefixes) || ...
+            matches_any_exact_impl(code, step_cfg.baseline_end_markers)
 
         event_codes(end+1,1) = string(code); %#ok<AGROW>
         event_times(end+1,1) = double(EEG.event(k).latency) / double(EEG.srate); %#ok<AGROW>
@@ -2074,9 +2240,28 @@ rej_info.n_rejected_hard                 = 0;
 rej_info.n_rejected_sophisticated        = 0;
 rej_info.n_rejected_total                = 0;
 rej_info.n_kept                          = EEG_ep.trials;
+rej_info.rejection_method                = "";
 rej_info.min_trials_required             = NaN;
 rej_info.min_trials_condition_counts     = "";
 rej_info.min_trials_insufficient_conditions = "";
+
+if isfield(step_cfg, 'epoch_rejection_method') && ...
+        strlength(string(step_cfg.epoch_rejection_method)) > 0
+    rejection_method = lower(strtrim(string(step_cfg.epoch_rejection_method)));
+else
+    rejection_method = "erplab";
+end
+
+if any(rejection_method == ["mad","mad_variance","mad_epoch_rejection"])
+    rejection_method = "mad_variance";
+end
+
+if ~ismember(rejection_method, ["erplab","faster_ptp","mad_variance","none"])
+    error(['Unsupported cfg.prep_06.epoch_rejection_method="%s". ' ...
+        'Use "erplab", "faster_ptp", "mad_variance", or "none".'], char(rejection_method));
+end
+
+rej_info.rejection_method = rejection_method;
 
 if step_cfg.save_intermediate_steps && ~step_cfg.save_final_only
     save_intermediate_set_impl( ...
@@ -2093,6 +2278,10 @@ if step_cfg.do_artifact_rejection
         EEG_work = helpers.append_eeg_comment(EEG_work, ...
             'prep_06_epoching: artifact rejection skipped (no EEG channels or no epochs)');
     else
+
+        % -----------------------------------------------------------------
+        % Optional first-pass hard threshold
+        % -----------------------------------------------------------------
         if step_cfg.do_initial_hard_threshold_rejection
             [EEG_work, hard_info] = apply_hard_epoch_threshold_rejection_impl( ...
                 EEG_work, idx_eeg, step_cfg.initial_hard_threshold_uv);
@@ -2123,44 +2312,125 @@ if step_cfg.do_artifact_rejection
                 'prep_06_epoching: hard threshold rejection skipped by config');
         end
 
+        % -----------------------------------------------------------------
+        % Sophisticated / backend-specific rejection
+        % -----------------------------------------------------------------
         if EEG_work.trials >= 1
-            use_shared = ...
-                isfield(step_cfg, 'shared_epoch_rejection') && ...
-                isstruct(step_cfg.shared_epoch_rejection) && ...
-                isfield(step_cfg.shared_epoch_rejection, 'enable') && ...
-                step_cfg.shared_epoch_rejection.enable;
 
-            if use_shared
-                [EEG_work, shared_info] = apply_shared_epoch_rejection_impl( ...
-                    EEG_work, step_cfg.shared_epoch_rejection);
+            switch rejection_method
 
-                rej_info.n_rejected_sophisticated = shared_info.n_rejected;
-                rej_info.n_kept = EEG_work.trials;
+                case "none"
+                    EEG_work = helpers.append_eeg_comment(EEG_work, ...
+                        'prep_06_epoching: epoch rejection skipped because epoch_rejection_method="none"');
 
-                EEG_work = helpers.append_eeg_comment(EEG_work, sprintf( ...
-                    'prep_06_epoching: shared rejection after hard threshold | rejected=%d/%d | kept=%d', ...
-                    shared_info.n_rejected, shared_info.n_before, EEG_work.trials));
+                    helpers.log_msg_default( ...
+                        'prep_06_epoching: %s | %s | epoch rejection skipped method=none', ...
+                        char(string(subj_label)), char(string(run_label)));
 
-                helpers.log_msg_default( ...
-                    'prep_06_epoching: %s | %s | shared rejection=%d/%d | kept=%d', ...
-                    char(string(subj_label)), char(string(run_label)), ...
-                    shared_info.n_rejected, shared_info.n_before, EEG_work.trials);
+                case "erplab"
+                    if ~isfield(step_cfg, 'erplab_epoch_rejection') || ...
+                            ~isstruct(step_cfg.erplab_epoch_rejection)
+                        error('cfg.prep_06.erplab_epoch_rejection is missing, but epoch_rejection_method="erplab".');
+                    end
 
-            else
-                [EEG_work, soft_info] = apply_fallback_epoch_rejection_impl( ...
-                    EEG_work, idx_eeg, step_cfg);
+                    erplab_reject_cfg = step_cfg.erplab_epoch_rejection;
+                    erplab_reject_cfg.enable = true; % method selects ERPLAB; no user-facing second switch
 
-                rej_info.n_rejected_sophisticated = soft_info.n_rejected;
-                rej_info.n_kept = EEG_work.trials;
+                    [EEG_work, erplab_info] = apply_erplab_epoch_rejection_impl( ...
+                        EEG_work, idx_eeg, erplab_reject_cfg, helpers, subj_label, run_label);
 
-                EEG_work = helpers.append_eeg_comment(EEG_work, sprintf( ...
-                    'prep_06_epoching: fallback rejection after hard threshold | rejected=%d/%d | kept=%d | robust=%d', ...
-                    soft_info.n_rejected, soft_info.n_total, soft_info.n_kept, soft_info.robust_z));
+                    rej_info.n_rejected_sophisticated = erplab_info.n_rejected;
+                    rej_info.n_kept = EEG_work.trials;
 
-                helpers.log_msg_default( ...
-                    'prep_06_epoching: %s | %s | fallback rejection=%d/%d | kept=%d', ...
-                    char(string(subj_label)), char(string(run_label)), ...
-                    soft_info.n_rejected, soft_info.n_total, soft_info.n_kept);
+                    EEG_work = helpers.append_eeg_comment(EEG_work, sprintf( ...
+                        ['prep_06_epoching: ERPLAB rejection | rejected=%d/%d | kept=%d | ' ...
+                        'extreme_voltage=%d | sample_diff=%d | flatline=%d'], ...
+                        erplab_info.n_rejected, ...
+                        erplab_info.n_before, ...
+                        erplab_info.n_kept, ...
+                        erplab_info.n_rejected_extreme_voltage, ...
+                        erplab_info.n_rejected_sample_diff, ...
+                        erplab_info.n_rejected_flatline));
+
+                    helpers.log_msg_default( ...
+                        ['prep_06_epoching: %s | %s | ERPLAB rejection=%d/%d | kept=%d | ' ...
+                        'extreme_voltage=%d | sample_diff=%d | flatline=%d'], ...
+                        char(string(subj_label)), char(string(run_label)), ...
+                        erplab_info.n_rejected, erplab_info.n_before, erplab_info.n_kept, ...
+                        erplab_info.n_rejected_extreme_voltage, ...
+                        erplab_info.n_rejected_sample_diff, ...
+                        erplab_info.n_rejected_flatline);
+
+                                case "mad_variance"
+
+                    z_thresh = 3;
+                    if isfield(step_cfg, 'mad_z_threshold') && ...
+                            ~isempty(step_cfg.mad_z_threshold)
+                        z_thresh = step_cfg.mad_z_threshold;
+                    end
+
+                    use_logvar = true;
+                    if isfield(step_cfg, 'mad_use_logvar') && ...
+                            ~isempty(step_cfg.mad_use_logvar)
+                        use_logvar = logical(step_cfg.mad_use_logvar);
+                    end
+
+                    [EEG_work, mad_info] = helpers.reject_ica_prep_epochs_by_mad_variance( ...
+                        EEG_work, ...
+                        idx_eeg, ...
+                        z_thresh, ...
+                        use_logvar);
+
+                    rej_info.n_rejected_sophisticated = mad_info.n_rejected;
+                    rej_info.n_kept = EEG_work.trials;
+
+                    EEG_work = helpers.append_eeg_comment(EEG_work, sprintf( ...
+                        ['prep_06_epoching: MAD variance rejection | rejected=%d/%d | kept=%d | ' ...
+                         'z=%.2f | logvar=%d'], ...
+                        mad_info.n_rejected, ...
+                        mad_info.n_before, ...
+                        EEG_work.trials, ...
+                        z_thresh, ...
+                        use_logvar));
+
+                    helpers.log_msg_default( ...
+                        ['prep_06_epoching: %s | %s | MAD variance rejection=%d/%d | kept=%d | ' ...
+                         'z=%.2f | logvar=%d'], ...
+                        char(string(subj_label)), char(string(run_label)), ...
+                        mad_info.n_rejected, ...
+                        mad_info.n_before, ...
+                        EEG_work.trials, ...
+                        z_thresh, ...
+                        use_logvar);
+
+                case "faster_ptp"
+                    if ~isfield(step_cfg, 'faster_ptp_epoch_rejection') || ...
+                            ~isstruct(step_cfg.faster_ptp_epoch_rejection)
+                        error('cfg.prep_06.faster_ptp_epoch_rejection is missing, but epoch_rejection_method="faster_ptp".');
+                    end
+
+                    faster_ptp_cfg = step_cfg.faster_ptp_epoch_rejection;
+                    faster_ptp_cfg.enable = true; % method selects FASTER/PTP; no user-facing second switch
+
+                    [EEG_work, faster_ptp_info] = apply_shared_epoch_rejection_impl( ...
+                        EEG_work, faster_ptp_cfg);
+
+                    rej_info.n_rejected_sophisticated = faster_ptp_info.n_rejected;
+                    rej_info.n_kept = EEG_work.trials;
+
+                    EEG_work = helpers.append_eeg_comment(EEG_work, sprintf( ...
+                        'prep_06_epoching: FASTER/PTP rejection | rejected=%d/%d | kept=%d', ...
+                        faster_ptp_info.n_rejected, faster_ptp_info.n_before, EEG_work.trials));
+
+                    helpers.log_msg_default( ...
+                        'prep_06_epoching: %s | %s | FASTER/PTP rejection=%d/%d | kept=%d', ...
+                        char(string(subj_label)), char(string(run_label)), ...
+                        faster_ptp_info.n_rejected, faster_ptp_info.n_before, EEG_work.trials);
+
+                otherwise
+                    error(['Unsupported cfg.prep_06.epoch_rejection_method="%s". ' ...
+                        'Use "erplab", "faster_ptp", "mad_variance", or "none".'], ...
+                        char(rejection_method));
             end
 
             if step_cfg.save_intermediate_steps && ~step_cfg.save_final_only
@@ -2202,15 +2472,17 @@ if apply_max_reject_exclusion && (prop_rejected > step_cfg.max_reject_prop)
 
     EEG_work = helpers.append_eeg_comment(EEG_work, sprintf( ...
         ['prep_06_epoching: dataset excluded | rejected %.1f%% of epochs ' ...
-         '(threshold %.1f%%) | hard=%d | sophisticated=%d'], ...
+        '(threshold %.1f%%) | hard=%d | sophisticated=%d | backend=%s'], ...
         100 * prop_rejected, ...
         100 * step_cfg.max_reject_prop, ...
         rej_info.n_rejected_hard, ...
-        rej_info.n_rejected_sophisticated));
+        rej_info.n_rejected_sophisticated, ...
+        char(rejection_method)));
 
     helpers.log_msg_default( ...
-        'prep_06_epoching: %s | %s | dataset excluded | rejected %.1f%% of epochs', ...
-        char(string(subj_label)), char(string(run_label)), 100 * prop_rejected);
+        'prep_06_epoching: %s | %s | dataset excluded | rejected %.1f%% of epochs | backend=%s', ...
+        char(string(subj_label)), char(string(run_label)), ...
+        100 * prop_rejected, char(rejection_method));
 
     EEG_final = EEG_work;
     return;
@@ -2525,8 +2797,8 @@ end
 original_data = EEG.data;
 
 try
-    EEG_tmp = EEG;
-    EEG_tmp.data = EEG.data(subset_indices, :);
+    EEG_tmp = pop_select(EEG, 'channel', subset_indices);
+    EEG_tmp = eeg_checkset(EEG_tmp);
 
     fs = EEG_tmp.srate;
     freqs = step_cfg.line_noise_frequencies_hz;
@@ -2538,7 +2810,7 @@ try
     end
 
     % Backward-compatible fallbacks in case older configs are used
-     bandwidth_hz      = getfield_safe_impl(step_cfg, 'pop_cleanline_bandwidth_hz', 2);
+    bandwidth_hz      = getfield_safe_impl(step_cfg, 'pop_cleanline_bandwidth_hz', 2);
     p_value           = getfield_safe_impl(step_cfg, 'pop_cleanline_p_value', 0.01);
     scanforlines      = getfield_safe_impl(step_cfg, 'pop_cleanline_scanforlines', false);
     winsize_sec       = getfield_safe_impl(step_cfg, 'pop_cleanline_winsize_sec', 4);
@@ -2746,6 +3018,550 @@ info.n_rejected      = numel(bad_epochs);
 info.rejected_epochs = bad_epochs;
 end
 
+function [EEG_out, info] = apply_erplab_epoch_rejection_impl( ...
+    EEG_in, idx_eeg, reject_cfg, helpers, subj_label, run_label)
+
+% APPLY_ERPLAB_EPOCH_REJECTION_IMPL
+%
+% Uses ERPLAB artifact-detection functions on already epoched/segmented
+% EEGLAB datasets:
+%
+%   pop_artextval    : extreme voltage threshold
+%   pop_artdiff      : sample-to-sample voltage difference
+%   pop_artflatline  : blocking / flatline detection
+%
+% The function also creates the minimal ERPLAB-compatible EVENTLIST / epoch
+% fields needed for artificial regepochs, such as ICA-prep 1-s epochs or
+% baseline 10-s epochs.
+
+EEG_out = EEG_in;
+
+info = struct();
+info.did_apply = false;
+info.toolbox   = 'ERPLAB';
+info.functions_called = {};
+info.n_before  = EEG_in.trials;
+info.n_rejected = 0;
+info.n_kept = EEG_in.trials;
+info.rejected_epochs = [];
+info.n_rejected_extreme_voltage = 0;
+info.n_rejected_sample_diff = 0;
+info.n_rejected_flatline = 0;
+info.channel_scope = "";
+info.n_channels_checked = 0;
+info.twindow_ms = [];
+info.lowpass_hz = [];
+info.review = "";
+info.history = "";
+
+if nargin < 5
+    subj_label = "";
+end
+
+if nargin < 6
+    run_label = "";
+end
+
+if EEG_in.trials < 1
+    return;
+end
+
+if ~isfield(reject_cfg, 'enable') || ~reject_cfg.enable
+    return;
+end
+
+required_erplab_functions = {'pop_artextval', 'pop_artdiff', 'pop_artflatline'};
+for f = 1:numel(required_erplab_functions)
+    if exist(required_erplab_functions{f}, 'file') ~= 2
+        error(['ERPLAB function %s was not found on the MATLAB path. ' ...
+            'Check cfg.toolboxes.path_erplab_* and make sure ERPLAB is installed/loaded.'], ...
+            required_erplab_functions{f});
+    end
+end
+
+channel_scope = "eeg";
+if isfield(reject_cfg, 'channel_scope') && strlength(string(reject_cfg.channel_scope)) > 0
+    channel_scope = lower(strtrim(string(reject_cfg.channel_scope)));
+end
+info.channel_scope = channel_scope;
+
+switch channel_scope
+    case "eeg"
+        chan_idx = idx_eeg(:)';
+    case "all"
+        chan_idx = 1:EEG_in.nbchan;
+    otherwise
+        error('cfg.*.erplab_epoch_rejection.channel_scope must be "eeg" or "all". Got: %s', ...
+            char(channel_scope));
+end
+
+if isempty(chan_idx)
+    helpers.log_msg_default( ...
+        'ERPLAB rejection skipped: %s | %s | no channels selected for scope=%s.', ...
+        char(string(subj_label)), char(string(run_label)), char(channel_scope));
+    return;
+end
+
+info.n_channels_checked = numel(chan_idx);
+
+twindow_ms = resolve_erplab_twindow_impl(EEG_in, reject_cfg);
+info.twindow_ms = twindow_ms;
+
+review = 'off';
+if isfield(reject_cfg, 'review') && strlength(string(reject_cfg.review)) > 0
+    review = char(string(reject_cfg.review));
+end
+info.review = review;
+
+history_mode = 'off';
+if isfield(reject_cfg, 'history') && strlength(string(reject_cfg.history)) > 0
+    history_mode = char(string(reject_cfg.history));
+end
+info.history = history_mode;
+
+lowpass_hz = -1;
+if isfield(reject_cfg, 'lowpass_hz') && ~isempty(reject_cfg.lowpass_hz)
+    lowpass_hz = double(reject_cfg.lowpass_hz);
+end
+info.lowpass_hz = lowpass_hz;
+
+clear_existing_flags = true;
+if isfield(reject_cfg, 'clear_existing_flags')
+    clear_existing_flags = logical(reject_cfg.clear_existing_flags);
+end
+
+EEG_work = EEG_in;
+EEG_work = ensure_erplab_epoch_eventlist_compat_impl(EEG_work);
+
+if ~isfield(EEG_work, 'reject') || ~isstruct(EEG_work.reject)
+    EEG_work.reject = struct();
+end
+
+if ~isfield(EEG_work.reject, 'rejmanual') || isempty(EEG_work.reject.rejmanual) || clear_existing_flags
+    EEG_work.reject.rejmanual = zeros(1, EEG_work.trials);
+end
+
+if ~isfield(EEG_work.reject, 'rejmanualE') || isempty(EEG_work.reject.rejmanualE) || clear_existing_flags
+    EEG_work.reject.rejmanualE = zeros(EEG_work.nbchan, EEG_work.trials);
+end
+
+if clear_existing_flags
+    EEG_work = clear_erplab_artifact_flags_impl(EEG_work);
+end
+
+% -------------------------------------------------------------------------
+% 1) Extreme voltage via ERPLAB pop_artextval
+% -------------------------------------------------------------------------
+use_extreme_voltage = isfield(reject_cfg, 'use_extreme_voltage') && ...
+    logical(reject_cfg.use_extreme_voltage);
+
+if use_extreme_voltage
+    extreme_voltage_uV = double(getfield_safe_impl(reject_cfg, 'extreme_voltage_uV', 200));
+    flag_extreme = validate_erplab_flag_impl( ...
+        getfield_safe_impl(reject_cfg, 'flag_extreme_voltage', 1), ...
+        'flag_extreme_voltage');
+
+    bad_before = erplab_rejmanual_mask_impl(EEG_work);
+
+    EEG_work = pop_artextval(EEG_work, ...
+        'Channel',   chan_idx, ...
+        'Flag',      flag_extreme, ...
+        'Threshold', [-abs(extreme_voltage_uV) abs(extreme_voltage_uV)], ...
+        'Twindow',   twindow_ms, ...
+        'LowPass',   lowpass_hz, ...
+        'Review',    review, ...
+        'History',   history_mode);
+
+    EEG_work = eeg_checkset(EEG_work);
+
+    bad_after = erplab_rejmanual_mask_impl(EEG_work);
+    info.n_rejected_extreme_voltage = sum(bad_after & ~bad_before);
+    info.functions_called{end+1} = 'pop_artextval';
+end
+
+% -------------------------------------------------------------------------
+% 2) Sample-to-sample voltage difference via ERPLAB pop_artdiff
+% -------------------------------------------------------------------------
+use_sample_diff = isfield(reject_cfg, 'use_sample_diff') && ...
+    logical(reject_cfg.use_sample_diff);
+
+if use_sample_diff
+    sample_diff_uV = double(getfield_safe_impl(reject_cfg, 'sample_diff_uV', 50));
+    flag_sample = validate_erplab_flag_impl( ...
+        getfield_safe_impl(reject_cfg, 'flag_sample_diff', 2), ...
+        'flag_sample_diff');
+
+    bad_before = erplab_rejmanual_mask_impl(EEG_work);
+
+    EEG_work = pop_artdiff(EEG_work, ...
+        'Channel',   chan_idx, ...
+        'Flag',      flag_sample, ...
+        'Threshold', abs(sample_diff_uV), ...
+        'Twindow',   twindow_ms, ...
+        'LowPass',   lowpass_hz, ...
+        'Review',    review, ...
+        'History',   history_mode);
+
+    EEG_work = eeg_checkset(EEG_work);
+
+    bad_after = erplab_rejmanual_mask_impl(EEG_work);
+    info.n_rejected_sample_diff = sum(bad_after & ~bad_before);
+    info.functions_called{end+1} = 'pop_artdiff';
+end
+
+% -------------------------------------------------------------------------
+% 3) Flatline / blocking via ERPLAB pop_artflatline
+% -------------------------------------------------------------------------
+use_flatline = isfield(reject_cfg, 'use_flatline') && ...
+    logical(reject_cfg.use_flatline);
+
+if use_flatline
+    flatline_tolerance_uV = double(getfield_safe_impl(reject_cfg, 'flatline_tolerance_uV', 0.5));
+    flatline_duration_ms  = double(getfield_safe_impl(reject_cfg, 'flatline_duration_ms', 100));
+    flag_flatline = validate_erplab_flag_impl( ...
+        getfield_safe_impl(reject_cfg, 'flag_flatline', 3), ...
+        'flag_flatline');
+
+    bad_before = erplab_rejmanual_mask_impl(EEG_work);
+
+    EEG_work = pop_artflatline(EEG_work, ...
+        'Channel',   chan_idx, ...
+        'Flag',      flag_flatline, ...
+        'Threshold', [-abs(flatline_tolerance_uV) abs(flatline_tolerance_uV)], ...
+        'Duration',  flatline_duration_ms, ...
+        'Twindow',   twindow_ms, ...
+        'LowPass',   lowpass_hz, ...
+        'Review',    review, ...
+        'History',   history_mode);
+
+    EEG_work = eeg_checkset(EEG_work);
+
+    bad_after = erplab_rejmanual_mask_impl(EEG_work);
+    info.n_rejected_flatline = sum(bad_after & ~bad_before);
+    info.functions_called{end+1} = 'pop_artflatline';
+end
+
+bad_union = erplab_rejmanual_mask_impl(EEG_work);
+bad_epochs = find(bad_union);
+
+info.did_apply = true;
+info.n_rejected = numel(bad_epochs);
+info.rejected_epochs = bad_epochs(:)';
+
+if isempty(bad_epochs)
+    info.n_kept = EEG_work.trials;
+
+    if ~isfield(EEG_work, 'etc') || isempty(EEG_work.etc)
+        EEG_work.etc = struct();
+    end
+    EEG_work.etc.prep_erplab_epoch_rejection = info;
+
+    EEG_out = EEG_work;
+
+    helpers.log_msg_default( ...
+        'ERPLAB rejection: %s | %s | no bad epochs | checked_channels=%d | functions=%s', ...
+        char(string(subj_label)), char(string(run_label)), ...
+        info.n_channels_checked, strjoin(string(info.functions_called), '+'));
+
+    return;
+end
+
+EEG_work = pop_rejepoch(EEG_work, bad_epochs, 0);
+EEG_work = eeg_checkset(EEG_work);
+
+info.n_kept = EEG_work.trials;
+
+if ~isfield(EEG_work, 'etc') || isempty(EEG_work.etc)
+    EEG_work.etc = struct();
+end
+EEG_work.etc.prep_erplab_epoch_rejection = info;
+
+EEG_out = EEG_work;
+
+helpers.log_msg_default( ...
+    ['ERPLAB rejection: %s | %s | rejected=%d/%d | kept=%d | ' ...
+    'extreme_voltage=%d | sample_diff=%d | flatline=%d | checked_channels=%d | functions=%s'], ...
+    char(string(subj_label)), char(string(run_label)), ...
+    info.n_rejected, info.n_before, info.n_kept, ...
+    info.n_rejected_extreme_voltage, ...
+    info.n_rejected_sample_diff, ...
+    info.n_rejected_flatline, ...
+    info.n_channels_checked, ...
+    strjoin(string(info.functions_called), '+'));
+end
+
+function EEG = ensure_erplab_epoch_eventlist_compat_impl(EEG)
+% Create the minimal ERPLAB-compatible EVENTLIST / epoch fields required by
+% ERPLAB artifact-detection functions. This is especially important for
+% artificial regepochs from eeg_regepochs.
+
+if EEG.trials < 1
+    return;
+end
+
+if ~isfield(EEG, 'epoch') || isempty(EEG.epoch)
+    error('ERPLAB epoch rejection requires EEG.epoch. The dataset must be epoched/segmented first.');
+end
+
+eventinfo_template = struct( ...
+    'item',      [], ...
+    'bini',      0, ...
+    'nbin',      0, ...
+    'binlabel',  '', ...
+    'code',      '', ...
+    'codelabel', '', ...
+    'type',      '', ...
+    'latency',   0, ...
+    'duration',  [], ...
+    'enable',    1, ...
+    'flag',      uint16(0), ...
+    'urevent',   []);
+
+eventinfo = repmat(eventinfo_template, 0, 1);
+item_counter = 0;
+
+for e = 1:EEG.trials
+
+    if isfield(EEG.epoch, 'eventtype')
+        event_types = coerce_to_cell_impl(EEG.epoch(e).eventtype);
+    else
+        event_types = {};
+    end
+
+    if isfield(EEG.epoch, 'eventlatency')
+        event_lats = coerce_to_cell_impl(EEG.epoch(e).eventlatency);
+    else
+        event_lats = {};
+    end
+
+    if isempty(event_types)
+        event_types = {'erplab_epoch_anchor'};
+    end
+
+    if isempty(event_lats)
+        event_lats = {0};
+    end
+
+    n_items = max([numel(event_types), numel(event_lats), 1]);
+
+    type_cells = cell(1, n_items);
+    lat_nums   = zeros(1, n_items);
+    item_ids   = zeros(1, n_items);
+    flags      = zeros(1, n_items, 'uint16');
+    bini       = zeros(1, n_items);
+    nbin       = zeros(1, n_items);
+
+    for j = 1:n_items
+        this_type = event_types{min(j, numel(event_types))};
+        this_type = char(string(normalize_trigger_type_impl(this_type)));
+
+        if isempty(this_type)
+            this_type = 'erplab_epoch_anchor';
+        end
+
+        this_lat = scalarize_latency_ms_impl(event_lats{min(j, numel(event_lats))});
+        if ~isfinite(this_lat)
+            this_lat = 0;
+        end
+
+        item_counter = item_counter + 1;
+
+        eventinfo(item_counter, 1) = eventinfo_template;
+        eventinfo(item_counter).item      = item_counter;
+        eventinfo(item_counter).bini      = 0;
+        eventinfo(item_counter).nbin      = 0;
+        eventinfo(item_counter).binlabel  = '';
+        eventinfo(item_counter).code      = this_type;
+        eventinfo(item_counter).codelabel = '';
+        eventinfo(item_counter).type      = this_type;
+        eventinfo(item_counter).latency   = this_lat;
+        eventinfo(item_counter).duration  = [];
+        eventinfo(item_counter).enable    = 1;
+        eventinfo(item_counter).flag      = uint16(0);
+        eventinfo(item_counter).urevent   = [];
+
+        type_cells{j} = this_type;
+        lat_nums(j)   = this_lat;
+        item_ids(j)   = item_counter;
+    end
+
+    % ERPLAB's markartifacts() looks for the event at latency exactly 0.
+    % If no event is exactly 0, use the event closest to 0 as anchor.
+    [~, zero_ix] = min(abs(lat_nums));
+    lat_nums(zero_ix) = 0;
+    eventinfo(item_ids(zero_ix)).latency = 0;
+
+    EEG.epoch(e).eventtype    = type_cells;
+    EEG.epoch(e).eventlatency = lat_nums;
+    EEG.epoch(e).eventitem    = item_ids;
+    EEG.epoch(e).eventflag    = flags;
+    EEG.epoch(e).eventbini    = bini;
+    EEG.epoch(e).eventnbin    = nbin;
+end
+
+EEG.EVENTLIST = struct();
+EEG.EVENTLIST.setname = getfield_safe_impl(EEG, 'setname', '');
+EEG.EVENTLIST.filename = '';
+EEG.EVENTLIST.filepath = '';
+EEG.EVENTLIST.trialsperbin = [];
+EEG.EVENTLIST.eventinfo = eventinfo;
+
+% Keep bdf present but without RT fields. This prevents ERPLAB from trying
+% to synchronize reaction-time artifact flags in datasets without RT info.
+EEG.EVENTLIST.bdf = struct();
+
+if ~isfield(EEG, 'reject') || ~isstruct(EEG.reject)
+    EEG.reject = struct();
+end
+
+if ~isfield(EEG.reject, 'rejmanual') || isempty(EEG.reject.rejmanual)
+    EEG.reject.rejmanual = zeros(1, EEG.trials);
+end
+
+if ~isfield(EEG.reject, 'rejmanualE') || isempty(EEG.reject.rejmanualE)
+    EEG.reject.rejmanualE = zeros(EEG.nbchan, EEG.trials);
+end
+
+% Also make EEG.event compatible. Some ERPLAB internals may inspect
+% EEG.event directly rather than EEG.EVENTLIST.eventinfo.
+if isfield(EEG, 'event') && ~isempty(EEG.event)
+    n_events = numel(EEG.event);
+
+    if ~isfield(EEG.event, 'item')
+        for k = 1:n_events
+            EEG.event(k).item = k;
+        end
+    end
+
+    if ~isfield(EEG.event, 'flag')
+        for k = 1:n_events
+            EEG.event(k).flag = uint16(0);
+        end
+    end
+
+    if ~isfield(EEG.event, 'bini')
+        for k = 1:n_events
+            EEG.event(k).bini = 0;
+        end
+    end
+
+    if ~isfield(EEG.event, 'nbin')
+        for k = 1:n_events
+            EEG.event(k).nbin = 0;
+        end
+    end
+end
+
+% Some ERPLAB code also expects these top-level EVENTLIST fields.
+if ~isfield(EEG.EVENTLIST, 'nbin')
+    EEG.EVENTLIST.nbin = 0;
+end
+if ~isfield(EEG.EVENTLIST, 'bininfo')
+    EEG.EVENTLIST.bininfo = struct([]);
+end
+end
+
+function EEG = clear_erplab_artifact_flags_impl(EEG)
+if ~isfield(EEG, 'reject') || ~isstruct(EEG.reject)
+    EEG.reject = struct();
+end
+
+EEG.reject.rejmanual  = zeros(1, EEG.trials);
+EEG.reject.rejmanualE = zeros(EEG.nbchan, EEG.trials);
+
+if isfield(EEG, 'epoch') && ~isempty(EEG.epoch)
+    for e = 1:min(EEG.trials, numel(EEG.epoch))
+        if isfield(EEG.epoch, 'eventflag')
+            n_flags = numel(EEG.epoch(e).eventflag);
+            if n_flags < 1
+                n_flags = 1;
+            end
+            EEG.epoch(e).eventflag = zeros(1, n_flags, 'uint16');
+        end
+    end
+end
+
+if isfield(EEG, 'EVENTLIST') && isfield(EEG.EVENTLIST, 'eventinfo') && ...
+        ~isempty(EEG.EVENTLIST.eventinfo) && isfield(EEG.EVENTLIST.eventinfo, 'flag')
+    for i = 1:numel(EEG.EVENTLIST.eventinfo)
+        EEG.EVENTLIST.eventinfo(i).flag = uint16(0);
+    end
+end
+EEG = eeg_checkset(EEG);
+
+end
+
+function bad = erplab_rejmanual_mask_impl(EEG)
+n_trials = EEG.trials;
+bad = false(n_trials, 1);
+
+if ~isfield(EEG, 'reject') || ~isstruct(EEG.reject)
+    return;
+end
+
+if ~isfield(EEG.reject, 'rejmanual') || isempty(EEG.reject.rejmanual)
+    return;
+end
+
+tmp = EEG.reject.rejmanual(:) ~= 0;
+n = min(numel(tmp), n_trials);
+bad(1:n) = tmp(1:n);
+end
+
+function flag = validate_erplab_flag_impl(flag_raw, field_name)
+flag = double(flag_raw);
+
+if isempty(flag) || ~isscalar(flag) || ~isfinite(flag) || flag ~= round(flag)
+    error('ERPLAB artifact flag %s must be a finite integer from 1 to 8. Got: %s', ...
+        field_name, mat2str(flag_raw));
+end
+
+flag = round(flag);
+
+if flag < 1 || flag > 8
+    error(['ERPLAB artifact flag %s must be between 1 and 8. Got %d. ' ...
+        'Use e.g. 1=extreme voltage, 2=sample diff, 3=flatline.'], ...
+        field_name, flag);
+end
+end
+
+function twindow_ms = resolve_erplab_twindow_impl(EEG, reject_cfg)
+twindow_ms = [];
+
+if isfield(reject_cfg, 'twindow_ms')
+    twindow_ms = reject_cfg.twindow_ms;
+end
+
+if isempty(twindow_ms)
+    twindow_ms = [double(EEG.xmin) double(EEG.xmax)] * 1000;
+else
+    twindow_ms = double(twindow_ms);
+end
+
+if numel(twindow_ms) ~= 2 || any(~isfinite(twindow_ms))
+    error('ERPLAB epoch rejection twindow_ms must be [] or [start end] in ms.');
+end
+
+twindow_ms = sort(twindow_ms(:)');
+
+epoch_ms = [double(EEG.xmin) double(EEG.xmax)] * 1000;
+
+if twindow_ms(1) < epoch_ms(1) - 2 || twindow_ms(2) > epoch_ms(2) + 2
+    error(['ERPLAB epoch rejection twindow_ms=[%.3f %.3f] is outside epoch limits ' ...
+        '[%.3f %.3f] ms.'], ...
+        twindow_ms(1), twindow_ms(2), epoch_ms(1), epoch_ms(2));
+end
+
+% Clamp tiny floating-point differences at the epoch borders.
+twindow_ms(1) = max(twindow_ms(1), epoch_ms(1));
+twindow_ms(2) = min(twindow_ms(2), epoch_ms(2));
+
+if twindow_ms(2) <= twindow_ms(1)
+    error('ERPLAB epoch rejection twindow_ms has zero/negative width: [%.3f %.3f].', ...
+        twindow_ms(1), twindow_ms(2));
+end
+end
+
 function r = compute_data_rank_svd_impl(X)
 % Robust numerical rank via SVD with explicit tolerance.
 % X is expected to be [channels x samples].
@@ -2773,7 +3589,7 @@ if isempty(s)
     return;
 end
 
-tol = max(size(X)) * eps(max(s)) * max(s);
+tol = max(size(X)) * eps(max(s));
 r = sum(s > tol);
 
 % Safety clamp
@@ -3300,18 +4116,18 @@ row = table( ...
     min_trials_insufficient, ...
     string(output_paths_joined), ...
     'VariableNames', { ...
-        'subject_id', 'run_base', 'ica_method', 'epoching_mode', 'condition', 'status', ...
-        'input_set_name', ...
-        'n_eeg_channels', 'n_eog_channels', 'n_non_eeg_channels', ...
-        'n_epochs_total', 'n_rejected_hard', 'n_rejected_sophisticated', 'n_rejected_total', 'n_epochs_kept', ...
-        'prop_rejected_total', ...
-        'excluded_any_rule', 'excluded_by_max_reject_prop', 'excluded_by_min_trials_rule', 'exclusion_reason', ...
-        'artifact_rejection_enabled', 'hard_threshold_enabled', 'hard_threshold_uv', ...
-        'baseline_correction_applied', 'baseline_start_ms', 'baseline_end_ms', ...
-        'max_reject_prop', ...
-        'shared_rejection_enabled', 'shared_faster_z', 'shared_ptp_uV_thresh', 'shared_use_robust_z', ...
-        'min_trials_rule_enabled', 'min_trials_min_n', 'min_trials_condition_counts', 'min_trials_insufficient_conditions', ...
-        'output_set_paths'});
+    'subject_id', 'run_base', 'ica_method', 'epoching_mode', 'condition', 'status', ...
+    'input_set_name', ...
+    'n_eeg_channels', 'n_eog_channels', 'n_non_eeg_channels', ...
+    'n_epochs_total', 'n_rejected_hard', 'n_rejected_sophisticated', 'n_rejected_total', 'n_epochs_kept', ...
+    'prop_rejected_total', ...
+    'excluded_any_rule', 'excluded_by_max_reject_prop', 'excluded_by_min_trials_rule', 'exclusion_reason', ...
+    'artifact_rejection_enabled', 'hard_threshold_enabled', 'hard_threshold_uv', ...
+    'baseline_correction_enabled', 'baseline_start_ms', 'baseline_end_ms', ...
+    'max_reject_prop', ...
+    'shared_rejection_enabled', 'shared_faster_z', 'shared_ptp_uV_thresh', 'shared_use_robust_z', ...
+    'min_trials_rule_enabled', 'min_trials_min_n', 'min_trials_condition_counts', 'min_trials_insufficient_conditions', ...
+    'output_set_paths'});
 end
 
 
@@ -3704,7 +4520,7 @@ for r = 1:height(beh)
         map_ref   = string(map_table{m,3});
 
         if behavior_value_matches_impl(event_type, map_event) && ...
-           behavior_value_matches_impl(code, map_code)
+                behavior_value_matches_impl(code, map_code)
 
             raw_token = get_raw_trigger_from_key_impl(opts.raw_triggers, map_ref);
 
@@ -3756,21 +4572,3 @@ else
     tf = strcmp(value, pattern);
 end
 end
-
-% function token = resolve_raw_trigger_from_key_impl(ref, raw_triggers)
-% ref = string(ref);
-% 
-% if strlength(ref) == 0
-%     token = "";
-%     return;
-% end
-% 
-% if isstruct(raw_triggers) && isfield(raw_triggers, char(ref))
-%     token = string(normalize_trigger_type_impl(raw_triggers.(char(ref))));
-% else
-%     token = string(normalize_trigger_type_impl(ref));
-% end
-% end
-% in case missing this function causes an error anywhere: call
-% get_raw_trigger_from_key_impl instead
-

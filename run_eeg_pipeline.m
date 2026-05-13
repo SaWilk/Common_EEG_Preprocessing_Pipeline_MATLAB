@@ -25,7 +25,7 @@ function run_eeg_pipeline(config_spec, varargin)
 % OUTPUT
 %   - Step 01 BIDS raw output under cfg.paths.bids_root
 %   - Steps 02-06 derivatives under cfg.paths.derivatives_root
-%   - Logs under <runner_folder>/logs/runlog_pipeline/
+%   - Logs under <derivatives_root>/logs/
 %
 % NOTES
 %   - The user should normally edit ONLY eeg_pipeline_config.m
@@ -96,14 +96,15 @@ end
 % =========================================================================
 % MASTER LOG
 % =========================================================================
-if ~isfield(cfg.paths, 'logs_dir') || strlength(string(cfg.paths.logs_dir)) == 0
-    cfg.paths.logs_dir = fullfile(cfg.root_dir, 'logs', 'runlog_pipeline');
-end
+% Store logs next to the derivative outputs:
+%
+%   <derivatives_root>/logs
+%
+% This deliberately overrides older cfg.paths.logs_dir defaults that pointed
+% to the runner folder, so master and subject logs stay with the output.
+cfg.paths.logs_dir = helpers.resolve_logs_dir(cfg);
 
 logs_dir = char(string(cfg.paths.logs_dir));
-if exist(logs_dir, 'dir') ~= 7
-    mkdir(logs_dir);
-end
 
 master_log = fullfile( ...
     logs_dir, ...
@@ -145,6 +146,7 @@ helpers.log_msg(master_log, 'source_eeg_root  : %s', char(string(cfg.paths.sourc
 helpers.log_msg(master_log, 'source_beh_root  : %s', char(string(cfg.paths.source_beh_root)));
 helpers.log_msg(master_log, 'bids_root        : %s', char(string(cfg.paths.bids_root)));
 helpers.log_msg(master_log, 'derivatives_root : %s', char(string(cfg.paths.derivatives_root)));
+helpers.log_msg(master_log, 'logs_dir         : %s', char(string(cfg.paths.logs_dir)));
 helpers.log_msg(master_log, 'task_label       : %s', char(string(cfg.bids.task_label)));
 helpers.log_msg(master_log, 'session_label    : %s', char(string(cfg.bids.session_label)));
 helpers.log_msg(master_log, 'overwrite_mode   : %s', char(string(cfg.io.overwrite_mode)));

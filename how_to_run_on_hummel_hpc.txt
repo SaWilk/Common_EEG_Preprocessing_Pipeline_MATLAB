@@ -40,48 +40,5 @@ Step 5: (every time) Run MATLAB
 4. type the name of your pipeline script, in this case run_eeg_pipeline(<config_name>) with the respective config file. it calls the preprocessing scripts sequentially
 5. recover Output from the latest Folder within  /beegfs/u/<user_name>/derivatives/
 
-
-VERSION WITH SLURM (FOR NON-MATLAB USERS)
-
-Step 4: make the SLURM Batch
-1. module load nano to load up the SLURM Batch creation tool 
-2. optional: matlab <script_name> can be used to run MATLAB on hummel1, leave back to hummel1 with quit
-3. if you do not know your work_group, type sacctmgr -n -P show assoc where user=bbf7366 format=Account,Partition
-4. create a SLURM Batch file using a command like nano /beegfs/u/<user_name>/run_eeg_pipeline.slurm
- that runs the run_eeg_pipeline.m function. Like this one: 
-lincoln_std|std
-
-#!/bin/bash
-#SBATCH --job-name=proof_eeg
-#SBATCH --partition=std
-#SBATCH --account=<work_group>
-#SBATCH --nodes=1
-#SBATCH --ntasks=1
-#SBATCH --cpus-per-task=16
-#SBATCH --time=24:00:00
-#SBATCH --output=/beegfs/u/<user_name>/slurm_logs/%x_%j.out
-#SBATCH --error=/beegfs/u/<user_name>/slurm_logs/%x_%j.err
-#SBATCH --mail-type=NONE
-
-set -euo pipefail
-
-mkdir -p /beegfs/u/bbf7366/slurm_logs
-module load matlab/R2023a
-
-export TMPDIR="${RRZ_GLOBAL_TMPDIR:-/tmp}"
-export MATLAB_PREFDIR="$TMPDIR/matlab_prefs"
-mkdir -p "$MATLAB_PREFDIR"
-
-cd /beegfs/u/bbf7366/path/to/pipeline
-
-matlab -nodisplay -nosplash -r "try, run_eeg_pipeline; catch ME, disp(getReport(ME,'extended','hyperlinks','off')); exit(1); end; exit(0);"
-
-
-5. make it executable using chmod +x /beegfs/u/<user_name>/run_eeg_pipeline
-
-Step 5: Run the Batch 
-1. sbatch /beegfs/u/<user_name>/run_eeg_pipeline
-2. check if it is running/queued squeue -u <user_name> -  if the state is PD or R it means it is being worked on, if it is gone check 
-the ls /beegfs/u/<user_name>/slurm_logs whether it ran successfully or not
-3. you can tail logs live: tail -f /beegfs/u/<user_name>/slurm_logs/proof_eeg_12345678.out or 
-tail -f /beegfs/u/<user_name>/slurm_logs/proof_eeg_12345678.err
+Step 6: (every time) Shut Down MATLAB
+1. type quit once you are done to shut down MATLAB on hummel as it apparently can cause issues for other Server cluster users

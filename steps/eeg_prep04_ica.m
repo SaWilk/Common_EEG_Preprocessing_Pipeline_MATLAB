@@ -53,6 +53,11 @@ step_cfg.amica_keep_tmp_on_error = true;
 % Overwrite override
 step_cfg.overwrite_mode = "";
 
+% ICA channel selection
+step_cfg.ica_channel_scope = "eeg_eog"; % "all" | "eeg" | "eeg_eog"
+
+
+
 %% ========================================================================
 %  MERGE OVERRIDES FROM CFG
 % ========================================================================
@@ -206,6 +211,52 @@ for fi = 1:numel(forica_sets)
         error('prep04_ica: channel label/order mismatch between preica and forica for %s.', run_base_c);
     end
 
+        %% --------------------------------------------------------------------
+    %  ICA CHANNEL SELECTION
+    % ---------------------------------------------------------------------
+    ica_channel_scope = lower(strtrim(string(step_cfg.ica_channel_scope)));
+
+    if isfield(ica_prep_eeg, 'chanlocs') && ...
+            ~isempty(ica_prep_eeg.chanlocs) && ...
+            isfield(ica_prep_eeg.chanlocs, 'type')
+
+        chan_types = lower(strtrim(string({ica_prep_eeg.chanlocs.type})));
+    else
+        chan_types = repmat("eeg", 1, ica_prep_eeg.nbchan);
+    end
+
+    switch ica_channel_scope
+        case "all"
+            ica_chan_idx = 1:ica_prep_eeg.nbchan;
+
+        case "eeg"
+            ica_chan_idx = find(chan_types == "eeg");
+
+        case "eeg_eog"
+            ica_chan_idx = find(chan_types == "eeg" | chan_types == "eog");
+
+        otherwise
+            error('prep04_ica: unsupported cfg.prep_04.ica_channel_scope: %s', ...
+                char(ica_channel_scope));
+    end
+
+    if isempty(ica_chan_idx)
+        error('prep04_ica: no channels selected for ICA with ica_channel_scope="%s".', ...
+            char(ica_channel_scope));
+    end
+
+    helpers.log_msg_default( ...
+        'prep04_ica: %s | %s | ICA channel scope=%s | selected=%d/%d channels', ...
+        subj_label, run_base_c, char(ica_channel_scope), ...
+        numel(ica_chan_idx), ica_prep_eeg.nbchan);
+
+    ica_train_eeg = pop_select(ica_prep_eeg, 'channel', ica_chan_idx);
+    ica_train_eeg = eeg_checkset(ica_train_eeg);
+
+    ica_train_eeg = helpers.append_eeg_comment(ica_train_eeg, sprintf( ...
+        'prep04_ica: ICA channel scope=%s | selected %d/%d channels from _forica dataset', ...
+        char(ica_channel_scope), numel(ica_chan_idx), ica_prep_eeg.nbchan));
+
     %% --------------------------------------------------------------------
     %  RANK-SAFE PCA LOGIC
     % ---------------------------------------------------------------------
@@ -219,9 +270,9 @@ for fi = 1:numel(forica_sets)
         interpolated_count = numel(preica_eeg.chaninfo.bad);
     end
 
-    X = double(reshape(ica_prep_eeg.data, ...
-        ica_prep_eeg.nbchan, ...
-        ica_prep_eeg.pnts * ica_prep_eeg.trials));
+    X = double(reshape(ica_train_eeg.data, ...
+        ica_train_eeg.nbchan, ...
+        ica_train_eeg.pnts * ica_train_eeg.trials));
 
     rank_forica = helpers.compute_data_rank_svd(X);
 
@@ -229,27 +280,27 @@ for fi = 1:numel(forica_sets)
     pca_rank = [];
 
     if isfield(step_cfg, 'use_pca_rank_if_interpolated') && step_cfg.use_pca_rank_if_interpolated
-        if rank_forica < ica_prep_eeg.nbchan
+        if rank_forica < ica_train_eeg.nbchan
             use_pca  = true;
             pca_rank = max(rank_forica, 1);
 
             ica_prep_eeg = helpers.append_eeg_comment(ica_prep_eeg, sprintf( ...
                 ['prep04_ica: rank-safe PCA: nbchan=%d rank(forica)=%d ' ...
                  'interpolated_count(preica)=%d => pca_rank=%d'], ...
-                ica_prep_eeg.nbchan, rank_forica, interpolated_count, pca_rank));
+                ica_train_eeg.nbchan, rank_forica, interpolated_count, pca_rank));
 
             helpers.log_msg_default( ...
                 ['prep04_ica: %s | %s | rank-safe PCA: nbchan=%d rank(forica)=%d ' ...
                  'interpolated_count(preica)=%d => pca_rank=%d'], ...
-                subj_label, run_base_c, ica_prep_eeg.nbchan, rank_forica, interpolated_count, pca_rank);
+                subj_label, run_base_c, ica_train_eeg.nbchan, rank_forica, interpolated_count, pca_rank);
         else
             ica_prep_eeg = helpers.append_eeg_comment(ica_prep_eeg, sprintf( ...
                 'prep04_ica: rank-safe PCA: nbchan=%d rank(forica)=%d => full-rank (no PCA)', ...
-                ica_prep_eeg.nbchan, rank_forica));
+                ica_train_eeg.nbchan, rank_forica));
 
             helpers.log_msg_default( ...
                 'prep04_ica: %s | %s | rank-safe PCA: nbchan=%d rank(forica)=%d => full-rank (no PCA)', ...
-                subj_label, run_base_c, ica_prep_eeg.nbchan, rank_forica);
+                subj_label, run_base_c, ica_train_eeg.nbchan, rank_forica);
         end
     else
         ica_prep_eeg = helpers.append_eeg_comment(ica_prep_eeg, ...
@@ -262,9 +313,9 @@ for fi = 1:numel(forica_sets)
     switch ica_method
 
         case "amica"
-            x = double(reshape(ica_prep_eeg.data, ...
-                ica_prep_eeg.nbchan, ...
-                ica_prep_eeg.pnts * ica_prep_eeg.trials));
+            x = double(reshape(ica_train_eeg.data, ...
+                ica_train_eeg.nbchan, ...
+                ica_train_eeg.pnts * ica_train_eeg.trials));
 
             if use_pca
                 pcakeep = pca_rank;
@@ -281,18 +332,18 @@ for fi = 1:numel(forica_sets)
             delete_tmp_after  = isfield(step_cfg, 'amica_delete_tmp') && step_cfg.amica_delete_tmp;
 
             try
-                [ica_prep_eeg.icaweights, ica_prep_eeg.icasphere, ~] = runamica15( ...
+                [ica_train_eeg.icaweights, ica_train_eeg.icasphere, ~] = runamica15( ...
                     x, ...
                     'pcakeep', pcakeep, ...
                     'outdir', amica_tmp_dir);
 
-                ica_prep_eeg.icawinv     = pinv(ica_prep_eeg.icaweights * ica_prep_eeg.icasphere);
-                ica_prep_eeg.icachansind = 1:ica_prep_eeg.nbchan;
+                ica_train_eeg.icawinv     = pinv(ica_train_eeg.icaweights * ica_train_eeg.icasphere);
+                ica_train_eeg.icachansind = 1:ica_train_eeg.nbchan;
 
                 ica_rank_used = pcakeep;
 
-                ica_prep_eeg = eeg_checkset(ica_prep_eeg);
-                ica_prep_eeg = helpers.append_eeg_comment(ica_prep_eeg, sprintf( ...
+                ica_train_eeg = eeg_checkset(ica_train_eeg);
+                ica_train_eeg = helpers.append_eeg_comment(ica_train_eeg, sprintf( ...
                     'prep04_ica: AMICA done. rank_used=%d | tmpdir=%s', ...
                     ica_rank_used, amica_tmp_dir));
 
@@ -325,12 +376,12 @@ for fi = 1:numel(forica_sets)
 
             if use_pca
                 if isfield(step_cfg, 'use_extended_infomax') && step_cfg.use_extended_infomax
-                    ica_prep_eeg = pop_runica(ica_prep_eeg, ...
+                    ica_train_eeg  = pop_runica(ica_train_eeg , ...
                         'extended', 1, ...
                         'pca', pca_rank, ...
                         'interrupt', interrupt_ica);
                 else
-                    ica_prep_eeg = pop_runica(ica_prep_eeg, ...
+                    ica_train_eeg  = pop_runica(ica_train_eeg , ...
                         'pca', pca_rank, ...
                         'interrupt', interrupt_ica);
                 end
@@ -342,29 +393,29 @@ for fi = 1:numel(forica_sets)
                 end
 
                 if use_extended
-                    ica_prep_eeg = pop_runica(ica_prep_eeg, ...
+                    ica_train_eeg  = pop_runica(ica_train_eeg , ...
                         'extended', 1, ...
                         'interrupt', interrupt_ica);
                 else
-                    ica_prep_eeg = pop_runica(ica_prep_eeg, ...
+                    ica_train_eeg  = pop_runica(ica_train_eeg , ...
                         'interrupt', interrupt_ica);
                 end
 
                 ica_rank_used = ica_prep_eeg.nbchan;
             end
 
-            ica_prep_eeg = eeg_checkset(ica_prep_eeg);
-            ica_prep_eeg = helpers.append_eeg_comment(ica_prep_eeg, sprintf( ...
+            ica_train_eeg  = eeg_checkset(ica_train_eeg );
+            ica_train_eeg  = helpers.append_eeg_comment(ica_train_eeg , sprintf( ...
                 'prep04_ica: runica done. rank_used=%d', ica_rank_used));
     end
 
     %% --------------------------------------------------------------------
     %  TRANSFER ICA TO PREICA
     % ---------------------------------------------------------------------
-    preica_eeg.icawinv     = ica_prep_eeg.icawinv;
-    preica_eeg.icasphere   = ica_prep_eeg.icasphere;
-    preica_eeg.icaweights  = ica_prep_eeg.icaweights;
-    preica_eeg.icachansind = ica_prep_eeg.icachansind;
+    preica_eeg.icawinv     = ica_train_eeg.icawinv;
+    preica_eeg.icasphere   = ica_train_eeg.icasphere;
+    preica_eeg.icaweights  = ica_train_eeg.icaweights;
+    preica_eeg.icachansind = ica_chan_idx;
 
     if ~isfield(preica_eeg, 'etc') || isempty(preica_eeg.etc)
         preica_eeg.etc = struct();
@@ -375,6 +426,9 @@ for fi = 1:numel(forica_sets)
     preica_eeg.etc.prep04_ica.interpolated_count = interpolated_count;
     preica_eeg.etc.prep04_ica.rank_forica        = rank_forica;
     preica_eeg.etc.prep04_ica.rank_used          = ica_rank_used;
+        preica_eeg.etc.prep04_ica.ica_channel_scope   = char(ica_channel_scope);
+    preica_eeg.etc.prep04_ica.ica_channel_indices = ica_chan_idx;
+    preica_eeg.etc.prep04_ica.ica_channel_labels  = {preica_eeg.chanlocs(ica_chan_idx).labels};
 
     preica_eeg = eeg_checkset(preica_eeg);
 

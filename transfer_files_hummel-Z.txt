@@ -1,0 +1,24 @@
+1. On Hummel: cd to Directory where files are saved
+2. type module load smbclient
+3. for K: "smbclient -U <username>@uni-hamburg.de //uhhdisk.uni-hamburg.de/home"
+4. for Z: "smbclient -U <username>@uni-hamburg.de //uhhdisk.uni-hamburg.de/daten"
+5. enter Password for b-code
+6. from there navigate via cd within remote (K or Z)
+	navigate to Folder where files Need to be transferred to
+7. Type prompt OFF (so you don't get asked for every file)
+	type recurse ON (not yet sure if this does anything)
+8. type mput * (in order to Transfer all files present in Folder)
+
+-------------------------------------
+helpful commands
+-------------------------------------
+pwd  - current *remote* directory
+!pwd - current *local* Directory
+
+cd  - Change Directory on remote (i.e. Z or K)
+lcd - Change Directory locally (i.e. on hummel)
+
+get [remote path] [local path] - gets file from uhhdisk
+put [local path] [remote path] - puts file on uhhdisk
+	
+
