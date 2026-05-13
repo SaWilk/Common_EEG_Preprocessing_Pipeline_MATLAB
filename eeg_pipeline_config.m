@@ -238,7 +238,7 @@ cfg.parallel.pool_type      = "none"; % runner-internal flag
 % =========================================================================
 cfg.steps = struct();
 
-cfg.steps.enable_downstream_rerun = false; % default should be true
+cfg.steps.enable_downstream_rerun = true; % default should be true
 
 cfg.steps.prep_01_bids_formatting = struct( ...
     'run', false, ...                % Step 01 creates/updates cfg.paths.bids_root from source_*_root
@@ -437,10 +437,11 @@ cfg.prep_03.crop_start_marker    = 'S 91';
 cfg.prep_03.crop_end_marker      = 'S 97';
 cfg.prep_03.crop_padding_sec     = [0 0];
 
+%# HOWTO: make sure these include your channel labels for AUX/EOG, otherwise channels will be included as EEG in ICA
 cfg.prep_03.eog_channel_labels     = {'IO1','IO2','LO1','LO2'};
-cfg.prep_03.scr_channel_labels     = {'SCR'};
+cfg.prep_03.scr_channel_labels     = {'EDA', 'SCR', 'GSR_MR_100_xx'};
 cfg.prep_03.startle_channel_labels = {'Startle'};
-cfg.prep_03.ekg_channel_labels     = {'EKG'};
+cfg.prep_03.ekg_channel_labels     = {'ECG', 'EKG'};
 
 cfg.prep_03.downsample_hz = 250;
 
