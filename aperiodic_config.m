@@ -24,8 +24,6 @@ function cfg = aperiodic_config()
 
 bootstrap_log = fullfile(tempdir, 'eeg_pipeline_config_bootstrap.log');
 helpers = eeg_pipeline_helpers(bootstrap_log);
-% CHECK: why does it run all steps, despite them being toggled off? was it
-% because of the changed regexp in prep01?
 
 % =========================================================================
 % USER SETTINGS
@@ -97,13 +95,6 @@ cfg.paths.derivatives_root_override = "";
 cfg.paths.source_eeg_root_override  = "";
 cfg.paths.source_beh_root_override  = "";
 
-% -------------------------------------------------------------------------
-% Overwrite behavior
-% -------------------------------------------------------------------------
-cfg.io = struct();
-cfg.io.overwrite_mode          = "delete"; % "skip" | "delete" | "if_older_than"
-cfg.io.overwrite_if_older_than = "";       % cutoff date for "if_older_than"
-
 % =========================================================================
 % TOOLBOX PATHS & SETTINGS
 % =========================================================================
@@ -122,6 +113,13 @@ cfg.toolboxes.use_genpath = false; % add toolbox subfolders recursively
 cfg.toolboxes.eeglab = struct();
 cfg.toolboxes.eeglab.no_update_check_on_hpc = true; % suppress EEGLAB update checks on HPC
 cfg.toolboxes.eeglab.nogui = true;                  % start EEGLAB without GUI
+
+% -------------------------------------------------------------------------
+% Overwrite behavior
+% -------------------------------------------------------------------------
+cfg.io = struct();
+cfg.io.overwrite_mode          = "delete"; % "skip" | "delete" | "if_older_than"
+cfg.io.overwrite_if_older_than = "";       % cutoff date for "if_older_than"
 
 % =========================================================================
 % INTERNAL SETUP
@@ -460,7 +458,7 @@ cfg.prep_03.ekg_channel_labels     = {'ECG', 'EKG'};
 cfg.prep_03.downsample_hz = 250;
 
 cfg.prep_03.highpass_hz          = 0.1;
-cfg.prep_03.lowpass_hz           = 100;
+cfg.prep_03.lowpass_hz           = 40;
 cfg.prep_03.ica_prep_highpass_hz = 1;
 
 cfg.prep_03.detect_bad_channels_mode = "auto";
@@ -489,27 +487,53 @@ cfg.prep_03.pop_cleanline_pad               = 4;
 cfg.prep_03.pop_cleanline_taperbandwidth_hz = 4;
 cfg.prep_03.pop_cleanline_norm_spectrum     = 0;
 cfg.prep_03.pop_cleanline_computepower      = 0;
-cfg.prep_03.pop_cleanline_verbose           = true;
+cfg.prep_03.pop_cleanline_verbose           = false;
 
-cfg.prep_03.ica_prep_use_regepochs           = true;
-cfg.prep_03.ica_prep_regepoch_length_sec     = 1;
-cfg.prep_03.ica_prep_use_mad_epoch_rejection = true;
-cfg.prep_03.ica_prep_mad_z_threshold         = 3;
-cfg.prep_03.ica_prep_mad_use_logvar          = true;
-cfg.prep_03.ica_prep_use_jointprob_rejection = true;
-cfg.prep_03.ica_prep_jointprob_local         = 2;
-cfg.prep_03.ica_prep_jointprob_global        = 2;
+% ERPLAB ICA-prep rejection.
+% Same criteria as final Step 06 rejection, but more lenient:
+%   final:     +/-200 uV, 50 uV step, 100 ms flatline
+%   ICA-prep:  +/-300 uV, 75 uV step, 200 ms flatline
+cfg.prep_03.ica_prep_erplab_epoch_rejection = struct();
+cfg.prep_03.ica_prep_epoch_rejection_method = "erplab"; % "erplab" | "faster_ptp" | "mad_variance" | "none"
 
-cfg.prep_03.apply_average_reference     = true;
-cfg.prep_03.average_ref_exclude_non_eeg = true;
+% MAD ICA-prep rejection settings.
+% Only used when cfg.prep_03.ica_prep_epoch_rejection_method == "mad_variance".
+cfg.prep_03.ica_prep_mad_z_threshold = 3;
+cfg.prep_03.ica_prep_mad_use_logvar  = true;
+cfg.prep_03.ica_prep_max_reject_prop = 1.00;
 
-cfg.prep_03.shared_epoch_rejection = struct();
-cfg.prep_03.shared_epoch_rejection.enable        = true;
-cfg.prep_03.shared_epoch_rejection.use_faster    = true;
-cfg.prep_03.shared_epoch_rejection.faster_z      = 4;
-cfg.prep_03.shared_epoch_rejection.use_robust_z  = true;
-cfg.prep_03.shared_epoch_rejection.use_ptp       = true;
-cfg.prep_03.shared_epoch_rejection.ptp_uV_thresh = 800;
+% MAD variance rejection settings.
+% Only used when cfg.prep_06.epoch_rejection_method == "mad_variance".
+cfg.prep_06.mad_z_threshold = 3;
+cfg.prep_06.mad_use_logvar  = true;
+
+% Check only EEG channels, not EOG/SCR/Startle/EKG.
+cfg.prep_03.ica_prep_erplab_epoch_rejection.channel_scope = "eeg";
+
+% [] = whole ICA-training regepoch.
+cfg.prep_03.ica_prep_erplab_epoch_rejection.twindow_ms = [];
+
+cfg.prep_03.ica_prep_erplab_epoch_rejection.clear_existing_flags = true;
+
+% 1) Exclude very large voltages.
+cfg.prep_03.ica_prep_erplab_epoch_rejection.use_extreme_voltage = true;
+cfg.prep_03.ica_prep_erplab_epoch_rejection.extreme_voltage_uV  = 300;
+cfg.prep_03.ica_prep_erplab_epoch_rejection.flag_extreme_voltage = 1;
+
+% 2) Exclude large sample-to-sample voltage jumps.
+cfg.prep_03.ica_prep_erplab_epoch_rejection.use_sample_diff = true;
+cfg.prep_03.ica_prep_erplab_epoch_rejection.sample_diff_uV  = 75;
+cfg.prep_03.ica_prep_erplab_epoch_rejection.flag_sample_diff = 2;
+
+% 3) Exclude flatline/blocking, but more lenient than final rejection.
+cfg.prep_03.ica_prep_erplab_epoch_rejection.use_flatline = true;
+cfg.prep_03.ica_prep_erplab_epoch_rejection.flatline_tolerance_uV = 0.5;
+cfg.prep_03.ica_prep_erplab_epoch_rejection.flatline_duration_ms  = 200;
+cfg.prep_03.ica_prep_erplab_epoch_rejection.flag_flatline = 3;
+
+cfg.prep_03.ica_prep_erplab_epoch_rejection.review = "off";
+cfg.prep_03.ica_prep_erplab_epoch_rejection.history = "off";
+cfg.prep_03.ica_prep_erplab_epoch_rejection.lowpass_hz = -1;
 
 % =========================================================================
 % STEP 04: ICA
@@ -521,6 +545,7 @@ cfg.prep_04.use_extended_infomax         = true;
 cfg.prep_04.interrupt_ica                = 'off';
 cfg.prep_04.use_pca_rank_if_interpolated = true;
 cfg.prep_04.amica_require_no_spaces_on_windows = true;
+cfg.prep_04.ica_channel_scope = "eeg_eog";
 
 % =========================================================================
 % STEP 05: AFTER ICA / ICLABEL
@@ -529,13 +554,18 @@ cfg.prep_05 = struct();
 
 cfg.prep_05.clear_subject_ica_comps_dir = true;
 
-cfg.prep_05.iclabel_eye_remove_thr       = 0.80;
-cfg.prep_05.iclabel_muscle_remove_thr    = 0.80;
-cfg.prep_05.iclabel_heart_remove_thr     = 0.80;
-cfg.prep_05.iclabel_linenoise_remove_thr = 0.80;
-cfg.prep_05.iclabel_channoise_remove_thr = 0.80;
-cfg.prep_05.iclabel_other_remove_thr     = 0.95;
-cfg.prep_05.iclabel_brain_min_keep_thr   = 0.05;
+% settings for ICLabel rejection
+% NOTE: In the handout we only agreed on ICLabel for eye artifact
+% rejection. However, why not use ti for removing other artifacts as well?
+% It is a well-validated algorithm and if thresholds are set
+% conservatively, no harm is done
+cfg.prep_05.iclabel_eye_remove_thr       = 0.85;
+cfg.prep_05.iclabel_muscle_remove_thr    = 0.85;
+cfg.prep_05.iclabel_heart_remove_thr     = 0.85;
+cfg.prep_05.iclabel_linenoise_remove_thr = 0.85;
+cfg.prep_05.iclabel_channoise_remove_thr = 0.85;
+cfg.prep_05.iclabel_other_remove_thr     = 1.01;
+cfg.prep_05.iclabel_brain_min_keep_thr   = 0.00;
 
 cfg.prep_05.save_ic_topos_png   = true;
 cfg.prep_05.iclabel_edge_margin = 0.10;
@@ -605,52 +635,87 @@ cfg.prep_06.baseline_end_markers            = {'S 99'};
 % -------------------------------------------------------------------------
 % Artifact rejection
 % -------------------------------------------------------------------------
-cfg.prep_06.do_artifact_rejection               = true;
-cfg.prep_06.do_initial_hard_threshold_rejection = true;
+cfg.prep_06.do_artifact_rejection = true;
+
+% Optional first-pass hard absolute-amplitude rejection.
+% Usually keep this false when using ERPLAB, because ERPLAB's extreme-voltage
+% rule can implement the same kind of threshold.
+cfg.prep_06.do_initial_hard_threshold_rejection = false;
 cfg.prep_06.initial_hard_threshold_uv           = 200;
 
-cfg.prep_06.use_faster                    = true;
-cfg.prep_06.faster_z_thresh               = 3;
-cfg.prep_06.faster_use_robust_z           = true;
-cfg.prep_06.faster_warn_if_reject_prop_gt = 0.25;
+% Select exactly one final epoch-rejection method.
+%
+%   "erplab"       = use cfg.prep_06.erplab_epoch_rejection
+%   "faster_ptp"   = use cfg.prep_06.faster_ptp_epoch_rejection
+%   "mad_variance" = use cfg.prep_06.mad_z_threshold / mad_use_logvar
+%   "none"         = skip final epoch rejection
+%
+cfg.prep_06.epoch_rejection_method = "erplab";  % "erplab" | "faster_ptp" | "mad_variance" | "none"
 
-cfg.prep_06.use_ptp       = true;
-cfg.prep_06.ptp_uV_thresh = 600;
-
-% Subject-level exclusion after epoch rejection
-% 1 means disabled
+% Subject-level exclusion after epoch rejection.
+% 1 means disabled. Example: 0.50 would exclude subjects with >50% rejected epochs.
 cfg.prep_06.max_reject_prop = 1;
 
 % -------------------------------------------------------------------------
-% Baseline correction
+% ERPLAB epoch rejection
+% Only used when cfg.prep_06.epoch_rejection_method == "erplab".
 % -------------------------------------------------------------------------
-cfg.prep_06.do_baseline_correction = false;
-cfg.prep_06.base_start_ms          = -200;
-cfg.prep_06.base_end_ms            = 0;
+cfg.prep_06.erplab_epoch_rejection = struct();
+
+cfg.prep_06.erplab_epoch_rejection.channel_scope = "eeg";
+cfg.prep_06.erplab_epoch_rejection.twindow_ms = [];
+cfg.prep_06.erplab_epoch_rejection.clear_existing_flags = true;
+
+cfg.prep_06.erplab_epoch_rejection.use_extreme_voltage = true;
+cfg.prep_06.erplab_epoch_rejection.extreme_voltage_uV  = 200;
+cfg.prep_06.erplab_epoch_rejection.flag_extreme_voltage = 1;
+
+cfg.prep_06.erplab_epoch_rejection.use_sample_diff = true;
+cfg.prep_06.erplab_epoch_rejection.sample_diff_uV  = 50;
+cfg.prep_06.erplab_epoch_rejection.flag_sample_diff = 2;
+
+cfg.prep_06.erplab_epoch_rejection.use_flatline = false;
+cfg.prep_06.erplab_epoch_rejection.flatline_tolerance_uV = 0.5;
+cfg.prep_06.erplab_epoch_rejection.flatline_duration_ms  = 100;
+cfg.prep_06.erplab_epoch_rejection.flag_flatline = 3;
+
+cfg.prep_06.erplab_epoch_rejection.review = "off";
+cfg.prep_06.erplab_epoch_rejection.history = "off";
+cfg.prep_06.erplab_epoch_rejection.lowpass_hz = -1;
 
 % -------------------------------------------------------------------------
-% Final output channel splitting
+% FASTER/PTP epoch rejection
+% Only used when cfg.prep_06.epoch_rejection_method == "faster_ptp".
+%
+% To use FASTER only: set use_faster=true and use_ptp=false.
+% To use PTP only:    set use_faster=false and use_ptp=true.
+% To use both:        set both to true.
 % -------------------------------------------------------------------------
-cfg.prep_06.split_non_eeg_channels = true;
-cfg.prep_06.eeg_only_keep_eog      = false;
+cfg.prep_06.faster_ptp_epoch_rejection = struct();
+
+cfg.prep_06.faster_ptp_epoch_rejection.use_faster    = true;
+cfg.prep_06.faster_ptp_epoch_rejection.faster_z      = 3;
+cfg.prep_06.faster_ptp_epoch_rejection.use_robust_z  = false;
+
+cfg.prep_06.faster_ptp_epoch_rejection.use_ptp       = true;
+cfg.prep_06.faster_ptp_epoch_rejection.ptp_uV_thresh = 300;
 
 % -------------------------------------------------------------------------
-% Shared epoch rejection helper
-% This is the preferred rejection block if your Step 06 uses the shared helper.
+% MAD variance epoch rejection
+% Only used when cfg.prep_06.epoch_rejection_method == "mad_variance".
 % -------------------------------------------------------------------------
-cfg.prep_06.shared_epoch_rejection = struct();
-cfg.prep_06.shared_epoch_rejection.enable          = true;
-cfg.prep_06.shared_epoch_rejection.use_faster      = true;
-cfg.prep_06.shared_epoch_rejection.faster_z        = 3;
-cfg.prep_06.shared_epoch_rejection.use_robust_z    = false;
-cfg.prep_06.shared_epoch_rejection.use_ptp         = true;
-cfg.prep_06.shared_epoch_rejection.ptp_uV_thresh   = 300;
-
+cfg.prep_06.mad_z_threshold = 3;
+cfg.prep_06.mad_use_logvar  = true;
 % -------------------------------------------------------------------------
-% Summary tables
+% Reject Participants if not enough Trials are present
+% replaces the faster_warn_if_reject_prop_gt setting wiht a more elaborate
+% version 
 % -------------------------------------------------------------------------
-cfg.prep_06.write_run_summary_table     = false;
-cfg.prep_06.write_subject_summary_table = false;
-cfg.prep_06.qc_table_delimiter          = ';';
+cfg.prep_06.min_trials_per_condition_enable      = true; 
+cfg.prep_06.min_trials_per_condition_min_n       = 3; % min num of trials in each condition so participant is not excluded
+cfg.prep_06.min_trials_per_condition_zero_tol_ms = 2; % jitter allowed around trigger
+cfg.prep_06.min_trials_per_condition_codes = { ...
+    'condition_name', {'S XXX','S XXY'}; ...
+    }; % adjust this to conditions in your setup that should have at least min_trials_per_condition
 
 end

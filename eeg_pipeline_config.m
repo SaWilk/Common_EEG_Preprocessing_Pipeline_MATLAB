@@ -478,8 +478,8 @@ cfg.prep_03.flat_channel_variance_epsilon = 0;
 cfg.prep_03.interpolate_bad_channels_before_ica = true;
 cfg.prep_03.interp_method = 'spherical';
 
-cfg.prep_03.line_noise_method         = "pop_cleanline"; % TODO: Which otrhers are there?
-cfg.prep_03.line_noise_frequencies_hz = [50 100]; % TODO: is this necessary?
+cfg.prep_03.line_noise_method         = "pop_cleanline"; %# TODO: Which otrhers are there?
+cfg.prep_03.line_noise_frequencies_hz = [50 100]; %# TODO: is this necessary?
 
 cfg.prep_03.pop_cleanline_bandwidth_hz      = 4;
 cfg.prep_03.pop_cleanline_p_value           = 0.01;
@@ -560,7 +560,7 @@ cfg.prep_05.clear_subject_ica_comps_dir = true;
 
 % settings for ICLabel rejection
 % NOTE: In the handout we only agreed on ICLabel for eye artifact
-% rejection. However, why not use ti for removing other artifacts as well?
+% rejection. However, why not use it for removing other artifacts as well?
 % It is a well-validated algorithm and if thresholds are set
 % conservatively, no harm is done
 cfg.prep_05.iclabel_eye_remove_thr       = 0.85;
