@@ -43,8 +43,8 @@ cfg = struct();
 % -------------------------------------------------------------------------
 % Project identity
 % -------------------------------------------------------------------------
-project = 'AD2'; %'GRK';
-project_og_path = 'Z:\pb\KPN\KPN-Allgemein\Daten\DFG_Angstdimensionen_2\Data\Rest\raw'; %'Z:\pb\KPN\KPN-Allgemein\Daten\GRK\GRK_Rest_SAVE';
+project = 'AD1'; %'GRK';
+project_og_path = 'Z:\pb\KPN\KPN-Allgemein\Daten\DFG_Angstdimensionen\Clinical\Data\Rest\raw'; %'Z:\pb\KPN\KPN-Allgemein\Daten\GRK\GRK_Rest_SAVE';
 
 cfg.pipeline = struct();
 cfg.pipeline.name        = ['aperiodic_' project];   % project name used in cfg
@@ -309,7 +309,7 @@ cfg.prep_01.write_readme_if_exporter_did_not = true; % write README if exporter 
 cfg.prep_01.copy_eeg_sidecar_log_to_events = false; % copy project-specific CF log as *_events.log
 
 % # TODO: make this more flexible or more intuitive
-cfg.prep_01.raw_eeg_regex = ['^' project '_([\d{3}]+)_Rest\.vhdr$']; % raw EEG filename pattern: starts with project name, then 3-digit number, i.e. sub-ID, task-token and has to end with .vhdr
+cfg.prep_01.raw_eeg_regex = ['^' project(1:end-1) '_([\d{3}]+)_Rest1\.vhdr$']; % raw EEG filename pattern: starts with project name, then 3-digit number, i.e. sub-ID, task-token and has to end with .vhdr
 
 cfg.prep_01.existing_bids_vhdr_regex = ...
     '^sub-(\d+)_ses-(\d+)_task-([A-Za-z0-9]+)(?:_run-(\d+))?_eeg\.vhdr$'; % existing BIDS EEG header pattern used when do_eeg=false
