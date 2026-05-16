@@ -1,7 +1,7 @@
 % =========================================================================
 % FILE: eeg_pipeline_config.m
 % =========================================================================
-function cfg = eeg_pipeline_config()
+function cfg = aperiodic_config()
 % EEG_PIPELINE_CONFIG
 %
 % PURPOSE
@@ -13,8 +13,9 @@ function cfg = eeg_pipeline_config()
 % OUTPUT
 %   cfg : full configuration struct for run_eeg_pipeline.m
 %
+%
 % REQUIREMENTS
-%   - EEGLAB
+%   - EEGLAB with ERPLab plugin
 %   - FASTER
 %   - (AMICA - optional)
 %   - (cleanline - optional)
@@ -42,15 +43,18 @@ cfg = struct();
 % -------------------------------------------------------------------------
 % Project identity
 % -------------------------------------------------------------------------
+project = 'AD1';
+project_og_path = 'Z:\pb\KPN\KPN-Allgemein\Daten\GRK\GRK_Rest_SAVE'; %'Z:\pb\KPN\KPN-Allgemein\Daten\DFG_Angstdimensionen\Clinical\Data\Rest\raw'; 
+
 cfg.pipeline = struct();
-cfg.pipeline.name        = "aperiodic_pipeline"; % project name used in cfg
-cfg.pipeline.step_prefix = "eeg";                % step 02-06 function prefix
+cfg.pipeline.name        = ['aperiodic_' project];   % project name used in cfg
+cfg.pipeline.step_prefix = "eeg";            % step 02-06 function prefix
 
 cfg.constants = struct();
-cfg.constants.log_prefix_master = "run_eeg_pipeline_aperiodic"; % master log filename prefix
+cfg.constants.log_prefix_master = "internalising_rest_aperiodic"; % master log filename prefix
 
 cfg.bids = struct();
-cfg.bids.dataset_folder_name = "baseline"; % BIDS dataset folder name (if you have multiple datasets in teh same raw folder)
+cfg.bids.dataset_folder_name = string(project);      % BIDS dataset folder name (if you have multiple datasets in teh same raw folder)
 cfg.bids.task_label          = "baseline";   % BIDS task label of EEG dataset
 cfg.bids.session_label       = "01";         % BIDS session label
 
@@ -69,22 +73,22 @@ cfg.paths.profile_override = ""; % leave empty for automatic profile selection
 cfg.paths.profile_paths = struct();
 
 cfg.paths.profile_paths.pc = struct( ...
-    'source_eeg_root',  'Z:\pb\KLPSY1\KLPSY1-RTG\PROOF - Data\Real\EEG\Baseline', ...
+    'source_eeg_root',  project_og_path, ... 
     'source_beh_root',  '', ...
-    'bids_root',        'Z:\pb\KPP_KPN_joined\Aperiodic\Saskia\sourcedata', ...
-    'derivatives_root', 'Z:\pb\KPP_KPN_joined\Aperiodic\Saskia\derivatives');
+    'bids_root',        fullfile('Z:\pb\KPP_KPN_joined\Aperiodic\Alena\Data', project, 'rawdata'), ...
+    'derivatives_root', fullfile('Z:\pb\KPP_KPN_joined\Aperiodic\Alena\Data', project, 'derivatives'));
 
 cfg.paths.profile_paths.server_windows = struct( ...
-    'source_eeg_root',  'Z:\pb\KLPSY1\KLPSY1-RTG\PROOF - Data\Real\EEG\Baseline', ...
+    'source_eeg_root',  '', ...
     'source_beh_root',  '', ...
-    'bids_root',         'Z:\pb\KPP_KPN_joined\Aperiodic\Saskia\sourcedata', ...
-    'derivatives_root', 'Z:\pb\KPP_KPN_joined\Aperiodic\Saskia\derivatives');
+    'bids_root',        fullfile('Z:\pb\KPP_KPN_joined\Aperiodic\Alena\Data', project, 'rawdata'), ...
+    'derivatives_root', fullfile('Z:\pb\KPP_KPN_joined\Aperiodic\Alena\Data', project, 'derivatives'));
 
 cfg.paths.profile_paths.hpc_hummel = struct( ...
     'source_eeg_root',  '', ...
     'source_beh_root',  '', ...
-    'bids_root',        fullfile('/beegfs/u/bbf7366/sourcedata', char(cfg.bids.dataset_folder_name)), ...
-    'derivatives_root', '/beegfs/u/bbf7366/derivatives/preprocessed_eeg_baseline');
+    'bids_root',        fullfile('/beegfs/u/bbe0557/raw', char(cfg.bids.dataset_folder_name), 'rawdata'), ...
+    'derivatives_root', fullfile('/beegfs/u/bbe0557/derivatives', char(cfg.bids.dataset_folder_name), 'preprocessed_eeg_baseline'));
 
 cfg.paths.bids_root_override        = "";
 cfg.paths.derivatives_root_override = "";
@@ -92,21 +96,22 @@ cfg.paths.source_eeg_root_override  = "";
 cfg.paths.source_beh_root_override  = "";
 
 % =========================================================================
-% TOOLBOX PATHS
+% TOOLBOX PATHS & SETTINGS
 % =========================================================================
 cfg.toolboxes = struct();
 
-cfg.toolboxes.path_eeglab_pc     = "K:\Wilken_Arbeitsordner\MATLAB\eeglab_current\eeglab2025.1.0"; % EEGLAB path on PC
-cfg.toolboxes.path_eeglab_server = "K:\Wilken_Arbeitsordner\MATLAB\eeglab_current\eeglab2025.1.0"; % EEGLAB path on server
-cfg.toolboxes.path_eeglab_hpc    = "/beegfs/u/bbf7366/toolboxes/eeglab2025.1.0";                   % EEGLAB path on HPC
+%# TODO: see if this is necessary if ERPLab is integrated in EEGLab 
+cfg.toolboxes.path_eeglab_pc     = "Z:\pb\KPP_KPN_joined\DynBU\analyses\toolboxes\eeglab2026.0.0"; % EEGLAB path on PC
+cfg.toolboxes.path_eeglab_server = "Z:\pb\KPP_KPN_joined\DynBU\analyses\toolboxes\eeglab2026.0.0"; % EEGLAB path on server
+cfg.toolboxes.path_eeglab_hpc    = "/beegfs/u/bbe0557/toolboxes/eeglab2026.0.0";                   % EEGLAB path on HPC
 
-cfg.toolboxes.path_faster_pc     = "K:\Wilken_Arbeitsordner\MATLAB\FASTER"; % FASTER path on PC
-cfg.toolboxes.path_faster_server = "K:\Wilken_Arbeitsordner\MATLAB\FASTER"; % FASTER path on server
-cfg.toolboxes.path_faster_hpc    = "/beegfs/u/bbf7366/toolboxes/FASTER";    % FASTER path on HPC
+cfg.toolboxes.path_faster_pc     = "Z:\pb\KPP_KPN_joined\DynBU\analyses\toolboxes\FASTER"; % FASTER path on PC
+cfg.toolboxes.path_faster_server = "Z:\pb\KPP_KPN_joined\DynBU\analyses\toolboxes\FASTER"; % FASTER path on server
+cfg.toolboxes.path_faster_hpc    = "/beegfs/u/bbe0557/toolboxes/FASTER";    % FASTER path on HPC
 
-cfg.toolboxes.path_erplab_pc     = "K:\Wilken_Arbeitsordner\MATLAB\erplab13.00";
-cfg.toolboxes.path_erplab_server = "K:\Wilken_Arbeitsordner\MATLAB\erplab13.00";
-cfg.toolboxes.path_erplab_hpc    = "/beegfs/u/bbf7366/toolboxes/eeglab2025.1.0/plugins/erplab";
+cfg.toolboxes.path_erplab_pc     = "Z:\pb\KPP_KPN_joined\DynBU\analyses\toolboxes\eeglab2026.0.0\plugins\ERPLAB12.20";
+cfg.toolboxes.path_erplab_server = "Z:\pb\KPP_KPN_joined\DynBU\analyses\toolboxes\eeglab2026.0.0\plugins\ERPLAB12.20";
+cfg.toolboxes.path_erplab_hpc    = "/beegfs/u/bbe0557/toolboxes/eeglab2026.0.0/plugins/ERPLAB12.20/erplab12.20";
 
 cfg.toolboxes.erplab = struct();
 cfg.toolboxes.erplab.use_genpath = true;
@@ -227,9 +232,8 @@ if strlength(string(cfg.paths.source_beh_root_override)) > 0
     cfg.paths.source_beh_root = string(cfg.paths.source_beh_root_override);
 end
 
-cfg.paths.logs_dir = fullfile(cfg.root_dir, 'logs', 'runlog_pipeline'); % folder for pipeline logs
+cfg.paths.logs_dir = fullfile(fileparts(cfg.paths.derivatives_root), 'logs', 'runlog_pipeline'); % log folder in data-directory
 cfg.paths.branch_by_ica_method = true; % create separate 04/05/06 folders per ICA method
-
 
 % =========================================================================
 % SUBJECTS
@@ -253,20 +257,20 @@ cfg.parallel.pool_type      = "none"; % runner-internal flag
 cfg.steps = struct();
 
 cfg.steps.enable_downstream_rerun = true; % default should be true
-
+%# TODO: check why "skip" disables prep03, even though required input for 04 does not exist
 cfg.steps.prep_01_bids_formatting = struct( ...
-    'run', true, ...                % Step 01 creates/updates cfg.paths.bids_root from source_*_root
+    'run', false, ...                % Step 01 creates/updates cfg.paths.bids_root from source_*_root
     'overwrite_mode', "delete", ...
     'overwrite_if_older_than', "");
 
 cfg.steps.prep_02_triggerfix = struct( ...
-    'run', true, ...
-    'overwrite_mode', "delete", ...
+    'run', false, ...
+    'overwrite_mode', "", ...
     'overwrite_if_older_than', "");
 
 cfg.steps.prep_03_until_ica = struct( ...
     'run', true, ...
-    'overwrite_mode', "delete", ...
+    'overwrite_mode', "", ...
     'overwrite_if_older_than', "");
 
 cfg.steps.prep_04_ica = struct( ...
@@ -312,7 +316,8 @@ cfg.prep_01.write_readme_if_exporter_did_not = true; % write README if exporter 
 
 cfg.prep_01.copy_eeg_sidecar_log_to_events = false; % copy project-specific CF log as *_events.log
 
-cfg.prep_01.raw_eeg_regex = '^B_(\d{3})(?:_(\d{3}))?\.vhdr$'; % raw EEG filename pattern: subject + optional run
+% # TODO: make this more flexible or more intuitive
+cfg.prep_01.raw_eeg_regex = ['^' project '_([\d{3}]+)_Rest\.vhdr$']; % raw EEG filename pattern: starts with project name, then 3-digit number, i.e. sub-ID, task-token and has to end with .vhdr
 
 cfg.prep_01.existing_bids_vhdr_regex = ...
     '^sub-(\d+)_ses-(\d+)_task-([A-Za-z0-9]+)(?:_run-(\d+))?_eeg\.vhdr$'; % existing BIDS EEG header pattern used when do_eeg=false
@@ -446,14 +451,13 @@ cfg.prep_02.disable_first_acquisition.disabled_plus_code  = "S 24999";
 % =========================================================================
 cfg.prep_03 = struct();
 
-% crop dataset around specifically defined triggers, e.g. exp start and exp
-% end
 cfg.prep_03.crop_to_task_markers = false;
-cfg.prep_03.crop_start_marker    = 'S 91'; % beginnin of cropping area
-cfg.prep_03.crop_end_marker      = 'S 97'; % end of cropping area
+cfg.prep_03.crop_start_marker    = 'S 91';
+cfg.prep_03.crop_end_marker      = 'S 97';
 cfg.prep_03.crop_padding_sec     = [0 0];
 
-%# HOWTO: make sure these include your channel labels for AUX/EOG, otherwise channels will be included as EEG in ICA
+% make sure these include your channel labels for AUX/EOG, otherwise
+% channels will be included as EEG in ICA
 cfg.prep_03.eog_channel_labels     = {'IO1','IO2','LO1','LO2'};
 cfg.prep_03.scr_channel_labels     = {'EDA', 'SCR', 'GSR_MR_100_xx'};
 cfg.prep_03.startle_channel_labels = {'Startle'};
@@ -461,9 +465,9 @@ cfg.prep_03.ekg_channel_labels     = {'ECG', 'EKG'};
 
 cfg.prep_03.downsample_hz = 250;
 
-cfg.prep_03.highpass_hz          = 0.1; % set lower if you are interested in low-frequency components
-cfg.prep_03.lowpass_hz           = 40; % set higher if you are interested in higher frequencies
-cfg.prep_03.ica_prep_highpass_hz = 1; % only for the ica training set; leave if possible as ICA is sensitive towards slow drifts
+cfg.prep_03.highpass_hz          = 0.1;
+cfg.prep_03.lowpass_hz           = 40;
+cfg.prep_03.ica_prep_highpass_hz = 1;
 
 cfg.prep_03.detect_bad_channels_mode = "auto";
 cfg.prep_03.auto_badchan_z_threshold  = 2.5;
@@ -478,12 +482,12 @@ cfg.prep_03.flat_channel_variance_epsilon = 0;
 cfg.prep_03.interpolate_bad_channels_before_ica = true;
 cfg.prep_03.interp_method = 'spherical';
 
-cfg.prep_03.line_noise_method         = "pop_cleanline"; %# TODO: Which otrhers are there?
-cfg.prep_03.line_noise_frequencies_hz = [50 100]; %# TODO: is this necessary?
+cfg.prep_03.line_noise_method         = "pop_cleanline";
+cfg.prep_03.line_noise_frequencies_hz = [50 100];
 
 cfg.prep_03.pop_cleanline_bandwidth_hz      = 4;
 cfg.prep_03.pop_cleanline_p_value           = 0.01;
-cfg.prep_03.pop_cleanline_scanforlines      = true; % leave on usually as it improves line noise detection
+cfg.prep_03.pop_cleanline_scanforlines      = true;
 cfg.prep_03.pop_cleanline_winsize_sec       = 2;
 cfg.prep_03.pop_cleanline_winstep_sec       = 1;
 cfg.prep_03.pop_cleanline_tau               = 50;
@@ -560,7 +564,7 @@ cfg.prep_05.clear_subject_ica_comps_dir = true;
 
 % settings for ICLabel rejection
 % NOTE: In the handout we only agreed on ICLabel for eye artifact
-% rejection. However, why not use it for removing other artifacts as well?
+% rejection. However, why not use ti for removing other artifacts as well?
 % It is a well-validated algorithm and if thresholds are set
 % conservatively, no harm is done
 cfg.prep_05.iclabel_eye_remove_thr       = 0.85;
@@ -721,12 +725,5 @@ cfg.prep_06.min_trials_per_condition_zero_tol_ms = 2; % jitter allowed around tr
 cfg.prep_06.min_trials_per_condition_codes = { ...
     'condition_name', {'S XXX','S XXY'}; ...
     }; % adjust this to conditions in your setup that should have at least min_trials_per_condition
-
-% -------------------------------------------------------------------------
-% Summary tables
-% -------------------------------------------------------------------------
-cfg.prep_06.write_run_summary_table     = false;
-cfg.prep_06.write_subject_summary_table = false;
-cfg.prep_06.qc_table_delimiter          = ';';
 
 end

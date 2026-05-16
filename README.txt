@@ -2,7 +2,7 @@ What this is:
 This EEG preprocessing Pipeline is intended to provide a Standard preprocessing procedure for the KPP, KPN (Uni Hamburg) and DFG-RU5389 as decided in a joint meeting in January 2026, in which common practises in preprocessing EEG data were agreed upon. It is set to these sensible defaults - plus some common practices - but fully configurable so you can adjust it to your specific setup. 
 
 Before you start:
-This pipeline requires EEGLab (https://eeglab.org/) with either the ERPLAB Extension by default, which in turn depend on the following MATALB toolboxes: Signal processing toolbox and Statistics toolbox. 
+This pipeline requires EEGLab (https://eeglab.org/) with the ERPLAB Extension by default, which in turn depend on the following MATALB toolboxes: Signal processing toolbox and Statistics toolbox. 
 Depending on the preprocessing options you choose, you may also need AMICA, cleanline or FASTER (as alternative to ERPLAB).
 
 How to use: 
