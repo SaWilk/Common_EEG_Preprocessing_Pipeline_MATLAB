@@ -15,7 +15,7 @@ function cfg = aperiodic_config()
 %
 %
 % REQUIREMENTS
-%   - EEGLAB
+%   - EEGLAB with ERPLab plugin
 %   - FASTER
 %   - (AMICA - optional)
 %   - (cleanline - optional)
@@ -43,7 +43,7 @@ cfg = struct();
 % -------------------------------------------------------------------------
 % Project identity
 % -------------------------------------------------------------------------
-project = 'GRK';
+project = 'AD1';
 project_og_path = 'Z:\pb\KPN\KPN-Allgemein\Daten\GRK\GRK_Rest_SAVE'; %'Z:\pb\KPN\KPN-Allgemein\Daten\DFG_Angstdimensionen\Clinical\Data\Rest\raw'; 
 
 cfg.pipeline = struct();
@@ -87,7 +87,7 @@ cfg.paths.profile_paths.server_windows = struct( ...
 cfg.paths.profile_paths.hpc_hummel = struct( ...
     'source_eeg_root',  '', ...
     'source_beh_root',  '', ...
-    'bids_root',        fullfile('/beegfs/u/bbe0557/raw', char(cfg.bids.dataset_folder_name)), ...
+    'bids_root',        fullfile('/beegfs/u/bbe0557/raw', char(cfg.bids.dataset_folder_name), 'rawdata'), ...
     'derivatives_root', fullfile('/beegfs/u/bbe0557/derivatives', char(cfg.bids.dataset_folder_name), 'preprocessed_eeg_baseline'));
 
 cfg.paths.bids_root_override        = "";
@@ -111,7 +111,7 @@ cfg.toolboxes.path_faster_hpc    = "/beegfs/u/bbe0557/toolboxes/FASTER";    % FA
 
 cfg.toolboxes.path_erplab_pc     = "Z:\pb\KPP_KPN_joined\DynBU\analyses\toolboxes\eeglab2026.0.0\plugins\ERPLAB12.20";
 cfg.toolboxes.path_erplab_server = "Z:\pb\KPP_KPN_joined\DynBU\analyses\toolboxes\eeglab2026.0.0\plugins\ERPLAB12.20";
-cfg.toolboxes.path_erplab_hpc    = "/beegfs/u/bbe0557/toolboxes/eeglab2026.0.0/plugins/erplab";
+cfg.toolboxes.path_erplab_hpc    = "/beegfs/u/bbe0557/toolboxes/eeglab2026.0.0/plugins/ERPLAB12.20/erplab12.20";
 
 cfg.toolboxes.erplab = struct();
 cfg.toolboxes.erplab.use_genpath = true;
@@ -257,7 +257,7 @@ cfg.parallel.pool_type      = "none"; % runner-internal flag
 cfg.steps = struct();
 
 cfg.steps.enable_downstream_rerun = true; % default should be true
-
+%# TODO: check why "skip" disables prep03, even though required input for 04 does not exist
 cfg.steps.prep_01_bids_formatting = struct( ...
     'run', false, ...                % Step 01 creates/updates cfg.paths.bids_root from source_*_root
     'overwrite_mode', "delete", ...
