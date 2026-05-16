@@ -478,6 +478,24 @@ cfg.prep_03.flat_channel_variance_epsilon = 0;
 cfg.prep_03.interpolate_bad_channels_before_ica = true;
 cfg.prep_03.interp_method = 'spherical';
 
+% -------------------------------------------------------------------------
+% Referencing
+% -------------------------------------------------------------------------
+% "keep"    = do not rereference in Step 03
+% "avg"     = average reference
+% "mastoid" = rereference to mastoids listed below
+%
+% Default should usually be "avg" to match the preprocessing handout.
+% Keep cfg.prep_06.reference_mode = "keep" unless you intentionally want a
+% second rereference during epoching.
+cfg.prep_03.reference_mode            = "avg";  % "keep" | "avg" | "mastoid"
+cfg.prep_03.reference_exclude_non_eeg = true;   % do not rereference EOG/SCR/Startle/EKG
+cfg.prep_03.mastoid_channel_labels    = {'T9','T10'};
+
+% -------------------------------------------------------------------------
+% Filtering
+% -------------------------------------------------------------------------
+
 cfg.prep_03.line_noise_method         = "pop_cleanline"; %# TODO: Which otrhers are there?
 cfg.prep_03.line_noise_frequencies_hz = [50 100]; %# TODO: is this necessary?
 

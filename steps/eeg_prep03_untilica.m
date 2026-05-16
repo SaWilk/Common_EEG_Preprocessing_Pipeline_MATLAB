@@ -473,44 +473,15 @@ else
 end
 
 %% ========================================================================
-%  AVERAGE REFERENCE
+%  REREFERENCE
 % ========================================================================
-if isfield(step_cfg, 'apply_average_reference') && step_cfg.apply_average_reference
+EEG = helpers.apply_reference_mode(EEG, step_cfg, helpers, 'prep03_untilica');
 
-    [eeg_idx, ~, ~] = helpers.get_channel_indices_by_type(EEG);
-
-    if isempty(eeg_idx)
-        helpers.log_msg_default('prep03_untilica: WARNING no EEG channels found for average reference.');
-        EEG = helpers.append_eeg_comment(EEG, ...
-            'prep03_untilica: average reference skipped (no EEG channels)');
-    else
-        if step_cfg.average_ref_exclude_non_eeg
-            EEG = pop_reref(EEG, [], 'exclude', setdiff(1:EEG.nbchan, eeg_idx));
-            EEG = helpers.append_eeg_comment(EEG, sprintf( ...
-                'prep03_untilica: average reference applied (EEG-only, n=%d)', numel(eeg_idx)));
-        else
-            EEG = pop_reref(EEG, []);
-            EEG = helpers.append_eeg_comment(EEG, sprintf( ...
-                'prep03_untilica: average reference applied (all channels, n=%d)', EEG.nbchan));
-        end
-
-        EEG = eeg_checkset(EEG);
-
-        if ~isfield(EEG, 'etc') || isempty(EEG.etc)
-            EEG.etc = struct();
-        end
-        EEG.etc.average_reference_applied = true;
-    end
-
-else
-    EEG = helpers.append_eeg_comment(EEG, ...
-        'prep03_untilica: average reference skipped (config off)');
-
-    if ~isfield(EEG, 'etc') || isempty(EEG.etc)
-        EEG.etc = struct();
-    end
-    EEG.etc.average_reference_applied = false;
+if ~isfield(EEG, 'etc') || isempty(EEG.etc)
+    EEG.etc = struct();
 end
+
+EEG.etc.prep03_reference_mode = char(string(step_cfg.reference_mode));
 
 %% ========================================================================
 %  FILTERING + LINE NOISE (EEG + EOG ONLY)
@@ -841,8 +812,9 @@ step_cfg.interpolate_bad_channels_before_ica = true;
 step_cfg.interp_method = 'spherical';
 
 % Referencing
-step_cfg.apply_average_reference     = true;
-step_cfg.average_ref_exclude_non_eeg = true;
+step_cfg.reference_mode            = "avg";  % "keep" | "avg" | "mastoid"
+step_cfg.reference_exclude_non_eeg = true;
+step_cfg.mastoid_channel_labels    = {'T9','T10'};
 
 % Filters
 step_cfg.highpass_hz          = 0.01;

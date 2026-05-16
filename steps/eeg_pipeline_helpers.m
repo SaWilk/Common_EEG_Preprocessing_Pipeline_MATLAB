@@ -1887,57 +1887,98 @@ idx_eog = idx_eog(:);
 idx_non_eeg = idx_non_eeg(:);
 end
 
-function EEG_out = apply_reference_mode_impl(EEG_in, step_cfg, helpers)
+function EEG_out = apply_reference_mode_impl(EEG_in, step_cfg, helpers, context_label)
 EEG_out = EEG_in;
 
+if nargin < 4 || isempty(context_label)
+    context_label = 'reference';
+end
+
+context_label = char(string(context_label));
+
 [idx_eeg, ~, ~] = get_channel_indices_by_type_impl(EEG_out);
-reference_mode = lower(string(step_cfg.reference_mode));
+
+reference_mode = "keep";
+if isfield(step_cfg, 'reference_mode') && strlength(string(step_cfg.reference_mode)) > 0
+    reference_mode = lower(strtrim(string(step_cfg.reference_mode)));
+end
+
+if reference_mode == "average"
+    reference_mode = "avg";
+end
 
 reference_exclude_non_eeg = true;
-if isfield(step_cfg, 'reference_exclude_non_eeg')
+if isfield(step_cfg, 'reference_exclude_non_eeg') && ~isempty(step_cfg.reference_exclude_non_eeg)
     reference_exclude_non_eeg = logical(step_cfg.reference_exclude_non_eeg);
 end
 
 switch reference_mode
-    case {"keep","none"}
-        EEG_out = helpers.append_eeg_comment(EEG_out, ...
-            'prep_06_epoching: reference kept unchanged');
+
+    case {"keep","none","off"}
+        EEG_out = helpers.append_eeg_comment(EEG_out, sprintf( ...
+            '%s: reference kept unchanged', context_label));
+
+        if ~isfield(EEG_out, 'etc') || isempty(EEG_out.etc)
+            EEG_out.etc = struct();
+        end
+        EEG_out.etc.reference_mode_applied = 'keep';
 
     case "avg"
         if isempty(idx_eeg)
-            EEG_out = helpers.append_eeg_comment(EEG_out, ...
-                'prep_06_epoching: WARNING no EEG channels found -> average reference skipped');
+            helpers.log_msg_default('%s: WARNING no EEG channels found for average reference.', context_label);
+            EEG_out = helpers.append_eeg_comment(EEG_out, sprintf( ...
+                '%s: average reference skipped (no EEG channels)', context_label));
+
+            if ~isfield(EEG_out, 'etc') || isempty(EEG_out.etc)
+                EEG_out.etc = struct();
+            end
+            EEG_out.etc.reference_mode_applied = 'avg_skipped_no_eeg';
             return;
         end
 
-        if isfield(step_cfg, 'reference_exclude_non_eeg')
+        if reference_exclude_non_eeg
             exclude_idx = setdiff(1:EEG_out.nbchan, idx_eeg);
             EEG_out = pop_reref(EEG_out, [], 'exclude', exclude_idx);
+            EEG_out = helpers.append_eeg_comment(EEG_out, sprintf( ...
+                '%s: average reference applied (EEG-only, n=%d)', ...
+                context_label, numel(idx_eeg)));
         else
             EEG_out = pop_reref(EEG_out, []);
+            EEG_out = helpers.append_eeg_comment(EEG_out, sprintf( ...
+                '%s: average reference applied (all channels, n=%d)', ...
+                context_label, EEG_out.nbchan));
         end
 
         EEG_out = eeg_checkset(EEG_out);
-        EEG_out = helpers.append_eeg_comment(EEG_out, ...
-            'prep_06_epoching: average reference applied');
+
+        if ~isfield(EEG_out, 'etc') || isempty(EEG_out.etc)
+            EEG_out.etc = struct();
+        end
+        EEG_out.etc.reference_mode_applied = 'avg';
 
     case "mastoid"
         if ~isfield(step_cfg, 'mastoid_channel_labels') || numel(step_cfg.mastoid_channel_labels) < 2
-            error('cfg.prep_06.mastoid_channel_labels must contain two labels for reference_mode="mastoid".');
+            error('%s: mastoid_channel_labels must contain two labels for reference_mode="mastoid".', ...
+                context_label);
         end
 
         mastoid_labels = cellstr(string(step_cfg.mastoid_channel_labels));
         mastoid_idx = zeros(1, numel(mastoid_labels));
 
+        all_labels = {EEG_out.chanlocs.labels};
+
         for k = 1:numel(mastoid_labels)
-            this_idx = find(strcmpi({EEG_out.chanlocs.labels}, mastoid_labels{k}), 1, 'first');
+            this_idx = find(strcmpi(all_labels, mastoid_labels{k}), 1, 'first');
+
             if isempty(this_idx)
-                error('Mastoid reference channel not found: %s', mastoid_labels{k});
+                error('%s: mastoid reference channel not found: %s', ...
+                    context_label, mastoid_labels{k});
             end
+
             mastoid_idx(k) = this_idx;
         end
 
-        if isfield(step_cfg, 'reference_exclude_non_eeg')
+        if reference_exclude_non_eeg
             exclude_idx = setdiff(1:EEG_out.nbchan, idx_eeg);
             EEG_out = pop_reref(EEG_out, mastoid_idx, 'exclude', exclude_idx);
         else
@@ -1945,12 +1986,20 @@ switch reference_mode
         end
 
         EEG_out = eeg_checkset(EEG_out);
+
         EEG_out = helpers.append_eeg_comment(EEG_out, sprintf( ...
-            'prep_06_epoching: mastoid reference applied using %s', ...
-            strjoin(string(step_cfg.mastoid_channel_labels), ', ')));
+            '%s: mastoid reference applied using %s', ...
+            context_label, strjoin(string(mastoid_labels), ', ')));
+
+        if ~isfield(EEG_out, 'etc') || isempty(EEG_out.etc)
+            EEG_out.etc = struct();
+        end
+        EEG_out.etc.reference_mode_applied = 'mastoid';
+        EEG_out.etc.reference_mastoid_labels = mastoid_labels;
 
     otherwise
-        error('Unsupported cfg.prep_06.reference_mode: %s', char(string(step_cfg.reference_mode)));
+        error('%s: unsupported reference_mode="%s". Use "keep", "avg", or "mastoid".', ...
+            context_label, char(reference_mode));
 end
 end
 
