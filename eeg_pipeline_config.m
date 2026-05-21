@@ -252,7 +252,7 @@ cfg.parallel.pool_type      = "none"; % runner-internal flag
 % =========================================================================
 cfg.steps = struct();
 
-cfg.steps.enable_downstream_rerun = true; % default should be true
+cfg.steps.enable_downstream_rerun = true; % if true, sets all downstream steps to run when a step is set to run. E.g. if Step 03 is set to run, but output for steps 04-06 already exists from a previous run, Steps 04-06 will automatically also be set to run
 
 cfg.steps.prep_01_bids_formatting = struct( ...
     'run', true, ...                % Step 01 creates/updates cfg.paths.bids_root from source_*_root
@@ -285,7 +285,7 @@ cfg.steps.prep_06_epoching = struct( ...
     'overwrite_if_older_than', "");
 
 % =========================================================================
-% STEP FUNCTION HANDLES
+% STEP FUNCTION HANDLES -- do not edit, will be resolved at runtime
 % =========================================================================
 cfg.step_fns = struct();
 cfg.step_fns.prep_01_bids_formatting = str2func('eeg_prep01_bids_formatting');
@@ -301,22 +301,21 @@ cfg.step_fns.prep_06_epoching        = str2func(char(cfg.pipeline.step_prefix + 
 % =========================================================================
 cfg.prep_01 = struct();
 
-cfg.prep_01.session_label = cfg.bids.session_label; % BIDS session label
-cfg.prep_01.task_label    = cfg.bids.task_label;    % BIDS task label
-
 cfg.prep_01.do_eeg = true;  % copy/rename raw BrainVision EEG into BIDS
-cfg.prep_01.do_beh = false; % copy project-specific CF behavior files
+cfg.prep_01.do_beh = false; % copy project-specific CF behavior files # HOWTO: what are CF files? specific format needed?
 
 cfg.prep_01.try_eeglab_bids_export           = true; % additionally try pop_exportbids after copying
 cfg.prep_01.write_readme_if_exporter_did_not = true; % write README if exporter did not create dataset-level description
 
 cfg.prep_01.copy_eeg_sidecar_log_to_events = false; % copy project-specific CF log as *_events.log
 
-cfg.prep_01.raw_eeg_regex = '^B_(\d{3})(?:_(\d{3}))?\.vhdr$'; % raw EEG filename pattern: subject + optional run
+cfg.prep_01.raw_eeg_regex = '^B_(\d{3})(?:_(\d{3}))?\.vhdr$'; % raw EEG filename pattern: starts with B, then 3-digit subject + optional 3-digit run
 
 cfg.prep_01.existing_bids_vhdr_regex = ...
     '^sub-(\d+)_ses-(\d+)_task-([A-Za-z0-9]+)(?:_run-(\d+))?_eeg\.vhdr$'; % existing BIDS EEG header pattern used when do_eeg=false
-
+   
+cfg.prep_01.session_label = cfg.bids.session_label; % get session label defined in project identity
+cfg.prep_01.task_label    = cfg.bids.task_label;    % get task label defined in project identity
 % =========================================================================
 % STEP 02: TRIGGERFIX
 % =========================================================================
@@ -331,7 +330,7 @@ cfg.prep_02.qc_out_dir = ""; % optional QC output folder override
 
 cfg.prep_02.task_label         = cfg.bids.task_label;    % BIDS task label
 cfg.prep_02.session_label      = cfg.bids.session_label; % BIDS session label
-cfg.prep_02.input_vhdr_pattern = "";                     % optional explicit vhdr pattern
+cfg.prep_02.input_vhdr_pattern = "";                     % optional explicit vhdr pattern # HOWTO: as regex pattern?
 
 cfg.prep_02.use_explicit_chanlist = false; % load only explicit channels
 cfg.prep_02.explicit_chanlist     = 1:66;  % explicit channel indices if enabled
@@ -448,24 +447,30 @@ cfg.prep_03 = struct();
 
 % crop dataset around specifically defined triggers, e.g. exp start and exp
 % end
-cfg.prep_03.crop_to_task_markers = false;
-cfg.prep_03.crop_start_marker    = 'S 91'; % beginnin of cropping area
+cfg.prep_03.crop_to_task_markers = false; %# HOWTO: if this is set to false, the following lines are irrelevant/ignored?
+cfg.prep_03.crop_start_marker    = 'S 91'; % beginning of cropping area
 cfg.prep_03.crop_end_marker      = 'S 97'; % end of cropping area
 cfg.prep_03.crop_padding_sec     = [0 0];
 
 %# HOWTO: make sure these include your channel labels for AUX/EOG, otherwise channels will be included as EEG in ICA
-cfg.prep_03.eog_channel_labels     = {'IO1','IO2','LO1','LO2'};
-cfg.prep_03.scr_channel_labels     = {'EDA', 'SCR', 'GSR_MR_100_xx'};
-cfg.prep_03.startle_channel_labels = {'Startle'};
-cfg.prep_03.ekg_channel_labels     = {'ECG', 'EKG'};
+cfg.prep_03.eog_channel_labels     = {'IO1','IO2','LO1','LO2'}; % ocular channels (detecting eye movements/blinks)
+cfg.prep_03.scr_channel_labels     = {'EDA', 'SCR', 'GSR_MR_100_xx'}; % skin conductance response channels
+cfg.prep_03.startle_channel_labels = {'Startle'}; % Startle response channels
+cfg.prep_03.ekg_channel_labels     = {'ECG', 'EKG'}; % Heart rate channels
 
-cfg.prep_03.downsample_hz = 250;
+cfg.prep_03.downsample_hz = 250; % downsample frequency
 
+% -------------------------------------------------------------------------
+% Filter settings
+% -------------------------------------------------------------------------
 cfg.prep_03.highpass_hz          = 0.1; % set lower if you are interested in low-frequency components
 cfg.prep_03.lowpass_hz           = 40; % set higher if you are interested in higher frequencies
 cfg.prep_03.ica_prep_highpass_hz = 1; % only for the ica training set; leave if possible as ICA is sensitive towards slow drifts
 
-cfg.prep_03.detect_bad_channels_mode = "auto";
+% -------------------------------------------------------------------------
+% Bad channel detection and interpolation
+% -------------------------------------------------------------------------
+cfg.prep_03.detect_bad_channels_mode = "auto"; %# HOWTO: which options are there?
 cfg.prep_03.auto_badchan_z_threshold  = 2.5;
 cfg.prep_03.auto_badchan_freqrange_hz = [1, cfg.prep_03.lowpass_hz + 10];
 
@@ -479,7 +484,7 @@ cfg.prep_03.interpolate_bad_channels_before_ica = true;
 cfg.prep_03.interp_method = 'spherical';
 
 % -------------------------------------------------------------------------
-% Referencing
+% Re-Referencing
 % -------------------------------------------------------------------------
 % "keep"    = do not rereference in Step 03
 % "avg"     = average reference
@@ -496,8 +501,10 @@ cfg.prep_03.mastoid_channel_labels    = {'T9','T10'};
 % Filtering
 % -------------------------------------------------------------------------
 
-cfg.prep_03.line_noise_method         = "pop_cleanline"; %# TODO: Which otrhers are there?
-cfg.prep_03.line_noise_frequencies_hz = [50 100]; %# TODO: is this necessary?
+cfg.prep_03.line_noise_method         = "pop_cleanline"; %# HOWTO: Which others are there? or is other option "none", because we filter at 40Hz?
+cfg.prep_03.line_noise_frequencies_hz = [50 100]; % in europe, set to [60 120] in US
+
+cfg.prep_03.ica_prep_epoch_rejection_method = "erplab"; % "erplab" | "faster_ptp" | "mad_variance" | "none" -- settings below
 
 cfg.prep_03.pop_cleanline_bandwidth_hz      = 4;
 cfg.prep_03.pop_cleanline_p_value           = 0.01;
@@ -516,18 +523,6 @@ cfg.prep_03.pop_cleanline_verbose           = false;
 %   final:     +/-200 uV, 50 uV step, 100 ms flatline
 %   ICA-prep:  +/-300 uV, 75 uV step, 200 ms flatline
 cfg.prep_03.ica_prep_erplab_epoch_rejection = struct();
-cfg.prep_03.ica_prep_epoch_rejection_method = "erplab"; % "erplab" | "faster_ptp" | "mad_variance" | "none"
-
-% MAD ICA-prep rejection settings.
-% Only used when cfg.prep_03.ica_prep_epoch_rejection_method == "mad_variance".
-cfg.prep_03.ica_prep_mad_z_threshold = 3;
-cfg.prep_03.ica_prep_mad_use_logvar  = true;
-cfg.prep_03.ica_prep_max_reject_prop = 1.00;
-
-% MAD variance rejection settings.
-% Only used when cfg.prep_06.epoch_rejection_method == "mad_variance".
-cfg.prep_06.mad_z_threshold = 3;
-cfg.prep_06.mad_use_logvar  = true;
 
 % Check only EEG channels, not EOG/SCR/Startle/EKG.
 cfg.prep_03.ica_prep_erplab_epoch_rejection.channel_scope = "eeg";
@@ -557,6 +552,18 @@ cfg.prep_03.ica_prep_erplab_epoch_rejection.review = "off";
 cfg.prep_03.ica_prep_erplab_epoch_rejection.history = "off";
 cfg.prep_03.ica_prep_erplab_epoch_rejection.lowpass_hz = -1;
 
+% MAD ICA-prep rejection settings.
+% Only used when cfg.prep_03.ica_prep_epoch_rejection_method == "mad_variance".
+cfg.prep_03.ica_prep_mad_z_threshold = 3;
+cfg.prep_03.ica_prep_mad_use_logvar  = true;
+cfg.prep_03.ica_prep_max_reject_prop = 1.00;
+
+% MAD variance rejection settings.
+% Only used when cfg.prep_06.epoch_rejection_method == "mad_variance".
+cfg.prep_06.mad_z_threshold = 3;
+cfg.prep_06.mad_use_logvar  = true;
+
+%# TODO: add FASTER settings for ICA-prep epoch rejection if we decide to keep that method?
 % =========================================================================
 % STEP 04: ICA
 % =========================================================================
@@ -574,7 +581,7 @@ cfg.prep_04.ica_channel_scope = "eeg_eog";
 % =========================================================================
 cfg.prep_05 = struct();
 
-cfg.prep_05.clear_subject_ica_comps_dir = true;
+cfg.prep_05.clear_subject_ica_comps_dir = true; % delete existing ICA components directory for subject before saving new one, to avoid confusion from old ICA results
 
 % settings for ICLabel rejection
 % NOTE: In the handout we only agreed on ICLabel for eye artifact
@@ -596,9 +603,9 @@ cfg.prep_05.ic_topo_dpi        = 300;
 cfg.prep_05.ic_topo_fig_cm     = [0 0 18 18];
 cfg.prep_05.ic_topo_electrodes = 'off';
 
-cfg.prep_05.write_component_table       = true;
-cfg.prep_05.write_run_summary_table     = true;
-cfg.prep_05.write_subject_summary_table = true;
+cfg.prep_05.write_component_table       = true; % creates table listing all ICA components with their labels and probabilities, as well as whether they were removed or kept
+cfg.prep_05.write_run_summary_table     = true; % creates table summarizing ICA results per run, e.g. number of components removed, number of flags per rejection criterion, etc.
+cfg.prep_05.write_subject_summary_table = true; % # HOWTO: creates identical table to run_summary..?
 cfg.prep_05.qc_table_delimiter          = ';';
 
 % =========================================================================
