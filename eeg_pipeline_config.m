@@ -14,7 +14,7 @@ function cfg = eeg_pipeline_config()
 %   cfg : full configuration struct for run_eeg_pipeline.m
 %
 % REQUIREMENTS
-%   - EEGLAB
+%   - EEGLAB with ERPLAB plugin
 %   - FASTER
 %   - (AMICA - optional)
 %   - (cleanline - optional)
@@ -50,7 +50,7 @@ cfg.constants = struct();
 cfg.constants.log_prefix_master = "run_eeg_pipeline_aperiodic"; % master log filename prefix
 
 cfg.bids = struct();
-cfg.bids.dataset_folder_name = "baseline"; % BIDS dataset folder name (if you have multiple datasets in teh same raw folder)
+cfg.bids.dataset_folder_name = "baseline";   % BIDS dataset folder name (if you have multiple datasets in the same raw folder)
 cfg.bids.task_label          = "baseline";   % BIDS task label of EEG dataset
 cfg.bids.session_label       = "01";         % BIDS session label
 
@@ -227,7 +227,7 @@ if strlength(string(cfg.paths.source_beh_root_override)) > 0
     cfg.paths.source_beh_root = string(cfg.paths.source_beh_root_override);
 end
 
-cfg.paths.logs_dir = fullfile(cfg.root_dir, 'logs', 'runlog_pipeline'); % folder for pipeline logs
+cfg.paths.logs_dir = fullfile(fileparts(cfg.paths.derivatives_root), 'logs', 'runlog_pipeline'); % log folder in data-directory
 cfg.paths.branch_by_ica_method = true; % create separate 04/05/06 folders per ICA method
 
 
