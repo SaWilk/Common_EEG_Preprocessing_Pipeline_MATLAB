@@ -43,8 +43,8 @@ cfg = struct();
 % Project identity
 % -------------------------------------------------------------------------
 cfg.pipeline = struct();
-cfg.pipeline.name        = "aperiodic_pipeline"; % project name used in cfg
-cfg.pipeline.step_prefix = "eeg";                % step 02-06 function prefix
+cfg.pipeline.name        = "aperiodic_pipeline"; % set recognizable name: project name used in cfg and logsheader
+cfg.pipeline.step_prefix = "eeg";                % step 02-06 function prefix, needed to find step-functions. Keep as "eeg" unless you have a good reason to change it.
 
 cfg.constants = struct();
 cfg.constants.log_prefix_master = "run_eeg_pipeline_aperiodic"; % master log filename prefix
@@ -54,6 +54,7 @@ cfg.bids.dataset_folder_name = "baseline";   % BIDS dataset folder name (if you 
 cfg.bids.task_label          = "baseline";   % BIDS task label of EEG dataset
 cfg.bids.session_label       = "01";         % BIDS session label
 
+cfg.paths.branch_by_ica_method = true; % create separate 04/05/06 folders per ICA method
 % -------------------------------------------------------------------------
 % Profile / paths
 % Configure ALL machine-specific path profiles here.
@@ -64,6 +65,8 @@ cfg.bids.session_label       = "01";         % BIDS session label
 %   3) optionally set cfg.paths.profile_override to that name
 % -------------------------------------------------------------------------
 cfg.paths = struct();
+
+%# HOWTO: how would we hav to set the overwrite? are there pre-set options?
 cfg.paths.profile_override = ""; % leave empty for automatic profile selection
 
 cfg.paths.profile_paths = struct();
@@ -122,7 +125,7 @@ cfg.toolboxes.eeglab.nogui = true;                  % start EEGLAB without GUI
 % -------------------------------------------------------------------------
 cfg.io = struct();
 cfg.io.overwrite_mode          = "delete"; % "skip" | "delete" | "if_older_than"
-cfg.io.overwrite_if_older_than = "";       % cutoff date for "if_older_than"
+cfg.io.overwrite_if_older_than = "";       % # HOWTO: cutoff date for "if_older_than" in which format?
 
 % =========================================================================
 % INTERNAL SETUP
@@ -136,13 +139,14 @@ cfg.root_dir  = root_dir;
 % =========================================================================
 % CONSTANTS
 % =========================================================================
-cfg.constants.valid_sub_id_regex = '^\d{3}$';          % valid subject IDs
+cfg.constants.valid_sub_id_regex = '^\d{3}$';          % valid subject IDs, default: three digits like "001"
 cfg.constants.log_prefix_subject = 'sub';              % subject log prefix
 cfg.constants.datestr_master     = 'yyyymmdd_HHMMSS';  % master log timestamp format
 cfg.constants.datestr_subject    = 'yyyymmdd_HHMMSS_FFF'; % subject log timestamp format
+cfg.paths.logs_dir = fullfile(fileparts(cfg.paths.derivatives_root), 'logs', 'runlog_pipeline'); % log folder in data-directory
 
 % =========================================================================
-% ENVIRONMENT
+% ENVIRONMENT  -- do not edit, will be automatically detected at runtime
 % =========================================================================
 cfg.env = struct();
 cfg.env.mode         = helpers.detect_env_mode();      % "pc" | "server" | "hpc"
@@ -154,7 +158,7 @@ cfg.env.slurm_job_id  = string(helpers.get_env_first_nonempty({'SLURM_JOB_ID'}))
 cfg.env.slurm_cluster = string(helpers.get_env_first_nonempty({'SLURM_CLUSTER_NAME'})); % SLURM cluster name
 
 % =========================================================================
-% RESOLVED PATHS
+% RESOLVED PATHS -- do not edit, will be resolved at runtime based on profile and environment
 % =========================================================================
 cfg.paths.profile = helpers.default_profile_for_mode(cfg.env.mode, cfg.env.machine_kind); % default profile by environment
 
@@ -209,7 +213,7 @@ end
 
 % -------------------------------------------------------------------------
 % Explicit config overrides
-% Highest priority because they are set directly in this file
+% Highest priority because they are set directly in this file (in Profile paths section above) and intended for manual runs. Environment variables are more intended for batch/HPC/test runs without editing this config file.
 % -------------------------------------------------------------------------
 if strlength(string(cfg.paths.bids_root_override)) > 0
     cfg.paths.bids_root = string(cfg.paths.bids_root_override);
@@ -227,26 +231,22 @@ if strlength(string(cfg.paths.source_beh_root_override)) > 0
     cfg.paths.source_beh_root = string(cfg.paths.source_beh_root_override);
 end
 
-cfg.paths.logs_dir = fullfile(fileparts(cfg.paths.derivatives_root), 'logs', 'runlog_pipeline'); % log folder in data-directory
-cfg.paths.branch_by_ica_method = true; % create separate 04/05/06 folders per ICA method
-
-
 % =========================================================================
 % SUBJECTS
 % =========================================================================
 cfg.subjects = struct();
-cfg.subjects.list   = []; % explicit subject list or [], e.g. {'211','212'}
-cfg.subjects.min_id = []; % [] = no lower cutoff | numeric/string ID
+cfg.subjects.list   = []; % explicit subject list, e.g. {'211','212'}, leave empty to autodetect from source_eeg_root using cfg.constants.valid_sub_id_regex
+cfg.subjects.min_id = []; % numeric/string ID, no lower cutoff if left empty 
 
 % =========================================================================
 % PARALLEL
 % =========================================================================
 cfg.parallel = struct();
 cfg.parallel.enable         = true;   % allow parallel execution
-cfg.parallel.force_workers  = [];     % explicit worker count or []
+cfg.parallel.force_workers  = [];     % explicit worker count, leave empty for automatic determination
 cfg.parallel.pool_is_thread = false;  % runner-internal flag
 cfg.parallel.pool_type      = "none"; % runner-internal flag
-
+%# HOWTO: what are runner internal flags?
 % =========================================================================
 % STEP TOGGLES
 % =========================================================================
