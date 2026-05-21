@@ -43,8 +43,8 @@ cfg = struct();
 % -------------------------------------------------------------------------
 % Project identity
 % -------------------------------------------------------------------------
-project = 'AD1';
-project_og_path = 'Z:\pb\KPN\KPN-Allgemein\Daten\GRK\GRK_Rest_SAVE'; %'Z:\pb\KPN\KPN-Allgemein\Daten\DFG_Angstdimensionen\Clinical\Data\Rest\raw'; 
+project = 'AD2';
+project_og_path = 'Z:\pb\KPN\KPN-Allgemein\Daten\DFG_Angstdimensionen\Clinical\Data\Rest\raw'; 
 
 cfg.pipeline = struct();
 cfg.pipeline.name        = ['aperiodic_' project];   % project name used in cfg
@@ -54,7 +54,7 @@ cfg.constants = struct();
 cfg.constants.log_prefix_master = "internalising_rest_aperiodic"; % master log filename prefix
 
 cfg.bids = struct();
-cfg.bids.dataset_folder_name = string(project);      % BIDS dataset folder name (if you have multiple datasets in teh same raw folder)
+cfg.bids.dataset_folder_name = string(project);      % BIDS dataset folder name (if you have multiple datasets in the same raw folder)
 cfg.bids.task_label          = "baseline";   % BIDS task label of EEG dataset
 cfg.bids.session_label       = "01";         % BIDS session label
 
