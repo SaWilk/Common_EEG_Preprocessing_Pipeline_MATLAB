@@ -785,9 +785,12 @@ if ~isempty(config_dir)
 end
 
 if exist(config_name, 'file') ~= 2
-    candidate_in_root = fullfile(root_dir, [config_name '.m']);
+    candidate_in_root        = fullfile(root_dir, [config_name '.m']);
+    candidate_in_root_parent = fullfile(fileparts(root_dir), [config_name '.m']);
     if exist(candidate_in_root, 'file') == 2
         addpath(root_dir);
+    elseif exist(candidate_in_root_parent, 'file') == 2
+        addpath(fileparts(root_dir))
     end
 end
 
