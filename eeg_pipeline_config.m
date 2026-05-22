@@ -143,7 +143,6 @@ cfg.constants.valid_sub_id_regex = '^\d{3}$';          % valid subject IDs, defa
 cfg.constants.log_prefix_subject = 'sub';              % subject log prefix
 cfg.constants.datestr_master     = 'yyyymmdd_HHMMSS';  % master log timestamp format
 cfg.constants.datestr_subject    = 'yyyymmdd_HHMMSS_FFF'; % subject log timestamp format
-cfg.paths.logs_dir = fullfile(fileparts(cfg.paths.derivatives_root), 'logs', 'runlog_pipeline'); % log folder in data-directory
 
 % =========================================================================
 % ENVIRONMENT  -- do not edit, will be automatically detected at runtime
@@ -185,6 +184,7 @@ cfg.paths.source_eeg_root  = string(profile_cfg.source_eeg_root);
 cfg.paths.source_beh_root  = string(profile_cfg.source_beh_root);
 cfg.paths.bids_root        = string(profile_cfg.bids_root);
 cfg.paths.derivatives_root = string(profile_cfg.derivatives_root);
+cfg.paths.logs_dir = fullfile(fileparts(cfg.paths.derivatives_root), 'logs', 'runlog_pipeline'); % log folder in data-directory
 
 % -------------------------------------------------------------------------
 % Optional environment overrides
@@ -622,9 +622,9 @@ cfg.prep_06.overwrite_mode = "";
 % -------------------------------------------------------------------------
 % Saving
 % -------------------------------------------------------------------------
-cfg.prep_06.save_final_only         = true;
+cfg.prep_06.save_final_only         = true; %# HOWTO: what does this mean and how does it relate to the intermediate steps below?
 cfg.prep_06.save_intermediate_steps = false;
-cfg.prep_06.savemode                = 'twofiles';
+cfg.prep_06.savemode                = 'twofiles'; %# HOWTO: what are the options?
 
 % -------------------------------------------------------------------------
 % Referencing in Step 06
@@ -646,25 +646,25 @@ cfg.prep_06.events_phase = { ...
     'S 205','S 245' ...
     };
 
-cfg.prep_06.epoch_start_s = -0.4;
-cfg.prep_06.epoch_end_s   =  2.6;
+cfg.prep_06.epoch_start_s = -0.4; % start of epoch relative to event in seconds
+cfg.prep_06.epoch_end_s   =  2.6; % end of epoch relative to event in seconds
 
 % -------------------------------------------------------------------------
 % BASELINE mode settings
 % Used only when cfg.prep_06.epoching_mode == "baseline"
 % -------------------------------------------------------------------------
-cfg.prep_06.regepoch_length_sec = 10;
-cfg.prep_06.regepoch_step_sec   = 10;
+cfg.prep_06.regepoch_length_sec = 10; % length of epochs to be created
+cfg.prep_06.regepoch_step_sec   = 10; %# HOWTO: what does this mean? if equal to length, epochs will be non-overlapping?
 
-cfg.prep_06.baseline_start_condition        = "open";
-cfg.prep_06.baseline_open_marker_prefixes   = {'S 1'};
-cfg.prep_06.baseline_closed_marker_prefixes = {'S 2'};
+cfg.prep_06.baseline_start_condition        = "open"; % assumes that data contains data from before first phase, in which participants had their eyes open
+cfg.prep_06.baseline_open_marker_prefixes   = {'S 1'}; % triggers marking the start of open-eye baseline segments, e.g. "S 1", "S 11", "S 12"
+cfg.prep_06.baseline_closed_marker_prefixes = {'S 2'}; % triggers marking the start of closed-eye baseline segments, e.g. "S 2", "S 21", "S 22"
 cfg.prep_06.baseline_end_markers            = {'S 99'};
 
 % -------------------------------------------------------------------------
 % Artifact rejection
 % -------------------------------------------------------------------------
-cfg.prep_06.do_artifact_rejection = true;
+cfg.prep_06.do_artifact_rejection = true; %# HOWTO: do we have suggestions when to use which?
 
 % Optional first-pass hard absolute-amplitude rejection.
 % Usually keep this false when using ERPLAB, because ERPLAB's extreme-voltage
