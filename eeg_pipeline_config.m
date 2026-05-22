@@ -54,7 +54,6 @@ cfg.bids.dataset_folder_name = "baseline";   % BIDS dataset folder name (if you 
 cfg.bids.task_label          = "baseline";   % BIDS task label of EEG dataset
 cfg.bids.session_label       = "01";         % BIDS session label
 
-cfg.paths.branch_by_ica_method = true; % create separate 04/05/06 folders per ICA method
 % -------------------------------------------------------------------------
 % Profile / paths
 % Configure ALL machine-specific path profiles here.
@@ -66,8 +65,9 @@ cfg.paths.branch_by_ica_method = true; % create separate 04/05/06 folders per IC
 % -------------------------------------------------------------------------
 cfg.paths = struct();
 
-%# HOWTO: how would we hav to set the overwrite? are there pre-set options?
-cfg.paths.profile_override = ""; % leave empty for automatic profile selection
+cfg.paths.branch_by_ica_method = true; % create separate 04/05/06 folders per ICA method
+
+cfg.paths.profile_override = ""; % leave empty for automatic profile selection; "pc" | "server_windows" | "hpc_hummel"
 
 cfg.paths.profile_paths = struct();
 
@@ -89,6 +89,7 @@ cfg.paths.profile_paths.hpc_hummel = struct( ...
     'bids_root',        fullfile('/beegfs/u/bbf7366/sourcedata', char(cfg.bids.dataset_folder_name)), ...
     'derivatives_root', '/beegfs/u/bbf7366/derivatives/preprocessed_eeg_baseline');
 
+% only set these if paths deviate but you do not want to change the profile
 cfg.paths.bids_root_override        = "";
 cfg.paths.derivatives_root_override = "";
 cfg.paths.source_eeg_root_override  = "";
@@ -125,7 +126,8 @@ cfg.toolboxes.eeglab.nogui = true;                  % start EEGLAB without GUI
 % -------------------------------------------------------------------------
 cfg.io = struct();
 cfg.io.overwrite_mode          = "delete"; % "skip" | "delete" | "if_older_than"
-cfg.io.overwrite_if_older_than = "";       % # HOWTO: cutoff date for "if_older_than" in which format?
+cfg.io.overwrite_if_older_than = "";       % cutoff date for "if_older_than", 
+% either "DD.MM.YYYY" or "YYYY-MM-DD", optionally with time in 24h format: HH:MM or HH:MM:SS 
 
 % =========================================================================
 % INTERNAL SETUP
@@ -155,6 +157,8 @@ cfg.env.hostname     = helpers.get_hostname();         % host name
 cfg.env.is_slurm      = ~isempty(getenv('SLURM_JOB_ID')); % true if running under SLURM
 cfg.env.slurm_job_id  = string(helpers.get_env_first_nonempty({'SLURM_JOB_ID'}));       % SLURM job id
 cfg.env.slurm_cluster = string(helpers.get_env_first_nonempty({'SLURM_CLUSTER_NAME'})); % SLURM cluster name
+% Note: since MATLAB does not run with SLURM on hummel hpc currently
+% (22.05.2026), these functions are not tested.
 
 % =========================================================================
 % RESOLVED PATHS -- do not edit, will be resolved at runtime based on profile and environment
@@ -188,7 +192,7 @@ cfg.paths.logs_dir = fullfile(fileparts(cfg.paths.derivatives_root), 'logs', 'ru
 
 % -------------------------------------------------------------------------
 % Optional environment overrides
-% Intended for batch/HPC/test runs without editing this config file
+% Intended for batch/HPC/SLURM test runs without editing this config file
 % -------------------------------------------------------------------------
 bids_env = helpers.get_env_first_nonempty({'EEG_PIPELINE_BIDS_ROOT'});
 derivatives_env = helpers.get_env_first_nonempty({'EEG_PIPELINE_DERIVATIVES_ROOT'});
@@ -213,7 +217,9 @@ end
 
 % -------------------------------------------------------------------------
 % Explicit config overrides
-% Highest priority because they are set directly in this file (in Profile paths section above) and intended for manual runs. Environment variables are more intended for batch/HPC/test runs without editing this config file.
+% Highest priority because they are set directly in this file (in Profile 
+% paths section above) and intended for manual runs. Environment variables 
+% are more intended for batch/HPC/test runs without editing this config file.
 % -------------------------------------------------------------------------
 if strlength(string(cfg.paths.bids_root_override)) > 0
     cfg.paths.bids_root = string(cfg.paths.bids_root_override);
@@ -235,24 +241,28 @@ end
 % SUBJECTS
 % =========================================================================
 cfg.subjects = struct();
-cfg.subjects.list   = []; % explicit subject list, e.g. {'211','212'}, leave empty to autodetect from source_eeg_root using cfg.constants.valid_sub_id_regex
-cfg.subjects.min_id = []; % numeric/string ID, no lower cutoff if left empty 
+cfg.subjects.list   = []; % explicit subject list, e.g. {'211','212'}, leave 
+% empty to autodetect from source_eeg_root using cfg.constants.valid_sub_id_regex
+cfg.subjects.min_id = []; % process all subjects with a higher ID than...
+% numeric/string ID, no lower cutoff if left empty 
 
 % =========================================================================
 % PARALLEL
 % =========================================================================
 cfg.parallel = struct();
 cfg.parallel.enable         = true;   % allow parallel execution
-cfg.parallel.force_workers  = [];     % explicit worker count, leave empty for automatic determination
-cfg.parallel.pool_is_thread = false;  % runner-internal flag
-cfg.parallel.pool_type      = "none"; % runner-internal flag
-%# HOWTO: what are runner internal flags?
+cfg.parallel.force_workers  = [];     % explicit worker count, leave empty 
+% for automatic determination (recommended)
+
 % =========================================================================
 % STEP TOGGLES
 % =========================================================================
 cfg.steps = struct();
 
-cfg.steps.enable_downstream_rerun = true; % if true, sets all downstream steps to run when a step is set to run. E.g. if Step 03 is set to run, but output for steps 04-06 already exists from a previous run, Steps 04-06 will automatically also be set to run
+cfg.steps.enable_downstream_rerun = true; % if true, sets all downstream steps 
+% to run when a step is set to run. E.g. if Step 03 is set to run, but output 
+% for steps 04-06 already exists from a previous run, Steps 04-06 will 
+% automatically also be set to run
 
 cfg.steps.prep_01_bids_formatting = struct( ...
     'run', true, ...                % Step 01 creates/updates cfg.paths.bids_root from source_*_root
@@ -288,7 +298,7 @@ cfg.steps.prep_06_epoching = struct( ...
 % STEP FUNCTION HANDLES -- do not edit, will be resolved at runtime
 % =========================================================================
 cfg.step_fns = struct();
-cfg.step_fns.prep_01_bids_formatting = str2func('eeg_prep01_bids_formatting');
+cfg.step_fns.prep_01_bids_formatting = str2func(char(cfg.pipeline.step_prefix + "_prep01_bids_formatting"));
 cfg.step_fns.prep_02_triggerfix      = str2func(char(cfg.pipeline.step_prefix + "_prep02_triggerfix"));
 cfg.step_fns.prep_03_until_ica       = str2func(char(cfg.pipeline.step_prefix + "_prep03_untilica"));
 cfg.step_fns.prep_04_ica             = str2func(char(cfg.pipeline.step_prefix + "_prep04_ica"));
@@ -309,13 +319,26 @@ cfg.prep_01.write_readme_if_exporter_did_not = true; % write README if exporter 
 
 cfg.prep_01.copy_eeg_sidecar_log_to_events = false; % copy project-specific CF log as *_events.log
 
-cfg.prep_01.raw_eeg_regex = '^B_(\d{3})(?:_(\d{3}))?\.vhdr$'; % raw EEG filename pattern: starts with B, then 3-digit subject + optional 3-digit run
+cfg.prep_01.raw_eeg_regex = '^B_(\d{3})(?:_(\d{3}))?\.vhdr$'; % raw EEG 
+% filename pattern: Example: 
+% ^              start of the filename
+% B_             literal text: B_
+% (\d{3})        capture group 1: exactly three digits, e.g. 001 or 123 = subject ID
+% (?: ... )      non-capturing group; used only for grouping, not extracted as separate output
+% _(\d{3})       underscore plus exactly three digits = optional run ID
+% ?              makes the whole previous group optional
+% \.             literal dot before the file extension
+% vhdr           literal file extension text: vhdr
+% $              end of the filename
+% so in the example B_001.vhdr, B_001_002.vhdr would match but not B_1.vhdr
+% B_0001.vhdr, A_001.vhdr B_001_02.vhdr B_001.eeg, ... 
 
 cfg.prep_01.existing_bids_vhdr_regex = ...
     '^sub-(\d+)_ses-(\d+)_task-([A-Za-z0-9]+)(?:_run-(\d+))?_eeg\.vhdr$'; % existing BIDS EEG header pattern used when do_eeg=false
    
 cfg.prep_01.session_label = cfg.bids.session_label; % get session label defined in project identity
 cfg.prep_01.task_label    = cfg.bids.task_label;    % get task label defined in project identity
+
 % =========================================================================
 % STEP 02: TRIGGERFIX
 % =========================================================================
@@ -447,12 +470,12 @@ cfg.prep_03 = struct();
 
 % crop dataset around specifically defined triggers, e.g. exp start and exp
 % end
-cfg.prep_03.crop_to_task_markers = false; %# HOWTO: if this is set to false, the following lines are irrelevant/ignored?
+cfg.prep_03.crop_to_task_markers = false; %if this is set to false, the following lines are irrelevant
 cfg.prep_03.crop_start_marker    = 'S 91'; % beginning of cropping area
 cfg.prep_03.crop_end_marker      = 'S 97'; % end of cropping area
 cfg.prep_03.crop_padding_sec     = [0 0];
 
-%# HOWTO: make sure these include your channel labels for AUX/EOG, otherwise channels will be included as EEG in ICA
+% IMPORTANT make sure these include your channel labels for AUX/EOG, otherwise channels will be included as EEG in ICA
 cfg.prep_03.eog_channel_labels     = {'IO1','IO2','LO1','LO2'}; % ocular channels (detecting eye movements/blinks)
 cfg.prep_03.scr_channel_labels     = {'EDA', 'SCR', 'GSR_MR_100_xx'}; % skin conductance response channels
 cfg.prep_03.startle_channel_labels = {'Startle'}; % Startle response channels
@@ -470,16 +493,22 @@ cfg.prep_03.ica_prep_highpass_hz = 1; % only for the ica training set; leave if 
 % -------------------------------------------------------------------------
 % Bad channel detection and interpolation
 % -------------------------------------------------------------------------
-cfg.prep_03.detect_bad_channels_mode = "auto"; %# HOWTO: which options are there?
-cfg.prep_03.auto_badchan_z_threshold  = 2.5;
-cfg.prep_03.auto_badchan_freqrange_hz = [1, cfg.prep_03.lowpass_hz + 10];
+cfg.prep_03.bad_channel_detection_method = "clean_rawdata"; % "clean_rawdata" | "pop_rejchan" | "off"
+% Note: clean_rawdata used to be called "auto"
 
-cfg.prep_03.emu_flatline_sec           = 5;
-cfg.prep_03.emu_channel_corr_threshold = 0.80;
+% Only used for bad_channel_detection_method = "clean_rawdata"
+cfg.prep_03.clean_rawdata_flatline_sec           = 5;
+cfg.prep_03.clean_rawdata_channel_corr_threshold = 0.80;
 
+% Only used for bad_channel_detection_method = "pop_rejchan"
+cfg.prep_03.pop_rejchan_z_threshold  = 2.5;
+cfg.prep_03.pop_rejchan_freqrange_hz = [1, cfg.prep_03.lowpass_hz + 10];
+
+% Always used if enabled
 cfg.prep_03.flag_flat_channels_as_bad     = true;
 cfg.prep_03.flat_channel_variance_epsilon = 0;
 
+% Applied to final bad EEG channel list
 cfg.prep_03.interpolate_bad_channels_before_ica = true;
 cfg.prep_03.interp_method = 'spherical';
 
@@ -501,10 +530,10 @@ cfg.prep_03.mastoid_channel_labels    = {'T9','T10'};
 % Filtering
 % -------------------------------------------------------------------------
 
-cfg.prep_03.line_noise_method         = "pop_cleanline"; %# HOWTO: Which others are there? or is other option "none", because we filter at 40Hz?
+cfg.prep_03.line_noise_method         = "pop_cleanline"; % "pop_cleanline" | "off"
 cfg.prep_03.line_noise_frequencies_hz = [50 100]; % in europe, set to [60 120] in US
 
-cfg.prep_03.ica_prep_epoch_rejection_method = "erplab"; % "erplab" | "faster_ptp" | "mad_variance" | "none" -- settings below
+cfg.prep_03.ica_prep_epoch_rejection_method = "erplab"; % "erplab" | "faster_ptp" | "mad_variance" | "none"
 
 cfg.prep_03.pop_cleanline_bandwidth_hz      = 4;
 cfg.prep_03.pop_cleanline_p_value           = 0.01;
@@ -581,7 +610,8 @@ cfg.prep_04.ica_channel_scope = "eeg_eog";
 % =========================================================================
 cfg.prep_05 = struct();
 
-cfg.prep_05.clear_subject_ica_comps_dir = true; % delete existing ICA components directory for subject before saving new one, to avoid confusion from old ICA results
+cfg.prep_05.clear_subject_ica_comps_dir = true; % delete existing ICA components 
+% directory for subject before saving new one, to avoid confusion from old ICA results
 
 % settings for ICLabel rejection
 % NOTE: In the handout we only agreed on ICLabel for eye artifact
@@ -603,9 +633,13 @@ cfg.prep_05.ic_topo_dpi        = 300;
 cfg.prep_05.ic_topo_fig_cm     = [0 0 18 18];
 cfg.prep_05.ic_topo_electrodes = 'off';
 
-cfg.prep_05.write_component_table       = true; % creates table listing all ICA components with their labels and probabilities, as well as whether they were removed or kept
-cfg.prep_05.write_run_summary_table     = true; % creates table summarizing ICA results per run, e.g. number of components removed, number of flags per rejection criterion, etc.
-cfg.prep_05.write_subject_summary_table = true; % # HOWTO: creates identical table to run_summary..?
+cfg.prep_05.write_component_table       = true; % table with one row per ICA 
+% component: ICLabel probabilities and remove/keep decision
+cfg.prep_05.write_run_summary_table     = true; % one summary file per 
+% run/input file: number of ICs removed and counts per rejection criterion
+cfg.prep_05.write_subject_summary_table = true; % one subject-level summary 
+% file combining all run summaries for this subject; may look identical if 
+% there is only one run
 cfg.prep_05.qc_table_delimiter          = ';';
 
 % =========================================================================
@@ -622,9 +656,10 @@ cfg.prep_06.overwrite_mode = "";
 % -------------------------------------------------------------------------
 % Saving
 % -------------------------------------------------------------------------
-cfg.prep_06.save_final_only         = true; %# HOWTO: what does this mean and how does it relate to the intermediate steps below?
-cfg.prep_06.save_intermediate_steps = false;
-cfg.prep_06.savemode                = 'twofiles'; %# HOWTO: what are the options?
+cfg.prep_06.save_final_only         = true; % save only one file per step
+cfg.prep_06.save_intermediate_steps = false; % save output files after each 
+% preprocessing sub-step (not fully implemented yet; if you require this please 
+% contact saskia.wilken@uni-hamburg.de)
 
 % -------------------------------------------------------------------------
 % Referencing in Step 06
@@ -635,16 +670,28 @@ cfg.prep_06.reference_mode         = "keep";   % "keep" | "avg" | "mastoid"
 cfg.prep_06.mastoid_channel_labels = {'T9','T10'};
 
 % -------------------------------------------------------------------------
+% Baseline correction
+% Mainly relevant for event_locked ERP-style epochs.
+% Usually keep false for continuous/resting-state baseline regepochs.
+% -------------------------------------------------------------------------
+cfg.prep_06.do_baseline_correction = false;
+cfg.prep_06.base_start_ms          = -200;
+cfg.prep_06.base_end_ms            = 0;
+
+% -------------------------------------------------------------------------
 % EVENT-LOCKED mode settings
 % Used only when cfg.prep_06.epoching_mode == "event_locked"
 % -------------------------------------------------------------------------
-cfg.prep_06.events_phase = { ...
-    'S 201','S 241', ...
-    'S 2021','S 2421','S 2022','S 2422', ...
-    'S 203','S 213','S 223','S 233','S 243', ...
-    'S 2041','S 2441','S 2042','S 2442','S 2043','S 2443', ...
-    'S 205','S 245' ...
-    };
+cfg.prep_06.events_phase = {}; % enter here triggers that mark where your epochs shoudl start
+% example entries: { ...
+    % 'S 201','S 241', ...
+    % 'S 2021','S 2421','S 2022','S 2422', ...
+    % 'S 203','S 213','S 223','S 233','S 243', ...
+    % 'S 2041','S 2441','S 2042','S 2442','S 2043','S 2443', ...
+    % 'S 205','S 245' ...
+    % }
+ % note: currently as a design choices you should label these epoch types
+ % in your analysis scripts as it is not really part of preprocessing
 
 cfg.prep_06.epoch_start_s = -0.4; % start of epoch relative to event in seconds
 cfg.prep_06.epoch_end_s   =  2.6; % end of epoch relative to event in seconds
@@ -654,12 +701,18 @@ cfg.prep_06.epoch_end_s   =  2.6; % end of epoch relative to event in seconds
 % Used only when cfg.prep_06.epoching_mode == "baseline"
 % -------------------------------------------------------------------------
 cfg.prep_06.regepoch_length_sec = 10; % length of epochs to be created
-cfg.prep_06.regepoch_step_sec   = 10; %# HOWTO: what does this mean? if equal to length, epochs will be non-overlapping?
+cfg.prep_06.regepoch_step_sec = 10; % seconds between starts of consecutive 
+% regepochs; same as length = non-overlapping epochs without gaps
 
-cfg.prep_06.baseline_start_condition        = "open"; % assumes that data contains data from before first phase, in which participants had their eyes open
-cfg.prep_06.baseline_open_marker_prefixes   = {'S 1'}; % triggers marking the start of open-eye baseline segments, e.g. "S 1", "S 11", "S 12"
-cfg.prep_06.baseline_closed_marker_prefixes = {'S 2'}; % triggers marking the start of closed-eye baseline segments, e.g. "S 2", "S 21", "S 22"
-cfg.prep_06.baseline_end_markers            = {'S 99'};
+% for inconsistency's sake, in the baseline condition you already label your
+% epochs here. For now, the pipeline assumes there was an eyes "open" and
+% an eyes "closed" condition; will be made more customizable in a future update
+cfg.prep_06.baseline_start_condition        = "open"; % assumes that data contains 
+% data from before first phase, in which participants had their eyes open
+cfg.prep_06.baseline_open_marker_prefixes   = {}; % triggers marking 
+% the start of open-eye baseline segments, e.g. "S 1", "S 11", "S 12"
+cfg.prep_06.baseline_closed_marker_prefixes = {}; % triggers marking the start of closed-eye baseline segments, e.g. "S 2", "S 21", "S 22"
+cfg.prep_06.baseline_end_markers            = {};
 
 % -------------------------------------------------------------------------
 % Artifact rejection
@@ -674,7 +727,8 @@ cfg.prep_06.initial_hard_threshold_uv           = 200;
 
 % Select exactly one final epoch-rejection method.
 %
-%   "erplab"       = use cfg.prep_06.erplab_epoch_rejection
+%   "erplab"       = use cfg.prep_06.erplab_epoch_rejection (what we agreed
+%   on in the kolloq)
 %   "faster_ptp"   = use cfg.prep_06.faster_ptp_epoch_rejection
 %   "mad_variance" = use cfg.prep_06.mad_z_threshold / mad_use_logvar
 %   "none"         = skip final epoch rejection
@@ -735,17 +789,27 @@ cfg.prep_06.faster_ptp_epoch_rejection.ptp_uV_thresh = 300;
 % -------------------------------------------------------------------------
 cfg.prep_06.mad_z_threshold = 3;
 cfg.prep_06.mad_use_logvar  = true;
+
 % -------------------------------------------------------------------------
-% Reject Participants if not enough Trials are present
-% replaces the faster_warn_if_reject_prop_gt setting wiht a more elaborate
-% version 
+% Reject datasets if too few valid epochs/trials remain.
+%
+% event_locked:
+%   checks minimum trial counts for the event-code groups listed below.
+%
+% baseline:
+%   checks minimum number of valid regepochs separately for open and closed.
+%   The code list below is ignored in baseline mode.
 % -------------------------------------------------------------------------
 cfg.prep_06.min_trials_per_condition_enable      = true; 
-cfg.prep_06.min_trials_per_condition_min_n       = 3; % min num of trials in each condition so participant is not excluded
+cfg.prep_06.min_trials_per_condition_min_n       = 3; % min num of trials in 
+% each condition so participant is not excluded. Suggestion: at least 10,
+% but you might need to be pragmatic. 
 cfg.prep_06.min_trials_per_condition_zero_tol_ms = 2; % jitter allowed around trigger
-cfg.prep_06.min_trials_per_condition_codes = { ...
-    'condition_name', {'S XXX','S XXY'}; ...
-    }; % adjust this to conditions in your setup that should have at least min_trials_per_condition
+cfg.prep_06.min_trials_per_condition_codes = {}; % adjust this to conditions 
+% in your setup that should have at least min_trials_per_condition
+% enter like this: { ...
+%    'condition_name', {'S XXX','S XXY'}; ...
+%    }
 
 % -------------------------------------------------------------------------
 % Summary tables

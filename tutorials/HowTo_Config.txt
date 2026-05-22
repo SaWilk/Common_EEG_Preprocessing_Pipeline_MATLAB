@@ -11,13 +11,13 @@ define your project and analysis Environment (i.e. "profiles")
 
 Project-identity:
 - The pipeline name should be recognisable for you and will appear in the log headers
-- The step-prefix is requiered to find the correct step-functions (so shouldn't be changed from "eeg", Right?)
+- The step-prefix is requiered to find the correct step-functions (only Change if you also Change the step function file names)
 - The masterlog prefix will be the start of your logfile name- make it succinct and informative.
 - The cfg.bids labels define the Output names of files and directory structure of the bids conversion in prep01
 
 Profiles:
 - profiles refer to analysis Environments (our defaults are pc, server_windows and hpc)
-- you only Need to set paths that you will use, e.g. if you have the raw data on your local machine and will do the bids-conversion only there, you can leave 'source*_root' empty
+- you only need to set paths that you will use, e.g. if you have the raw data on your local machine and will do the bids-conversion only there but the rest of the pipeline on the high performance cluster (hpc), you can leave 'source*_root' empty
 - you can set override paths in the same section, e.g. if you are testing the pipeline on a subject that is not saved in your profile_path
 
 Toolbox-paths:
@@ -29,7 +29,7 @@ GLOBAL SETTINGS:
 Overwrite behaviour: 
 - "delete" replaces output files if they already exist
 - "skip" checks if output for step-function exists already and skips the respective analysis step
-- "if_older_than" checks creation date of existent Output files and only replaces older ones, requires cutoff.
+- "if_older_than" checks creation date of existing Output files and only replaces older ones, requires cutoff date.
 
 Constants:
 - defines which sub-IDs are recognized (default: 3-digits), as well as log-file names
@@ -39,9 +39,9 @@ Subjects:
 - specify explicit subject list and/or minimum sub-ID
 - leave empty for pipeline to automatically pull subjects from root-directories
 
-Parallell:
-- run several subjects in parallel? (Default: true); "scrambles" command line output so not recommended for Troubleshooting
-- you can set a specific number how many analyses should run in parallel, or let the Pipeline determine available ressources automatically.
+Parallel:
+- run several subjects in parallel (Default: true); "scrambles" command line output so not recommended for Troubleshooting
+- you can set a specific number how many analyses should run in parallel, or let the Pipeline determine available ressources automatically (recommended).
 
 ______________________________
 STEP SETTINGS:

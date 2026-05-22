@@ -611,10 +611,16 @@ else
 end
 
 if isstring(sub_ids)
-    sub_ids = cellstr(sub_ids);
-end
-if ischar(sub_ids)
+    sub_ids = cellstr(sub_ids(:));
+elseif ischar(sub_ids)
     sub_ids = {sub_ids};
+elseif iscell(sub_ids)
+    sub_ids = sub_ids(:);
+    sub_ids = cellfun(@(x) char(string(x)), sub_ids, 'UniformOutput', false);
+elseif isnumeric(sub_ids)
+    sub_ids = arrayfun(@(x) sprintf('%03d', x), sub_ids(:), 'UniformOutput', false);
+else
+    sub_ids = cellstr(string(sub_ids(:)));
 end
 
 sub_ids = sub_ids(:);

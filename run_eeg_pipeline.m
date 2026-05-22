@@ -76,6 +76,24 @@ helpers = eeg_pipeline_helpers(bootstrap_log);
 % =========================================================================
 cfg = config_fn();
 
+% -------------------------------------------------------------------------
+% Internal runtime defaults
+% -------------------------------------------------------------------------
+if ~isfield(cfg, 'parallel') || ~isstruct(cfg.parallel)
+    cfg.parallel = struct();
+end
+
+if ~isfield(cfg.parallel, 'enable') || isempty(cfg.parallel.enable)
+    cfg.parallel.enable = false;
+end
+
+if ~isfield(cfg.parallel, 'force_workers')
+    cfg.parallel.force_workers = [];
+end
+
+cfg.parallel.pool_is_thread = false;  % internal runtime flag, set by runner
+cfg.parallel.pool_type      = "none"; % internal runtime flag, set by runner
+
 cfg.runner_file     = this_file;
 cfg.runner_root_dir = root_dir;
 cfg.config_name     = string(config_name);
@@ -171,7 +189,10 @@ helpers.log_msg(master_log, ...
     cfg.prep_06.epoch_start_s, ...
     cfg.prep_06.epoch_end_s, ...
     cfg.prep_06.do_initial_hard_threshold_rejection, ...
-    cfg.prep_06.initial_hard_threshold_uv, ... %   cfg.prep_06.do_baseline_correction, cfg.prep_06.base_start_ms, cfg.prep_06.base_end_ms, ...
+    cfg.prep_06.initial_hard_threshold_uv, ...
+    cfg.prep_06.do_baseline_correction, ...
+    cfg.prep_06.base_start_ms, ...
+    cfg.prep_06.base_end_ms, ...
     cfg.prep_06.max_reject_prop);
 
 % =========================================================================

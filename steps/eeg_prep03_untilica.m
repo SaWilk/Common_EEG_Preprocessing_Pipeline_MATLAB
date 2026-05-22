@@ -347,13 +347,15 @@ end
 bad_idx = [];
 bad_labels = {};
 
-switch lower(char(string(step_cfg.detect_bad_channels_mode)))
+badchan_method = lower(strtrim(string(step_cfg.bad_channel_detection_method)));
 
-    case 'auto'
+switch char(badchan_method)
+
+    case 'clean_rawdata'
         if ~isempty(eeg_idx)
             try
                 [emu_bad_idx, ~] = helpers.detect_bad_channels_emulation_style( ...
-                    EEG, eeg_idx, step_cfg.emu_flatline_sec, step_cfg.emu_channel_corr_threshold);
+                    EEG, eeg_idx, step_cfg.clean_rawdata_flatline_sec, step_cfg.clean_rawdata_channel_corr_threshold);
 
                 bad_idx = sort(unique([ ...
                     emu_bad_idx(:); ...
@@ -374,23 +376,23 @@ switch lower(char(string(step_cfg.detect_bad_channels_mode)))
             end
         end
 
-    case 'auto_rejchan'
+    case 'pop_rejchan'
         if isempty(eeg_idx)
             bad_idx = sort(unique([flat_idx(:); dead_eeg_idx(:)]));
         else
             try
                 [~, idx_prob] = pop_rejchan(EEG, 'elec', eeg_idx, ...
-                    'threshold', step_cfg.auto_badchan_z_threshold, ...
+                    'threshold', step_cfg.pop_rejchan_z_threshold, ...
                     'norm', 'on', 'measure', 'prob');
 
                 [~, idx_kurt] = pop_rejchan(EEG, 'elec', eeg_idx, ...
-                    'threshold', step_cfg.auto_badchan_z_threshold, ...
+                    'threshold', step_cfg.pop_rejchan_z_threshold, ...
                     'norm', 'on', 'measure', 'kurt');
 
                 [~, idx_spec] = pop_rejchan(EEG, 'elec', eeg_idx, ...
-                    'threshold', step_cfg.auto_badchan_z_threshold, ...
+                    'threshold', step_cfg.pop_rejchan_z_threshold, ...
                     'norm', 'on', 'measure', 'spec', ...
-                    'freqrange', step_cfg.auto_badchan_freqrange_hz);
+                    'freqrange', step_cfg.pop_rejchan_freqrange_hz);
 
                 bad_idx = sort(unique([ ...
                     idx_prob(:); ...
@@ -413,15 +415,13 @@ switch lower(char(string(step_cfg.detect_bad_channels_mode)))
             end
         end
 
-    case 'manual'
-        error('prep03_untilica: detect_bad_channels_mode="manual" is not allowed in pipeline mode.');
-
     case 'off'
         bad_idx = sort(unique([flat_idx(:); dead_eeg_idx(:)]));
         bad_idx = intersect(bad_idx, eeg_idx);
 
     otherwise
-        error('prep03_untilica: unsupported detect_bad_channels_mode: %s', string(step_cfg.detect_bad_channels_mode));
+error('prep03_untilica: unsupported bad_channel_detection_method: %s', ...
+    string(step_cfg.bad_channel_detection_method));
 end
 
 if ~isempty(bad_idx)
@@ -796,16 +796,15 @@ step_cfg.ekg_channel_labels     = {'EKG'};
 step_cfg.downsample_hz = 250;
 
 % Bad channel detection
-step_cfg.detect_bad_channels_mode = "auto";   % "auto" | "auto_rejchan" | "manual" | "off"
-step_cfg.auto_badchan_z_threshold  = 3.29;
-step_cfg.auto_badchan_freqrange_hz = [1 125];
+step_cfg.bad_channel_detection_method = "clean_rawdata"; % "clean_rawdata" | "pop_rejchan" | "off"
 
-% Emulation-style bad-channel detection
-step_cfg.emu_flatline_sec           = 5;
-step_cfg.emu_channel_corr_threshold = 0.80;
+% Used when bad_channel_detection_method = "clean_rawdata"
+step_cfg.clean_rawdata_flatline_sec           = 5;
+step_cfg.clean_rawdata_channel_corr_threshold = 0.80;
 
-step_cfg.flag_flat_channels_as_bad     = true;
-step_cfg.flat_channel_variance_epsilon = 0;
+% Used when bad_channel_detection_method = "pop_rejchan"
+step_cfg.pop_rejchan_z_threshold  = 3.29;
+step_cfg.pop_rejchan_freqrange_hz = [1 125];
 
 % Interpolation timing
 step_cfg.interpolate_bad_channels_before_ica = true;
@@ -818,7 +817,7 @@ step_cfg.mastoid_channel_labels    = {'T9','T10'};
 
 % Filters
 step_cfg.highpass_hz          = 0.01;
-step_cfg.lowpass_hz           = 30;
+step_cfg.lowpass_hz           = 40;
 step_cfg.ica_prep_highpass_hz = 1;
 
 % Line noise
