@@ -1,0 +1,124 @@
+This is a step-by-step guide to setting up the config script for your analyses.
+
+The Pipeline is set up in a way that you only need to run the function run_eeg_pipeline(), through which you pass your config-file and optionally specific subjects.
+
+______________________________
+FIRST THINGS FIRST: if you rename the config file, you also Need to Change the function name at the top of the script.
+
+______________________________
+PROJECT AND MACHINE PROFILE(S):
+define your project and analysis Environment (i.e. "profiles")
+
+Project-identity:
+- The pipeline name should be recognisable for you and will appear in the log headers
+- The step-prefix is requiered to find the correct step-functions (so shouldn't be changed from "eeg", Right?)
+- The masterlog prefix will be the start of your logfile name- make it succinct and informative.
+- The cfg.bids labels define the Output names of files and directory structure of the bids conversion in prep01
+
+Profiles:
+- profiles refer to analysis Environments (our defaults are pc, server_windows and hpc)
+- you only Need to set paths that you will use, e.g. if you have the raw data on your local machine and will do the bids-conversion only there, you can leave 'source*_root' empty
+- you can set override paths in the same section, e.g. if you are testing the pipeline on a subject that is not saved in your profile_path
+
+Toolbox-paths:
+- tell the Pipeline where to find the required toolboxes for each profile
+
+______________________________
+GLOBAL SETTINGS:
+
+Overwrite behaviour: 
+- "delete" replaces output files if they already exist
+- "skip" checks if output for step-function exists already and skips the respective analysis step
+- "if_older_than" checks creation date of existent Output files and only replaces older ones, requires cutoff.
+
+Constants:
+- defines which sub-IDs are recognized (default: 3-digits), as well as log-file names
+- sets the Location where logs are saved (default: creates log Folder alongside step-function outputs)
+
+Subjects:
+- specify explicit subject list and/or minimum sub-ID
+- leave empty for pipeline to automatically pull subjects from root-directories
+
+Parallell:
+- run several subjects in parallel? (Default: true); "scrambles" command line output so not recommended for Troubleshooting
+- you can set a specific number how many analyses should run in parallel, or let the Pipeline determine available ressources automatically.
+
+______________________________
+STEP SETTINGS:
+
+Step toggles: 
+- set 'run' true for each preprocessing step you want to run
+- set 'overwrite_mode' for each step individually, if you want to deviate from global Setting. Otherwise leave empty ("")
+- Note: by default, if you rerun intermediate steps (i.e., if output files already exist), subsequent steps will be toggled to run. This prevents inconsistent Outputs. If you want to only rerun one step (e.g. for Troubleshooting) set cfg.steps.enable_downstream_rerun = false
+
+------------------------------
+STEP 01: BIDS FORMATTING
+- set which data (eeg/bahav) to copy and optional EEGLAB export functions, defaults work 
+- define regexp Patterns for raw filenames, so Pipeline can find datafiles. !! IF THIS IS NOT CORRECT THE PIPELINE CANNOT RUN !!
+- raw_eeg_regex sets the pattern prep01 Looks for to copy data into BIDS conforming file structure
+- existing_bids_vhdr_regex sets the filename pattern the function looks for if files were not re-organized by Pipeline
+
+------------------------------
+STEP 02: TRIGGERFIX
+- rename triggers/Events and (optionally) compare to behaviour events-log 
+- currently designed for fear conditioning paradigm
+- will be updated to be more generic
+- Details coming soon…
+
+------------------------------
+STEP 03: UNTIL ICA --> main preprocessing step: filters, detects and interpolates bad channels in preparation for ICA
+- set start/stop trigger names, if data is to be cropped (not done by default)
+- make sure that your AUX/EOG channel labels are listed correctly (though not case-sensitive), otherwise they might be interpreted as EEG data, which will mess up your ICA
+- high-/lowpass filter Settings are highly dependent on your Research Question and Analysis Parameters, e.g. ERP vs. time-frequency, etc.; therefore our defaults are not prescriptive
+
+Defaults:
+- downsampling frequency: 250Hz, Note: Sampling rate needs to be at least 4 times the low-pass filter cutoff frequency, otherwise aliasing can occur
+- Highpass filter: 0.1Hz
+- Lowpass filter: 40Hz
+- automatic bad channel detection: channel variance/z-score > 2.5, flatline ≥ 5 s or channel correlation < 0.80; spherical interpolation before ICA for EEG-channels, dead/invalid AUX channels are removed
+- linenoise removal via cleanline (EEGLab)
+- epoch rejection via ERPLab: exclude voltage over 300uV, sample-to-sample voltage jumps over 75, flatlines (within 0.5uV) of over 200ms
+
+------------------------------
+STEP 04: ICA
+- choose ICA method (currently only one Option)
+
+------------------------------
+STEP 05: AFTER ICA / ICLABEL:
+- set ICLabel thresholds (https://labeling.ucsd.edu/tutorial)
+- decide which summary tables you want as output (still work in progress as of May 2026)
+
+------------------------------
+STEP 06: EPOCHING + FINAL ARTIFACT REJECTION:
+- choose one of two modes for epoching: baseline or event-locked
+	event-locked:
+	- if you have task data and want to cut epochs based on event-triggers
+
+	baseline:
+	- for continuous recording of baseline/resting-state data
+	- assumes alternating eyes open and eyes closed phases;
+
+- Coming soon: short description of rejection options
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+ 
+
+
+
+

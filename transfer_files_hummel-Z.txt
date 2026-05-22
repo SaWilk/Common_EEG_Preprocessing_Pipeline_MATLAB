@@ -1,3 +1,5 @@
+NOTE: this process is extremely slow, it is easier to use the download function in MobaXterm.
+
 1. On Hummel: cd to Directory where files are saved
 2. type module load smbclient
 3. for K: "smbclient -U <username>@uni-hamburg.de //uhhdisk.uni-hamburg.de/home"
