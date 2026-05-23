@@ -74,6 +74,7 @@ helpers.safe_save_set   = @safe_save_set_impl;
 helpers.safe_load_set   = @safe_load_set_impl;
 helpers.find_bids_vhdr  = @find_bids_vhdr_impl;
 helpers.safe_load_bv    = @safe_load_bv_impl;
+helpers.getfield_safe   = @getfield_safe_impl;
 
 % -------------------------------------------------------------------------
 % EEG comment / trigger helpers
@@ -1722,6 +1723,14 @@ if exist(vhdr_dir, 'dir') ~= 7
     error('safe_load_bv: directory not found: %s', vhdr_dir);
 end
 
+function value = getfield_safe_impl(S, field_name, default_value)
+if isstruct(S) && isfield(S, field_name)
+    value = S.(field_name);
+else
+    value = default_value;
+end
+end
+
 full_path = fullfile(vhdr_dir, vhdr_name);
 if exist(full_path, 'file') ~= 2
     error('safe_load_bv: file not found: %s', full_path);
@@ -3025,36 +3034,124 @@ info.rejected_epochs = bad_epochs;
 end
 
 function [EEG, info] = apply_shared_epoch_rejection_impl(EEG, reject_cfg)
+% APPLY_SHARED_EPOCH_REJECTION_IMPL
+%
+% Shared FASTER/PTP epoch rejection for already epoched EEGLAB datasets.
+%
+% Used by:
+%   - Step 03 ICA-prep rejection when method="faster_ptp"
+%   - Step 06 final epoch rejection when method="faster_ptp"
+%
+% Logic:
+%   1) optional FASTER epoch_properties outlier detection
+%   2) optional peak-to-peak amplitude threshold
+%   3) reject union of bad epochs
+
 info = struct();
 info.did_apply       = false;
-info.n_before        = EEG.trials;
+info.n_before        = 0;
 info.n_rejected      = 0;
+info.n_kept          = 0;
 info.rejected_epochs = [];
 
-if EEG.trials < 1 || ~reject_cfg.enable
+info.use_faster      = false;
+info.have_faster     = false;
+info.use_ptp         = false;
+info.use_robust_z    = true;
+info.faster_z        = NaN;
+info.ptp_uV_thresh   = NaN;
+
+info.n_bad_faster    = 0;
+info.n_bad_ptp       = 0;
+
+if nargin < 2 || isempty(reject_cfg) || ~isstruct(reject_cfg)
     return;
 end
 
-idx_eeg = find(strcmpi({EEG.chanlocs.type}, 'EEG'));
+if ~isfield(EEG, 'trials') || isempty(EEG.trials)
+    return;
+end
+
+info.n_before = EEG.trials;
+info.n_kept   = EEG.trials;
+
+enable = true;
+if isfield(reject_cfg, 'enable') && ~isempty(reject_cfg.enable)
+    enable = logical(reject_cfg.enable);
+end
+
+if EEG.trials < 1 || ~enable
+    return;
+end
+
+if ~isfield(EEG, 'chanlocs') || isempty(EEG.chanlocs)
+    return;
+end
+
+if isfield(EEG.chanlocs, 'type')
+    idx_eeg = find(strcmpi({EEG.chanlocs.type}, 'EEG'));
+else
+    idx_eeg = 1:EEG.nbchan;
+end
+
+idx_eeg = idx_eeg(:)';
 
 if isempty(idx_eeg)
     return;
 end
 
+use_faster = false;
+if isfield(reject_cfg, 'use_faster') && ~isempty(reject_cfg.use_faster)
+    use_faster = logical(reject_cfg.use_faster);
+end
+
+use_ptp = false;
+if isfield(reject_cfg, 'use_ptp') && ~isempty(reject_cfg.use_ptp)
+    use_ptp = logical(reject_cfg.use_ptp);
+end
+
+use_robust_z = true;
+if isfield(reject_cfg, 'use_robust_z') && ~isempty(reject_cfg.use_robust_z)
+    use_robust_z = logical(reject_cfg.use_robust_z);
+end
+
+faster_z = 3;
+if isfield(reject_cfg, 'faster_z') && ~isempty(reject_cfg.faster_z)
+    faster_z = double(reject_cfg.faster_z);
+end
+
+ptp_uV_thresh = 300;
+if isfield(reject_cfg, 'ptp_uV_thresh') && ~isempty(reject_cfg.ptp_uV_thresh)
+    ptp_uV_thresh = double(reject_cfg.ptp_uV_thresh);
+end
+
+info.use_faster    = use_faster;
+info.use_ptp       = use_ptp;
+info.use_robust_z  = use_robust_z;
+info.faster_z      = faster_z;
+info.ptp_uV_thresh = ptp_uV_thresh;
+
 bad_faster = false(EEG.trials, 1);
 bad_ptp    = false(EEG.trials, 1);
 
-have_faster = (exist('epoch_properties', 'file') == 2);
+% -------------------------------------------------------------------------
+% FASTER epoch_properties
+% -------------------------------------------------------------------------
+info.have_faster = (exist('epoch_properties', 'file') == 2);
 
-if reject_cfg.use_faster && have_faster
+if use_faster && info.have_faster
+
     props = epoch_properties(EEG, idx_eeg);
 
-    if ~isempty(props) && size(props, 1) ~= EEG.trials
+    if ~isempty(props) && size(props, 1) ~= EEG.trials && size(props, 2) == EEG.trials
         props = props.';
     end
 
-    if size(props, 1) == EEG.trials
-        if reject_cfg.use_robust_z
+    if ~isempty(props) && size(props, 1) == EEG.trials
+
+        props = double(props);
+
+        if use_robust_z
             med = median(props, 1, 'omitnan');
             madv = median(abs(props - med), 1, 'omitnan');
             denom = 1.4826 .* madv;
@@ -3067,18 +3164,26 @@ if reject_cfg.use_faster && have_faster
             zmat = (props - mu) ./ sd;
         end
 
-        bad_faster = any(abs(zmat) > reject_cfg.faster_z, 2);
+        bad_faster = any(abs(zmat) > faster_z, 2);
     end
 end
 
-if reject_cfg.use_ptp
+% -------------------------------------------------------------------------
+% Peak-to-peak threshold
+% -------------------------------------------------------------------------
+if use_ptp
     data = double(EEG.data(idx_eeg, :, :));
-    ptp  = squeeze(max(data, [], 2) - min(data, [], 2));
-    bad_ptp = any(ptp > reject_cfg.ptp_uV_thresh, 1)';
+    ptp  = max(data, [], 2) - min(data, [], 2);
+    ptp  = reshape(ptp, numel(idx_eeg), EEG.trials);
+
+    bad_ptp = any(ptp > ptp_uV_thresh, 1)';
 end
 
 bad = bad_faster | bad_ptp;
 bad_epochs = find(bad);
+
+info.n_bad_faster = sum(bad_faster);
+info.n_bad_ptp    = sum(bad_ptp);
 
 if ~isempty(bad_epochs)
     EEG = pop_rejepoch(EEG, bad_epochs, 0);
@@ -3087,7 +3192,14 @@ end
 
 info.did_apply       = true;
 info.n_rejected      = numel(bad_epochs);
-info.rejected_epochs = bad_epochs;
+info.n_kept          = EEG.trials;
+info.rejected_epochs = bad_epochs(:)';
+
+if ~isfield(EEG, 'etc') || isempty(EEG.etc)
+    EEG.etc = struct();
+end
+
+EEG.etc.shared_epoch_rejection = info;
 end
 
 function [EEG_out, info] = apply_erplab_epoch_rejection_impl( ...

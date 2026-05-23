@@ -314,7 +314,7 @@ cfg.prep_01 = struct();
 cfg.prep_01.do_eeg = true;  % copy/rename raw BrainVision EEG into BIDS
 cfg.prep_01.do_beh = false; % copy project-specific CF behavior files # HOWTO: what are CF files? specific format needed?
 
-cfg.prep_01.try_eeglab_bids_export           = true; % additionally try pop_exportbids after copying
+cfg.prep_01.try_eeglab_bids_export           = false; % additionally try pop_exportbids after copying; doesn't work, leave disabled
 cfg.prep_01.write_readme_if_exporter_did_not = true; % write README if exporter did not create dataset-level description
 
 cfg.prep_01.copy_eeg_sidecar_log_to_events = false; % copy project-specific CF log as *_events.log
@@ -512,6 +512,27 @@ cfg.prep_03.flat_channel_variance_epsilon = 0;
 cfg.prep_03.interpolate_bad_channels_before_ica = true;
 cfg.prep_03.interp_method = 'spherical';
 
+% Step 03 debug/intermediate exports.
+% Master switch. Default false = no Step 03 intermediate debug files.
+% If true, the individual switches below decide which stages are written.
+step_cfg.save_intermediate_steps = false;
+
+% Save after final bad EEG channel list has been applied.
+% In this pipeline, bad EEG channels are usually interpolated rather than
+% permanently removed.
+step_cfg.save_intermediate_after_bad_channel_rejection = true;
+
+% Save after rereferencing.
+step_cfg.save_intermediate_after_rereference = true;
+
+% Save after high-pass filtering.
+step_cfg.save_intermediate_after_highpass = true;
+
+% Save after low-pass filtering.
+step_cfg.save_intermediate_after_lowpass = true;
+
+step_cfg.intermediate_savemode = 'twofiles';
+
 % -------------------------------------------------------------------------
 % Re-Referencing
 % -------------------------------------------------------------------------
@@ -592,7 +613,30 @@ cfg.prep_03.ica_prep_max_reject_prop = 1.00;
 cfg.prep_06.mad_z_threshold = 3;
 cfg.prep_06.mad_use_logvar  = true;
 
-%# TODO: add FASTER settings for ICA-prep epoch rejection if we decide to keep that method?
+% -------------------------------------------------------------------------
+% FASTER/PTP ICA-prep epoch rejection
+% Only used when cfg.prep_03.ica_prep_epoch_rejection_method == "faster_ptp".
+%
+% ICA-prep rejection should usually be more lenient than final Step 06
+% rejection because it only cleans the temporary ICA-training dataset.
+%
+% To use FASTER only: set use_faster=true and use_ptp=false.
+% To use PTP only:    set use_faster=false and use_ptp=true.
+% To use both:        set both to true.
+% -------------------------------------------------------------------------
+cfg.prep_03.ica_prep_faster_ptp_epoch_rejection = struct();
+
+cfg.prep_03.ica_prep_faster_ptp_epoch_rejection.use_faster   = true;
+cfg.prep_03.ica_prep_faster_ptp_epoch_rejection.faster_z     = 4;
+cfg.prep_03.ica_prep_faster_ptp_epoch_rejection.use_robust_z = true;
+
+cfg.prep_03.ica_prep_faster_ptp_epoch_rejection.use_ptp       = true;
+cfg.prep_03.ica_prep_faster_ptp_epoch_rejection.ptp_uV_thresh = 800;
+
+% 1.00 means disabled. Example: 0.50 would stop Step 03 if >50% of
+% ICA-training epochs are removed.
+cfg.prep_03.ica_prep_faster_ptp_epoch_rejection.max_reject_prop = 1.00;
+
 % =========================================================================
 % STEP 04: ICA
 % =========================================================================

@@ -487,13 +487,13 @@ cfg.prep_03.downsample_hz = 250; % downsample frequency
 % Filter settings
 % -------------------------------------------------------------------------
 cfg.prep_03.highpass_hz          = 0.01; % set lower if you are interested in low-frequency components
-cfg.prep_03.lowpass_hz           = 45; % set higher if you are interested in higher frequencies
+cfg.prep_03.lowpass_hz           = 30; % set higher if you are interested in higher frequencies
 cfg.prep_03.ica_prep_highpass_hz = 1; % only for the ica training set; leave if possible as ICA is sensitive towards slow drifts
 
 % -------------------------------------------------------------------------
 % Bad channel detection and interpolation
 % -------------------------------------------------------------------------
-cfg.prep_03.bad_channel_detection_method = "clean_rawdata"; % "clean_rawdata" | "pop_rejchan" | "off"
+cfg.prep_03.bad_channel_detection_method = "pop_rejchan"; % "clean_rawdata" | "pop_rejchan" | "off"
 % Note: clean_rawdata used to be called "auto"
 
 % Only used for bad_channel_detection_method = "clean_rawdata"
@@ -511,6 +511,36 @@ cfg.prep_03.flat_channel_variance_epsilon = 0;
 % Applied to final bad EEG channel list
 cfg.prep_03.interpolate_bad_channels_before_ica = true;
 cfg.prep_03.interp_method = 'spherical';
+
+% -------------------------------------------------------------------------
+% Step 03 debug/intermediate exports
+% -------------------------------------------------------------------------
+% Master switch. Default false = no Step 03 intermediate debug files.
+% If true, the individual switches below decide which stages are written.
+%
+% Outputs are written to the normal Step 03 output folder:
+%   <derivatives_root>/02_until_ica/sub-XXX/
+%
+% These files are for debugging only and are not used by downstream steps.
+cfg.prep_03.save_intermediate_steps = false;
+
+% Save after final bad EEG channel list has been applied.
+% Note: in this pipeline bad EEG channels are usually interpolated, not
+% permanently removed. So this is effectively "after bad-channel
+% detection/interpolation".
+cfg.prep_03.save_intermediate_after_bad_channel_rejection = true;
+
+% Save after Step 03 rereferencing.
+cfg.prep_03.save_intermediate_after_rereference = true;
+
+% Save after Step 03 high-pass filter.
+cfg.prep_03.save_intermediate_after_highpass = true;
+
+% Save after Step 03 low-pass filter.
+cfg.prep_03.save_intermediate_after_lowpass = true;
+
+% Savemode for debug/intermediate Step 03 files.
+cfg.prep_03.intermediate_savemode = 'twofiles';
 
 % -------------------------------------------------------------------------
 % Re-Referencing
@@ -533,7 +563,8 @@ cfg.prep_03.mastoid_channel_labels    = {'T9','T10'};
 cfg.prep_03.line_noise_method         = "pop_cleanline"; % "pop_cleanline" | "off"
 cfg.prep_03.line_noise_frequencies_hz = [50 100]; % in europe, set to [60 120] in US
 
-cfg.prep_03.ica_prep_epoch_rejection_method = "erplab"; % "erplab" | "faster_ptp" | "mad_variance" | "none"
+% only for the ICA training dataset which will not be kept
+cfg.prep_03.ica_prep_epoch_rejection_method = "faster_ptp"; % "erplab" | "faster_ptp" | "mad_variance" | "none"
 
 cfg.prep_03.pop_cleanline_bandwidth_hz      = 4;
 cfg.prep_03.pop_cleanline_p_value           = 0.01;
@@ -592,7 +623,30 @@ cfg.prep_03.ica_prep_max_reject_prop = 1.00;
 cfg.prep_06.mad_z_threshold = 3;
 cfg.prep_06.mad_use_logvar  = true;
 
-%# TODO: add FASTER settings for ICA-prep epoch rejection if we decide to keep that method?
+% -------------------------------------------------------------------------
+% FASTER/PTP ICA-prep epoch rejection
+% Only used when cfg.prep_03.ica_prep_epoch_rejection_method == "faster_ptp".
+%
+% ICA-prep rejection should usually be more lenient than final Step 06
+% rejection because it only cleans the temporary ICA-training dataset.
+%
+% To use FASTER only: set use_faster=true and use_ptp=false.
+% To use PTP only:    set use_faster=false and use_ptp=true.
+% To use both:        set both to true.
+% -------------------------------------------------------------------------
+cfg.prep_03.ica_prep_faster_ptp_epoch_rejection = struct();
+
+cfg.prep_03.ica_prep_faster_ptp_epoch_rejection.use_faster   = true;
+cfg.prep_03.ica_prep_faster_ptp_epoch_rejection.faster_z     = 4;
+cfg.prep_03.ica_prep_faster_ptp_epoch_rejection.use_robust_z = true;
+
+cfg.prep_03.ica_prep_faster_ptp_epoch_rejection.use_ptp       = true;
+cfg.prep_03.ica_prep_faster_ptp_epoch_rejection.ptp_uV_thresh = 800;
+
+% 1.00 means disabled. Example: 0.50 would stop Step 03 if >50% of
+% ICA-training epochs are removed.
+cfg.prep_03.ica_prep_faster_ptp_epoch_rejection.max_reject_prop = 1.00;
+
 % =========================================================================
 % STEP 04: ICA
 % =========================================================================
@@ -732,7 +786,7 @@ cfg.prep_06.initial_hard_threshold_uv           = 200;
 %   "mad_variance" = use cfg.prep_06.mad_z_threshold / mad_use_logvar
 %   "none"         = skip final epoch rejection
 %
-cfg.prep_06.epoch_rejection_method = "erplab";  % "erplab" | "faster_ptp" | "mad_variance" | "none"
+cfg.prep_06.epoch_rejection_method = "faster_ptp";  % "erplab" | "faster_ptp" | "mad_variance" | "none"
 
 % Subject-level exclusion after epoch rejection.
 % 1 means disabled. Example: 0.50 would exclude subjects with >50% rejected epochs.
@@ -780,7 +834,7 @@ cfg.prep_06.faster_ptp_epoch_rejection.faster_z      = 3;
 cfg.prep_06.faster_ptp_epoch_rejection.use_robust_z  = true;
 
 cfg.prep_06.faster_ptp_epoch_rejection.use_ptp       = true;
-cfg.prep_06.faster_ptp_epoch_rejection.ptp_uV_thresh = 300;
+cfg.prep_06.faster_ptp_epoch_rejection.ptp_uV_thresh = 200;
 
 % -------------------------------------------------------------------------
 % MAD variance epoch rejection
