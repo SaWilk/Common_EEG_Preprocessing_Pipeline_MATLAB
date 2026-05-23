@@ -2,7 +2,7 @@ How to run the EEG preprocessing Pipeline on Hummel HPC
 By Saskia Wilken
 Creation date: 20.01.2026
 
-Important note: After the pipeline has finished its run, if using MATLAB directly without a SLURM batch (currently that is the only possible option, so yes, we are doing this), please shut it down ASAP by logging on and typing quit to close it. Otherwise it uses up CPU on the hummel hp cluster and the admins really do not like that. Don't upset the admins... :)
+Important note: After the pipeline has finished its run, if using MATLAB directly without a SLURM batch (currently that is the only possible option, so yes, you are doing this), please shut it down ASAP by logging on and typing quit to close it. Otherwise it uses up CPU on the hummel hp cluster and the admins really do not like that. Don't upset the admins... :)
 
 Step 1 (only once): Setup Connection
 1. Ask for access at hpc@uni-hamburg.de with your Professor in cc (this is required to verify you are really you)
