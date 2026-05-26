@@ -6,25 +6,31 @@ Important note: After the pipeline has finished its run, if using MATLAB directl
 
 Step 1 (only once): Setup Connection
 1. Ask for access at hpc@uni-hamburg.de with your Professor in cc (this is required to verify you are really you)
-2. Install MobaXterm 
+2. Install MobaXterm, which is a Client for connecting to remote machines from windows https://mobaxterm.mobatek.net/
 3. Generate a public/private key pair using MobaXGen
-4. Once Access is initialized by the HPC Team, follow instructions in presentation "UHH cluster from Windows" Silde 3-9. 
-Only difference: nowadays we work either on hummel2 or hummel3, not hummel1 like in the power Point
+4. Once Access is initialized by the HPC Team, start MobaXterm.
+	4.1 Click "session" in the top left corner.
+	4.2 Select "SSH Connection" in the top left Corner
+	4.3 Set the "Basic SSH Settings": Remote Host is hummel2.rrz.uni-hamburg.de (hummel3 is also fine) and the username is your UHH username. Port is 22. 
+	4.4 Set the "Advanced SSH Settings": CHeck-mark at X11 Forwarding, Compression, "Remote Environment": Interactive Shell. Enter as "Execute command" 	ssh front1 and "SSH-browser type"; SFTP protocol. Check "use private key" and specify the Location on your Computer where it is located. DO not set a check mark anywhere else
+	4.5 Under the tab "Bookmark Settings" set a "Session Name"; this is how the shortcut for establishing the session will be named for you, so that you 	recogntize immediately which session you are Opening. 
+	4.6 Click "Save"
+	4.7 Double-Click on the Connection you want to open to start the session. Enter Passphrase as prompted
+	4.8 once you opened a Connection, to the left you see a normal browser window that works very similar to your Windows Explorer (adress in the top Panel, drag & dropm works, double click to navigate through Folders, etc.) On the Right is the terminal window where the following commands will be entered.
 
 Step 2 (only once): Adjust MATLAB scripts and set up environment
 1. Set the paths in the eeg_pipeline_config.m to wherever the script and Input/Output Folders are located on hummel
-2. Unlike in the presentation, the Folder we Need our data in is under /beegfs/u/<username>/ -> put the BIDS-formatted 
-raw data here in a new Folder /sourcedata
+2. Unlike in the presentation, the Folder we Need our data in is under /beegfs/u/<username>/ -> put the raw data here in a new Folder /sourcedata (BeeGFS stands for Bee Global File System)
 3. then, put the pipeline scripts and steps in the /beegfs/u/<username>/ folder
 
 Step 3 (every time): Move to the Right place 
-1. Log into Hummel2/3 by using hte shortcut you creaetd in Step 1.
-2. use the command ssh front1 in the terminal to move away from the welcome node into a workable node. 
+1. Log into Hummel2/3 by using the shortcut you created in Step 1.
+2. if the command line says something ending on -front1, you're good to go; otherwise type ssh front1
 3. Enter module load hummel1 to load the hummel1 Setup that contains executable MATLAB until 2023a
 4. Enter hummel1 to switch to within the Environment you just loaded. now you can use matlab etc. if you want to go back to 
 hummel2/3, type quit
 
-Step: 4 (Optional - you can also edit it in the MATLAB Pipeline config; Only once unless you want to Change something) Setup Environment
+Step: 4 (Optional - you can skip it if you setup everything in your MATLAB Pipeline config; Only once unless you want to Change something): Setup Environment
 1. load up nano by typing module load nano
 2. create a file that contains your environment Defaults by typing nano ~/.bashrc
 3. inside the editor, type: 
