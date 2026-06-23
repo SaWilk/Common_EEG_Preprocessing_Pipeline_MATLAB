@@ -322,7 +322,29 @@ else
     end
 end
 
+
+%% ========================================================================
+% High-Pass Filter before bad-channel detection (EEG + EOG ONLY)
+% =========================================================================
 [eeg_idx, eog_idx, ~] = helpers.get_channel_indices_by_type(EEG);
+filter_idx = sort(unique([eeg_idx(:); eog_idx(:)]));
+
+EEG = helpers.apply_filter_to_subset_only(EEG, filter_idx, ...
+    step_cfg.highpass_hz, [], 'prep03_untilica high-pass');
+
+%% ========================================================================
+%  OPTIONAL DEBUG SAVE: AFTER HIGH-PASS
+% ========================================================================
+if step_cfg.save_intermediate_steps && step_cfg.save_intermediate_after_highpass
+    helpers.save_intermediate_set( ...
+        EEG, ...
+        prep03_out_dir_untilica, ...
+        string(run_base_name) + "_stage-prep03_after-highpass", ...
+        "delete", ...
+        cfg, ...
+        step_cfg.intermediate_savemode, ...
+        helpers);
+end
 
 %% ========================================================================
 %  FLAT / INVALID EEG CHANNELS
@@ -526,27 +548,11 @@ end
 
 
 %% ========================================================================
-%  FILTERING + LINE NOISE (EEG + EOG ONLY)
+%  LINE NOISE (EEG + EOG ONLY)
 % ========================================================================
 [eeg_idx, eog_idx, ~] = helpers.get_channel_indices_by_type(EEG);
 filter_idx = sort(unique([eeg_idx(:); eog_idx(:)]));
 
-EEG = helpers.apply_filter_to_subset_only(EEG, filter_idx, ...
-    step_cfg.highpass_hz, [], 'prep03_untilica high-pass');
-
-%% ========================================================================
-%  OPTIONAL DEBUG SAVE: AFTER HIGH-PASS
-% ========================================================================
-if step_cfg.save_intermediate_steps && step_cfg.save_intermediate_after_highpass
-    helpers.save_intermediate_set( ...
-        EEG, ...
-        prep03_out_dir_untilica, ...
-        string(run_base_name) + "_stage-prep03_after-highpass", ...
-        "delete", ...
-        cfg, ...
-        step_cfg.intermediate_savemode, ...
-        helpers);
-end
 
 line_noise_applied = false;
 if string(step_cfg.line_noise_method) == "pop_cleanline"
