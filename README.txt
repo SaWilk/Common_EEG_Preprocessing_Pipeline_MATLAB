@@ -3,7 +3,7 @@ This EEG preprocessing Pipeline is intended to provide a Standard preprocessing 
 
 Before you start:
 This pipeline requires EEGLab (https://eeglab.org/) with the ERPLAB Extension by default, which in turn depend on the following MATALB toolboxes: Signal processing toolbox and Statistics toolbox. 
-Depending on the preprocessing options you choose, you may also need AMICA, cleanline or FASTER (as alternative to ERPLAB).
+Depending on the preprocessing options you choose, you may need to additionally install AMICA, cleanline or FASTER (as alternative to ERPLAB).
 
 How to use: 
 open eeg_pipeline_config. Take your time to adjust the paths and decide on the preprocessing settings that suit your analysis. Note: if you change the name of the file, you also need to change the name of the function at the top of the script.
