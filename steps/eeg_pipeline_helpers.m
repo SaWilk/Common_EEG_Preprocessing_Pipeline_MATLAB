@@ -2868,10 +2868,12 @@ function [EEG, did_apply] = apply_pop_cleanline_to_subset_impl(EEG, subset_indic
 did_apply = false;
 
 if isempty(subset_indices)
+    helpers.log_msg_default('prep03_untilica: WARNING no channel indices available for pop_cleanline.');
     return;
 end
 
 if exist('pop_cleanline', 'file') ~= 2
+    helpers.log_msg_default('prep03_untilica: WARNING pop_cleanline was not found on path.');
     return;
 end
 
