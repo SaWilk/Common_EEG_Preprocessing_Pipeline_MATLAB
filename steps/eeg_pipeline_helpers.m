@@ -2187,13 +2187,17 @@ end
 event_times = [];
 event_codes = strings(0,1);
 
+% identify events and their timings matching defined triggers
 for k = 1:numel(EEG.event)
-    code = normalize_trigger_type_impl(EEG.event(k).type);
+    code = normalize_trigger_type_impl(EEG.event(k).type); % make sure that triggers are understood by script (?)
 
+    %disregard evnts added by EEGLab, called 'boundary'
     if strcmpi(code, 'boundary')
         continue;
     end
 
+    %only add events (+timing) if they match open, closed or end-markers as
+    %defined in config
     if matches_any_prefix_impl(code, step_cfg.baseline_open_marker_prefixes) || ...
             matches_any_prefix_impl(code, step_cfg.baseline_closed_marker_prefixes) || ...
             matches_any_exact_impl(code, step_cfg.baseline_end_markers)
@@ -2207,6 +2211,7 @@ if isempty(event_times)
     error('No open/closed segmentation markers found in baseline recording.');
 end
 
+% sort events chronologically
 [event_times, sort_ix] = sort(event_times);
 event_codes = event_codes(sort_ix);
 
