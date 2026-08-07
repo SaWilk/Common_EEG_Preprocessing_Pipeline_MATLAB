@@ -748,6 +748,8 @@ cfg.prep_06.regepoch_length_sec = 10; % length of epochs to be created
 cfg.prep_06.regepoch_step_sec = 10; % seconds between starts of consecutive 
 % regepochs; same as length = non-overlapping epochs without gaps
 
+cfg.prep_06.baseline_has_conditions = false; % indicates if baseline data have conditions (e.g. eyes open/closed)
+
 % for inconsistency's sake, in the baseline condition you already label your
 % epochs here. For now, the pipeline assumes there was an eyes "open" and
 % an eyes "closed" condition; will be made more customizable in a future update

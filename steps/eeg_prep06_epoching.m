@@ -315,10 +315,27 @@ try
                 run_summary_rows = row_event_locked;
 
             case MODE_BASELINE
+%% #TODO: check if this works with the new baseline_has_conditions flag
+            if isfield(step_cfg, 'baseline_has_conditions') && ~step_cfg.baseline_has_conditions
 
+                EEG_open = eeg_regepochs(EEG_ref, ...
+                    'recurrence', step_cfg.regepoch_step_sec, ...
+                    'limits', [0 step_cfg.regepoch_length_sec], ...
+                    'rmbase', NaN);
+
+                EEG_open.setname = sprintf('%s_resting_regepochs', char(run_base));
+                EEG_open = eeg_checkset(EEG_open);
+
+                EEG_open = helpers.append_eeg_comment(EEG_open, sprintf( ...
+                    'prep_06_epoching: resting-state baseline without open/closed markers | regepoch_length=%.3f s | step=%.3f s', ...
+                    step_cfg.regepoch_length_sec, step_cfg.regepoch_step_sec));
+
+                EEG_closed = [];
+
+            else    
                 [EEG_open, EEG_closed] = helpers.create_baseline_condition_datasets( ...
                     EEG_ref, step_cfg, helpers, run_base);
-
+            end
                 if ~isempty(EEG_open) && EEG_open.trials > 0
                     base_stem_open = run_base + OUTPUT_LABEL_OPEN;
 
