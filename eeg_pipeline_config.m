@@ -548,7 +548,7 @@ cfg.prep_03.reference_exclude_non_eeg = true;   % do not rereference EOG/SCR/Sta
 cfg.prep_03.mastoid_channel_labels    = {'T9','T10'};
 
 % -------------------------------------------------------------------------
-% Filtering
+% Line Noise Filtering
 % -------------------------------------------------------------------------
 
 cfg.prep_03.line_noise_method         = "pop_cleanline"; % "pop_cleanline" | "off"
