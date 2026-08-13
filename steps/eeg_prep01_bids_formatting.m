@@ -1,5 +1,7 @@
 function step_out = eeg_prep01_bids_formatting(subj_id, cfg, paths, helpers)
 % EEG_PREP01_BIDS_FORMATTING
+% Copyright (C) 2025–2026 Saskia Wilken and contributors
+%
 % Step 01 of the unified EEG pipeline.
 %
 % WHAT THIS STEP DOES

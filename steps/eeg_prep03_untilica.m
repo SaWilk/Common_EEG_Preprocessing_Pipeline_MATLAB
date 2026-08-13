@@ -1,5 +1,7 @@
 function step_out = eeg_prep03_untilica(subj_id, cfg, paths, helpers)
 % EEG_PREP03_UNTILICA
+% Copyright (C) 2025–2026 Saskia Wilken and contributors
+%
 %
 % Preprocess continuous EEG until ICA preparation.
 %

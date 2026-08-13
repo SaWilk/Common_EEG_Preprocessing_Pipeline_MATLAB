@@ -24,3 +24,15 @@ What if something doesn't work?
 If you are 80 % sure you found a bug in the script and didn't just set some config options improperly or if you are really annoyed with the way the config is shaped in an area that is important to your work, then contact the author Saskia Wilken (saskia.wilken@uni-hamburg.de) for support. 
 In a bug report, please provide an explanation of what exactly one needs to do to recreate your issue and also provide the exact error message or a screenshot of it.
 
+
+License
+
+Copyright (C) 2025–2026 Saskia Wilken and contributors.
+
+This project is licensed under the GNU General Public License v3.0 or later (GPL-3.0-or-later). See the LICENSE file for details.
+
+Third-party software
+
+The Common EEG Preprocessing Pipeline relies on EEGLAB and ERPLAB and, depending on the selected configuration, may use additional third-party software such as FASTER, AMICA, and CleanLine. These dependencies are not included in or distributed as part of this repository and must be installed separately.
+
+All third-party packages remain subject to their respective licenses and terms of use. The license of this project applies only to the software contained in this repository, except where individual files explicitly state otherwise. MATLAB and any required MathWorks toolboxes are likewise not included and are subject to the applicable MathWorks license terms.

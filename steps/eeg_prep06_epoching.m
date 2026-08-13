@@ -1,5 +1,7 @@
 function step_out = eeg_prep06_epoching(subj_id, cfg, paths, helpers)
 % EEG_PREP06_EPOCHING
+% Copyright (C) 2025–2026 Saskia Wilken and contributors
+%
 %
 % PURPOSE
 %   Create final epoched datasets from post-ICA continuous data.

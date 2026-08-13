@@ -1,5 +1,7 @@
 function step_out = eeg_prep05_after_ica(subj_id, cfg, paths, helpers)
 % EEG_PREP05_AFTER_ICA
+% Copyright (C) 2025–2026 Saskia Wilken and contributors
+%
 %
 % PURPOSE
 %   Load ICA-applied datasets, classify components with ICLabel, remove

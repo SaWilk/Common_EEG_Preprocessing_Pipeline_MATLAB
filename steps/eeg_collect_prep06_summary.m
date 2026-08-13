@@ -1,5 +1,7 @@
 function [t_all, t_by_method, t_pair] = eeg_collect_prep06_summary(cfg_or_qc_root)
 % EEG_COLLECT_PREP06_SUMMARY
+% Copyright (C) 2025–2026 Saskia Wilken and contributors
+%
 %
 % PURPOSE
 %   Collect all Step-06 epoching summary tables across subjects and methods,

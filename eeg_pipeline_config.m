@@ -1,6 +1,8 @@
 % =========================================================================
 % FILE: eeg_pipeline_config.m
 % =========================================================================
+% Copyright (C) 2025–2026 Saskia Wilken and contributors
+%
 function cfg = eeg_pipeline_config()
 % EEG_PIPELINE_CONFIG
 %

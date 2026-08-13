@@ -1,6 +1,8 @@
 % =========================================================================
 % FILE: run_eeg_pipeline.m
 % =========================================================================
+% Copyright (C) 2025–2026 Saskia Wilken and contributors
+%
 function run_eeg_pipeline(config_spec, varargin)
 % RUN_EEG_PIPELINE Unified EEG preprocessing runner.
 %
