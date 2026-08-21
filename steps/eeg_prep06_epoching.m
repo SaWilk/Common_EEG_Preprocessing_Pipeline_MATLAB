@@ -11,7 +11,7 @@ function step_out = eeg_prep06_epoching(subj_id, cfg, paths, helpers)
 %      - epoch around configured event markers
 %
 %   2) "baseline"
-%      - segment continuous baseline into open/closed chunks
+%      - optionally segment continuous baseline into configured conditions
 %      - create regular regepochs within each chunk
 %
 % ARTIFACT HANDLING ORDER
@@ -33,8 +33,8 @@ function step_out = eeg_prep06_epoching(subj_id, cfg, paths, helpers)
 %           or split outputs
 %
 %       baseline:
-%           *_cond-open_epoched_final.set
-%           *_cond-closed_epoched_final.set
+%           *_epoched_final.set                         (no conditions)
+%           *_cond-<condition-name>_epoched_final.set   (configured conditions)
 %           or split outputs
 %
 % NOTES
@@ -56,10 +56,6 @@ INPUT_FILE_SUFFIX = "_until_epoching.set";
 
 MODE_EVENT_LOCKED = "event_locked";
 MODE_BASELINE     = "baseline";
-
-OUTPUT_LABEL_FINAL  = "_epoched_final";
-OUTPUT_LABEL_OPEN   = "_cond-open_epoched_final";
-OUTPUT_LABEL_CLOSED = "_cond-closed_epoched_final";
 
 %% ========================================================================
 %  STEP CFG DEFAULTS
@@ -242,7 +238,7 @@ try
                     'prep_06_epoching: event_locked epoching | n_requested=%d | n_present=%d | window=[%.3f %.3f] s', ...
                     numel(target_events), numel(present_events), step_cfg.epoch_start_s, step_cfg.epoch_end_s));
 
-                base_stem = run_base + OUTPUT_LABEL_FINAL;
+                base_stem = helpers.build_epoching_output_stem(run_base, "", false);
 
                 [EEG_final, rej_info] = helpers.finalize_epoched_dataset( ...
                     EEG_ep, base_stem, OUT_DIR, step_cfg, cfg, helpers, SUBJ_LABEL, run_base);
@@ -316,7 +312,7 @@ try
                     MODE_EVENT_LOCKED, "event_locked", "prep_06_epoching");
                 run_epoch_qc_rows = event_epoch_qc;
 
-                row_event_locked = helpers.build_step06_summary_row( ...
+                row_event_locked = helpers.build_step06_summary_rows( ...
                     SUBJ_LABEL, run_base, ica_method, step_cfg, ...
                     MODE_EVENT_LOCKED, "event_locked", ...
                     in_name, rej_info, saved_paths, status_label, ...
@@ -325,185 +321,116 @@ try
                 run_summary_rows = row_event_locked;
 
             case MODE_BASELINE
-            open_condition_label = "open";
-            if ~step_cfg.baseline_has_conditions
-
-                open_condition_label = "baseline";
-
-                EEG_open = eeg_regepochs(EEG_ref, ...
-                    'recurrence', step_cfg.regepoch_step_sec, ...
-                    'limits', [0 step_cfg.regepoch_length_sec], ...
-                    'rmbase', NaN);
-
-                EEG_open.setname = sprintf('%s_resting_regepochs', char(run_base));
-                EEG_open = eeg_checkset(EEG_open);
-
-                EEG_open = helpers.append_eeg_comment(EEG_open, sprintf( ...
-                    'prep_06_epoching: resting-state baseline without open/closed markers | regepoch_length=%.3f s | step=%.3f s', ...
-                    step_cfg.regepoch_length_sec, step_cfg.regepoch_step_sec));
-
-                EEG_closed = [];
-
-            else    
-                [EEG_open, EEG_closed] = helpers.create_baseline_condition_datasets( ...
-                    EEG_ref, step_cfg, helpers, run_base);
-            end
-                if ~isempty(EEG_open) && EEG_open.trials > 0
-                    base_stem_open = run_base + OUTPUT_LABEL_OPEN;
-
-                    [EEG_open_final, rej_info_open] = helpers.finalize_epoched_dataset( ...
-                        EEG_open, base_stem_open, OUT_DIR, step_cfg, cfg, helpers, SUBJ_LABEL, run_base + "_open");
-
-                    if ~rej_info_open.excluded && EEG_open_final.trials > 0 && step_cfg.min_trials_per_condition_enable
-                        min_n = step_cfg.min_trials_per_condition_min_n;
-
-                        rej_info_open.min_trials_required = min_n;
-                        rej_info_open.min_trials_condition_counts = sprintf( ...
-                            '%s=%d', char(open_condition_label), EEG_open_final.trials);
-
-                        if EEG_open_final.trials < min_n
-                            rej_info_open.excluded = true;
-                            rej_info_open.excluded_by_min_trials_rule = true;
-                            rej_info_open.exclusion_reason = "min_trials_per_condition";
-                            rej_info_open.min_trials_insufficient_conditions = open_condition_label;
-
-                            EEG_open_final = helpers.append_eeg_comment(EEG_open_final, sprintf( ...
-                                'prep_06_epoching: baseline %s excluded by min-trials rule | min_n=%d | n=%d', ...
-                                char(open_condition_label), min_n, EEG_open_final.trials));
-
-                            helpers.log_msg_default( ...
-                                'prep_06_epoching: %s | %s | baseline %s excluded by min-trials rule | min_n=%d | n=%d', ...
-                                SUBJ_LABEL, run_base_c, char(open_condition_label), min_n, EEG_open_final.trials);
-                        end
-                    end
-
-                    saved_paths_open = {};
-                    status_open      = "empty_after_rejection";
-
-                    if ~rej_info_open.excluded && EEG_open_final.trials > 0
-                        saved_paths_open = helpers.save_final_epoched_outputs( ...
-                            EEG_open_final, base_stem_open, OUT_DIR, step_cfg, cfg, helpers);
-
-                        for k = 1:numel(saved_paths_open)
-                            outputs_written{end+1} = saved_paths_open{k}; %#ok<AGROW>
-                        end
-                        status_open = "saved";
-
-                    elseif rej_info_open.excluded
-                        status_open = "excluded";
-                        helpers.log_msg_default( ...
-                            'prep_06_epoching: %s | %s | baseline OPEN dataset excluded.', ...
-                            SUBJ_LABEL, run_base_c);
-
-                    else
-                        helpers.log_msg_default( ...
-                            'prep_06_epoching: %s | %s | baseline OPEN dataset empty after rejection.', ...
-                            SUBJ_LABEL, run_base_c);
-                    end
-
-                    open_epoch_qc = helpers.build_epoch_rejection_qc_table( ...
-                        rej_info_open, step_cfg, cfg, SUBJ_LABEL, run_base, ...
-                        MODE_BASELINE, open_condition_label, "prep_06_epoching");
-
-                    if isempty(run_epoch_qc_rows)
-                        run_epoch_qc_rows = open_epoch_qc;
-                    else
-                        run_epoch_qc_rows = [run_epoch_qc_rows; open_epoch_qc]; %#ok<AGROW>
-                    end
-
-                    row_open = helpers.build_step06_summary_row( ...
-                        SUBJ_LABEL, run_base, ica_method, step_cfg, ...
-                        MODE_BASELINE, open_condition_label, ...
-                        in_name, rej_info_open, saved_paths_open, status_open, ...
-                        numel(idx_eeg), numel(idx_eog), numel(idx_non_eeg));
-
-                    if isempty(run_summary_rows)
-                        run_summary_rows = row_open;
-                    else
-                        run_summary_rows = [run_summary_rows; row_open]; %#ok<AGROW>
-                    end
+                has_conditions = logical(step_cfg.baseline_has_conditions);
+                if has_conditions
+                    [condition_datasets, condition_labels] = ...
+                        helpers.create_baseline_condition_datasets( ...
+                        EEG_ref, step_cfg, helpers, run_base);
                 else
-                    helpers.log_msg_default( ...
-                        'prep_06_epoching: %s | %s | no OPEN dataset created.', ...
-                        SUBJ_LABEL, run_base_c);
+                    EEG_baseline = eeg_regepochs(EEG_ref, ...
+                        'recurrence', step_cfg.regepoch_step_sec, ...
+                        'limits', [0 step_cfg.regepoch_length_sec], ...
+                        'rmbase', NaN);
+                    EEG_baseline.setname = sprintf('%s_resting_regepochs', char(run_base));
+                    EEG_baseline = eeg_checkset(EEG_baseline);
+                    EEG_baseline = helpers.append_eeg_comment(EEG_baseline, sprintf( ...
+                        ['prep_06_epoching: baseline without conditions | ' ...
+                        'regepoch_length=%.3f s | step=%.3f s'], ...
+                        step_cfg.regepoch_length_sec, step_cfg.regepoch_step_sec));
+                    condition_datasets = {EEG_baseline};
+                    condition_labels = "";
                 end
 
-                if ~isempty(EEG_closed) && EEG_closed.trials > 0
-                    base_stem_closed = run_base + OUTPUT_LABEL_CLOSED;
+                for condition_ix = 1:numel(condition_labels)
+                    condition_label = string(condition_labels(condition_ix));
+                    condition_display = condition_label;
+                    if strlength(condition_display) == 0
+                        condition_display = "unconditioned";
+                    end
 
-                    [EEG_closed_final, rej_info_closed] = helpers.finalize_epoched_dataset( ...
-                        EEG_closed, base_stem_closed, OUT_DIR, step_cfg, cfg, helpers, SUBJ_LABEL, run_base + "_closed");
+                    EEG_condition = condition_datasets{condition_ix};
+                    if isempty(EEG_condition) || EEG_condition.trials < 1
+                        helpers.log_msg_default( ...
+                            'prep_06_epoching: %s | %s | no dataset created for condition=%s.', ...
+                            SUBJ_LABEL, run_base_c, char(condition_display));
+                        continue;
+                    end
 
-                    if ~rej_info_closed.excluded && EEG_closed_final.trials > 0 && step_cfg.min_trials_per_condition_enable
+                    base_stem = helpers.build_epoching_output_stem( ...
+                        run_base, condition_label, has_conditions);
+                    run_label = run_base;
+                    if has_conditions
+                        run_label = run_base + "_" + condition_label;
+                    end
+
+                    [EEG_final, rej_info] = helpers.finalize_epoched_dataset( ...
+                        EEG_condition, base_stem, OUT_DIR, step_cfg, cfg, helpers, ...
+                        SUBJ_LABEL, run_label);
+
+                    if ~rej_info.excluded && EEG_final.trials > 0 && ...
+                            step_cfg.min_trials_per_condition_enable
                         min_n = step_cfg.min_trials_per_condition_min_n;
+                        rej_info.min_trials_required = min_n;
+                        rej_info.min_trials_condition_counts = sprintf( ...
+                            '%s=%d', char(condition_display), EEG_final.trials);
 
-                        rej_info_closed.min_trials_required = min_n;
-                        rej_info_closed.min_trials_condition_counts = sprintf('closed=%d', EEG_closed_final.trials);
-
-                        if EEG_closed_final.trials < min_n
-                            rej_info_closed.excluded = true;
-                            rej_info_closed.excluded_by_min_trials_rule = true;
-                            rej_info_closed.exclusion_reason = "min_trials_per_condition";
-                            rej_info_closed.min_trials_insufficient_conditions = "closed";
-
-                            EEG_closed_final = helpers.append_eeg_comment(EEG_closed_final, sprintf( ...
-                                'prep_06_epoching: baseline CLOSED excluded by min-trials rule | min_n=%d | closed=%d', ...
-                                min_n, EEG_closed_final.trials));
-
+                        if EEG_final.trials < min_n
+                            rej_info.excluded = true;
+                            rej_info.excluded_by_min_trials_rule = true;
+                            rej_info.exclusion_reason = "min_trials_per_condition";
+                            rej_info.min_trials_insufficient_conditions = condition_label;
+                            EEG_final = helpers.append_eeg_comment(EEG_final, sprintf( ...
+                                ['prep_06_epoching: baseline condition=%s excluded by ' ...
+                                'min-trials rule | min_n=%d | n=%d'], ...
+                                char(condition_display), min_n, EEG_final.trials));
                             helpers.log_msg_default( ...
-                                'prep_06_epoching: %s | %s | baseline CLOSED excluded by min-trials rule | min_n=%d | closed=%d', ...
-                                SUBJ_LABEL, run_base_c, min_n, EEG_closed_final.trials);
+                                ['prep_06_epoching: %s | %s | baseline condition=%s ' ...
+                                'excluded by min-trials rule | min_n=%d | n=%d'], ...
+                                SUBJ_LABEL, run_base_c, char(condition_display), ...
+                                min_n, EEG_final.trials);
                         end
                     end
-                    saved_paths_closed = {};
-                    status_closed      = "empty_after_rejection";
 
-                    if ~rej_info_closed.excluded && EEG_closed_final.trials > 0
-                        saved_paths_closed = helpers.save_final_epoched_outputs( ...
-                            EEG_closed_final, base_stem_closed, OUT_DIR, step_cfg, cfg, helpers);
-
-                        for k = 1:numel(saved_paths_closed)
-                            outputs_written{end+1} = saved_paths_closed{k}; %#ok<AGROW>
+                    saved_paths = {};
+                    status_condition = "empty_after_rejection";
+                    if ~rej_info.excluded && EEG_final.trials > 0
+                        saved_paths = helpers.save_final_epoched_outputs( ...
+                            EEG_final, base_stem, OUT_DIR, step_cfg, cfg, helpers);
+                        for k = 1:numel(saved_paths)
+                            outputs_written{end+1} = saved_paths{k}; %#ok<AGROW>
                         end
-                        status_closed = "saved";
-
-                    elseif rej_info_closed.excluded
-                        status_closed = "excluded";
+                        status_condition = "saved";
+                    elseif rej_info.excluded
+                        status_condition = "excluded";
                         helpers.log_msg_default( ...
-                            'prep_06_epoching: %s | %s | baseline CLOSED dataset excluded.', ...
-                            SUBJ_LABEL, run_base_c);
-
+                            'prep_06_epoching: %s | %s | condition=%s dataset excluded.', ...
+                            SUBJ_LABEL, run_base_c, char(condition_display));
                     else
                         helpers.log_msg_default( ...
-                            'prep_06_epoching: %s | %s | baseline CLOSED dataset empty after rejection.', ...
-                            SUBJ_LABEL, run_base_c);
+                            ['prep_06_epoching: %s | %s | condition=%s dataset ' ...
+                            'empty after rejection.'], ...
+                            SUBJ_LABEL, run_base_c, char(condition_display));
                     end
 
-                    closed_epoch_qc = helpers.build_epoch_rejection_qc_table( ...
-                        rej_info_closed, step_cfg, cfg, SUBJ_LABEL, run_base, ...
-                        MODE_BASELINE, "closed", "prep_06_epoching");
-
+                    condition_epoch_qc = helpers.build_epoch_rejection_qc_table( ...
+                        rej_info, step_cfg, cfg, SUBJ_LABEL, run_base, ...
+                        MODE_BASELINE, condition_label, "prep_06_epoching");
                     if isempty(run_epoch_qc_rows)
-                        run_epoch_qc_rows = closed_epoch_qc;
+                        run_epoch_qc_rows = condition_epoch_qc;
                     else
-                        run_epoch_qc_rows = [run_epoch_qc_rows; closed_epoch_qc]; %#ok<AGROW>
+                        run_epoch_qc_rows = [run_epoch_qc_rows; condition_epoch_qc]; %#ok<AGROW>
                     end
 
-                    row_closed = helpers.build_step06_summary_row( ...
+                    condition_summary_rows = helpers.build_step06_summary_rows( ...
                         SUBJ_LABEL, run_base, ica_method, step_cfg, ...
-                        MODE_BASELINE, "closed", ...
-                        in_name, rej_info_closed, saved_paths_closed, status_closed, ...
+                        MODE_BASELINE, condition_label, in_name, rej_info, ...
+                        saved_paths, status_condition, ...
                         numel(idx_eeg), numel(idx_eog), numel(idx_non_eeg));
-
                     if isempty(run_summary_rows)
-                        run_summary_rows = row_closed;
+                        run_summary_rows = condition_summary_rows;
                     else
-                        run_summary_rows = [run_summary_rows; row_closed]; %#ok<AGROW>
+                        run_summary_rows = [run_summary_rows; condition_summary_rows]; %#ok<AGROW>
                     end
-                else
-                    helpers.log_msg_default( ...
-                        'prep_06_epoching: %s | %s | no CLOSED dataset created.', ...
-                        SUBJ_LABEL, run_base_c);
                 end
 
                 if isempty(run_summary_rows)
@@ -606,4 +533,3 @@ catch me
     step_out.message = sprintf('prep_06_epoching: %s', me.message);
 end
 end
-

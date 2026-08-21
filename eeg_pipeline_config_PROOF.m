@@ -650,7 +650,7 @@ cfg.prep_03.ica_prep_faster_ptp_epoch_rejection.faster_z     = 4;
 cfg.prep_03.ica_prep_faster_ptp_epoch_rejection.use_robust_z = true;
 
 cfg.prep_03.ica_prep_faster_ptp_epoch_rejection.use_ptp       = true;
-cfg.prep_03.ica_prep_faster_ptp_epoch_rejection.ptp_uV_thresh = 400;
+cfg.prep_03.ica_prep_faster_ptp_epoch_rejection.ptp_uV_thresh = 100;
 
 % 1.00 means disabled. Example: 0.50 would stop Step 03 if >50% of
 % ICA-training epochs are removed.
@@ -768,15 +768,13 @@ cfg.prep_06.regepoch_step_sec = 10; % seconds between starts of consecutive
 
 cfg.prep_06.baseline_has_conditions = false; % false = treat complete baseline as one condition
 
-% for inconsistency's sake, in the baseline condition you already label your
-% epochs here. For now, the pipeline assumes there was an eyes "open" and
-% an eyes "closed" condition; will be made more customizable in a future update
-cfg.prep_06.baseline_start_condition        = "open"; % assumes that data contains 
-% data from before first phase, in which participants had their eyes open
-cfg.prep_06.baseline_open_marker_prefixes   = {'S 1'}; % triggers marking 
-% the start of open-eye baseline segments, e.g. "S 1", "S 11", "S 12"
-cfg.prep_06.baseline_closed_marker_prefixes = {'S 2'}; % triggers marking the start of closed-eye baseline segments, e.g. "S 2", "S 21", "S 22"
-cfg.prep_06.baseline_end_markers            = {'S 99'};
+% Ignored while baseline_has_conditions=false. If enabled, define arbitrary
+% names as rows of {condition_name, marker prefixes starting that condition}.
+% The names are propagated to output filenames and QC tables.
+cfg.prep_06.baseline_condition_definitions = {};
+cfg.prep_06.baseline_start_condition = "";
+cfg.prep_06.baseline_end_markers = {};
+cfg.prep_06.baseline_end_condition = "";
 
 % -------------------------------------------------------------------------
 % Artifact rejection
@@ -802,6 +800,10 @@ cfg.prep_06.epoch_rejection_method = "faster_ptp";  % "erplab" | "faster_ptp" | 
 % Subject-level exclusion after epoch rejection.
 % 1 means disabled. Example: 0.50 would exclude subjects with >50% rejected epochs.
 cfg.prep_06.max_reject_prop = 1;
+
+% Warning only (no exclusion): report all subjects with >25% rejected epochs
+% once more at the very end of the console output and in the master run log.
+cfg.prep_06.warn_if_reject_prop_gt = 0.25;
 
 % -------------------------------------------------------------------------
 % ERPLAB epoch rejection
@@ -847,7 +849,7 @@ cfg.prep_06.faster_ptp_epoch_rejection.faster_z      = 3;
 cfg.prep_06.faster_ptp_epoch_rejection.use_robust_z  = true;
 
 cfg.prep_06.faster_ptp_epoch_rejection.use_ptp       = true;
-cfg.prep_06.faster_ptp_epoch_rejection.ptp_uV_thresh = 200;
+cfg.prep_06.faster_ptp_epoch_rejection.ptp_uV_thresh = 100;
 
 % -------------------------------------------------------------------------
 % MAD variance epoch rejection
@@ -863,7 +865,8 @@ cfg.prep_06.mad_use_logvar  = true;
 %   checks minimum trial counts for the event-code groups listed below.
 %
 % baseline:
-%   checks minimum number of valid regepochs separately for open and closed.
+%   checks minimum valid regepochs separately for every configured condition.
+%   Without conditions, the check applies once to the complete recording.
 %   The code list below is ignored in baseline mode.
 % -------------------------------------------------------------------------
 cfg.prep_06.min_trials_per_condition_enable      = true; 

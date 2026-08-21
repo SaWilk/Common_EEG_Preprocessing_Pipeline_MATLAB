@@ -97,16 +97,20 @@ helpers.get_present_events                    = @get_present_events_impl;
 helpers.preview_event_types                   = @preview_event_types_impl;
 helpers.evaluate_min_trials_per_condition     = @evaluate_min_trials_per_condition_impl;
 helpers.build_step06_summary_row              = @build_step06_summary_row_impl;
+helpers.build_step06_summary_rows             = @build_step06_summary_rows_impl;
 helpers.build_bad_channel_qc_table            = @build_bad_channel_qc_table_impl;
 helpers.build_epoch_rejection_qc_table        = @build_epoch_rejection_qc_table_impl;
 helpers.write_qc_table                        = @write_qc_table_impl;
 helpers.resolve_qc_timestamp                  = @resolve_qc_timestamp_impl;
 helpers.collect_bad_channel_qc                = @collect_bad_channel_qc_impl;
 helpers.collect_prep06_summary                = @collect_prep06_summary_impl;
+helpers.build_high_epoch_rejection_warning    = @build_high_epoch_rejection_warning_impl;
 helpers.save_intermediate_set                 = @save_intermediate_set_impl;
 helpers.apply_hard_epoch_threshold_rejection  = @apply_hard_epoch_threshold_rejection_impl;
 helpers.apply_fallback_epoch_rejection        = @apply_fallback_epoch_rejection_impl;
 helpers.create_baseline_condition_datasets    = @create_baseline_condition_datasets_impl;
+helpers.resolve_baseline_condition_definitions = @resolve_baseline_condition_definitions_impl;
+helpers.build_epoching_output_stem             = @build_epoching_output_stem_impl;
 helpers.finalize_epoched_dataset              = @finalize_epoched_dataset_impl;
 helpers.save_final_epoched_outputs            = @save_final_epoched_outputs_impl;
 helpers.build_eeg_key_token_stream_with_time  = @build_eeg_key_token_stream_with_time_impl;
@@ -2040,26 +2044,52 @@ mode_raw = step_cfg.epoching_mode;
 mode = normalize_epoching_mode_value_impl(mode_raw);
 
 if strcmp(mode, 'event_locked')
-    base_stem = string(run_base) + "_epoched_final";
+    base_stem = build_epoching_output_stem_impl(run_base, "", false);
     output_spec.all_paths = build_output_paths_for_base_stem_epoching_impl( ...
         base_stem, out_dir, step_cfg, idx_eeg, idx_eog, idx_non_eeg);
 
 elseif strcmp(mode, 'baseline')
-    base_stem_open   = string(run_base) + "_cond-open_epoched_final";
-    base_stem_closed = string(run_base) + "_cond-closed_epoched_final";
+    has_conditions = logical(getfield_safe_impl(step_cfg, 'baseline_has_conditions', false));
 
-    paths_open = build_output_paths_for_base_stem_epoching_impl( ...
-        base_stem_open, out_dir, step_cfg, idx_eeg, idx_eog, idx_non_eeg);
+    if has_conditions
+        [condition_names, ~, ~, ~] = resolve_baseline_condition_definitions_impl(step_cfg);
+        if isempty(condition_names)
+            error(['cfg.prep_06.baseline_has_conditions=true, but no baseline condition ' ...
+                'definitions were provided.']);
+        end
+    else
+        condition_names = "";
+    end
 
-    paths_closed = build_output_paths_for_base_stem_epoching_impl( ...
-        base_stem_closed, out_dir, step_cfg, idx_eeg, idx_eog, idx_non_eeg);
-
-    output_spec.all_paths = [paths_open(:); paths_closed(:)];
+    for c = 1:numel(condition_names)
+        base_stem = build_epoching_output_stem_impl( ...
+            run_base, condition_names(c), has_conditions);
+        condition_paths = build_output_paths_for_base_stem_epoching_impl( ...
+            base_stem, out_dir, step_cfg, idx_eeg, idx_eog, idx_non_eeg);
+        output_spec.all_paths = [output_spec.all_paths; condition_paths(:)]; %#ok<AGROW>
+    end
 
 else
     error('Unsupported cfg.prep_06.epoching_mode: raw=>>%s<< | normalized=>>%s<<', ...
         char(string(mode_raw)), mode);
 end
+end
+
+function base_stem = build_epoching_output_stem_impl(run_base, condition_name, include_condition)
+base_stem = string(run_base);
+
+if nargin >= 3 && logical(include_condition)
+    condition_name = string(condition_name);
+    condition_name = strtrim(condition_name(1));
+    if strlength(condition_name) == 0
+        error('A non-empty condition name is required when include_condition=true.');
+    end
+
+    condition_token = lower(string(sanitize_filename_impl(condition_name)));
+    base_stem = base_stem + "_cond-" + condition_token;
+end
+
+base_stem = base_stem + "_epoched_final";
 end
 
 function out_path = save_intermediate_set_impl(EEG, out_dir, base_stem, overwrite_mode, cfg, savemode, helpers) %#ok<INUSD>
@@ -2185,53 +2215,59 @@ info.n_rejected = numel(bad_epochs);
 info.n_kept     = EEG_out.trials;
 end
 
-function [EEG_open, EEG_closed] = create_baseline_condition_datasets_impl(EEG, step_cfg, helpers, run_base)
-EEG_open   = [];
-EEG_closed = [];
+function [condition_datasets, condition_names] = create_baseline_condition_datasets_impl(EEG, step_cfg, helpers, run_base)
+condition_datasets = {};
 
 if ~isfield(EEG, 'event') || isempty(EEG.event)
-    error('No EEG.event present -> cannot segment baseline open/closed.');
+    error('No EEG.event present -> cannot segment baseline conditions.');
 end
 
 if ~isfield(EEG, 'srate') || isempty(EEG.srate)
-    error('EEG.srate missing -> cannot segment baseline open/closed.');
+    error('EEG.srate missing -> cannot segment baseline conditions.');
 end
 
+[condition_names, marker_prefixes, start_condition, end_condition] = ...
+    resolve_baseline_condition_definitions_impl(step_cfg);
+
+if isempty(condition_names)
+    error(['No baseline condition definitions found. Use ' ...
+        'cfg.prep_06.baseline_condition_definitions.']);
+end
+
+end_markers = getfield_safe_impl(step_cfg, 'baseline_end_markers', {});
 event_times = [];
 event_codes = strings(0,1);
 
-% identify events and their timings matching defined triggers
 for k = 1:numel(EEG.event)
-    code = normalize_trigger_type_impl(EEG.event(k).type); % make sure that triggers are understood by script (?)
-
-    %disregard evnts added by EEGLab, called 'boundary'
+    code = normalize_trigger_type_impl(EEG.event(k).type);
     if strcmpi(code, 'boundary')
         continue;
     end
 
-    %only add events (+timing) if they match open, closed or end-markers as
-    %defined in config
-    if matches_any_prefix_impl(code, step_cfg.baseline_open_marker_prefixes) || ...
-            matches_any_prefix_impl(code, step_cfg.baseline_closed_marker_prefixes) || ...
-            matches_any_exact_impl(code, step_cfg.baseline_end_markers)
+    is_condition_marker = false;
+    for c = 1:numel(condition_names)
+        if matches_any_prefix_impl(code, marker_prefixes{c})
+            is_condition_marker = true;
+            break;
+        end
+    end
 
+    if is_condition_marker || matches_any_exact_impl(code, end_markers)
         event_codes(end+1,1) = string(code); %#ok<AGROW>
         event_times(end+1,1) = double(EEG.event(k).latency) / double(EEG.srate); %#ok<AGROW>
     end
 end
 
 if isempty(event_times)
-    error('No open/closed segmentation markers found in baseline recording.');
+    error('No configured baseline condition markers found in the recording.');
 end
 
-% sort events chronologically
 [event_times, sort_ix] = sort(event_times);
 event_codes = event_codes(sort_ix);
 
 recording_end_s = double(EEG.pnts) / double(EEG.srate);
 sample_eps = 1.0 / double(EEG.srate);
-
-current_condition = string(step_cfg.baseline_start_condition);
+current_condition = start_condition;
 current_t1 = 0;
 
 seg_condition = strings(0,1);
@@ -2247,20 +2283,21 @@ for i = 1:numel(event_codes)
     end
 
     next_condition = current_condition;
-
-    if matches_any_exact_impl(code, step_cfg.baseline_end_markers)
-        next_condition = "open";
-    elseif matches_any_prefix_impl(code, step_cfg.baseline_open_marker_prefixes)
-        next_condition = "open";
-    elseif matches_any_prefix_impl(code, step_cfg.baseline_closed_marker_prefixes)
-        next_condition = "closed";
+    if matches_any_exact_impl(code, end_markers)
+        next_condition = end_condition;
+    else
+        for c = 1:numel(condition_names)
+            if matches_any_prefix_impl(code, marker_prefixes{c})
+                next_condition = condition_names(c);
+                break;
+            end
+        end
     end
 
     if next_condition ~= current_condition
         seg_condition(end+1,1) = current_condition; %#ok<AGROW>
         seg_t1(end+1,1) = current_t1; %#ok<AGROW>
         seg_t2(end+1,1) = t_ev; %#ok<AGROW>
-
         current_condition = next_condition;
         current_t1 = t_ev;
     end
@@ -2273,16 +2310,14 @@ if current_t1 < recording_end_s - sample_eps
 end
 
 if isempty(seg_t1)
-    error('Could not derive any baseline segments.');
+    error('Could not derive any baseline condition segments.');
 end
 
 helpers.log_msg_default( ...
-    'prep_06_epoching: %s | derived %d baseline segments', ...
-    char(string(run_base)), numel(seg_t1));
+    'prep_06_epoching: %s | derived %d baseline segments across conditions: %s', ...
+    char(string(run_base)), numel(seg_t1), strjoin(cellstr(condition_names), ', '));
 
-open_parts = {};
-closed_parts = {};
-
+condition_parts = repmat({{}}, numel(condition_names), 1);
 epoch_len = double(step_cfg.regepoch_length_sec);
 epoch_step = double(step_cfg.regepoch_step_sec);
 if epoch_step <= 0
@@ -2292,36 +2327,102 @@ end
 for s = 1:numel(seg_t1)
     t1 = seg_t1(s);
     t2 = seg_t2(s);
-
     if (t2 - t1) < epoch_len
         continue;
     end
 
+    condition_ix = find(strcmpi(condition_names, seg_condition(s)), 1, 'first');
+    if isempty(condition_ix)
+        error('Derived unknown baseline condition: %s', char(seg_condition(s)));
+    end
+
     EEG_seg = pop_select(EEG, 'time', [t1, t2 - sample_eps]);
     EEG_seg = eeg_checkset(EEG_seg);
-
     EEG_ep = eeg_regepochs( ...
         EEG_seg, ...
         'recurrence', epoch_step, ...
         'limits', [0 epoch_len], ...
         'eventtype', 'regepoch');
-
     EEG_ep = eeg_checkset(EEG_ep);
-    EEG_ep.etc.baseline_condition = char(seg_condition(s));
-
+    EEG_ep.etc.baseline_condition = char(condition_names(condition_ix));
     EEG_ep = append_eeg_comment_impl(EEG_ep, sprintf( ...
         'prep_06_epoching: baseline_condition=%s | chunk=[%.3f %.3f] s | regepoch_length=%.1f s | regepoch_step=%.1f s', ...
-        seg_condition(s), t1, t2, epoch_len, epoch_step));
+        condition_names(condition_ix), t1, t2, epoch_len, epoch_step));
+    condition_parts{condition_ix}{end+1} = EEG_ep; %#ok<AGROW>
+end
 
-    if seg_condition(s) == "open"
-        open_parts{end+1} = EEG_ep; %#ok<AGROW>
-    else
-        closed_parts{end+1} = EEG_ep; %#ok<AGROW>
+condition_datasets = cell(numel(condition_names), 1);
+for c = 1:numel(condition_names)
+    condition_datasets{c} = merge_eeg_sets_impl(condition_parts{c});
+end
+end
+
+function [condition_names, marker_prefixes, start_condition, end_condition] = resolve_baseline_condition_definitions_impl(step_cfg)
+condition_names = strings(0,1);
+marker_prefixes = {};
+
+definitions = getfield_safe_impl(step_cfg, 'baseline_condition_definitions', {});
+if ~isempty(definitions)
+    if ~iscell(definitions) || size(definitions, 2) ~= 2
+        error(['cfg.prep_06.baseline_condition_definitions must be an N-by-2 cell array: ' ...
+            '{condition_name, marker_prefixes}.']);
+    end
+
+    for r = 1:size(definitions, 1)
+        this_name = strtrim(string(definitions{r,1}));
+        if isempty(this_name)
+            this_name = "";
+        else
+            this_name = this_name(1);
+        end
+        this_markers = normalize_event_list_impl(definitions{r,2});
+        if strlength(this_name) == 0 || isempty(this_markers)
+            error('Baseline condition definition row %d has an empty name or marker list.', r);
+        end
+        condition_names(end+1,1) = this_name; %#ok<AGROW>
+        marker_prefixes{end+1,1} = cellstr(this_markers); %#ok<AGROW>
     end
 end
 
-EEG_open   = merge_eeg_sets_impl(open_parts);
-EEG_closed = merge_eeg_sets_impl(closed_parts);
+if isempty(condition_names)
+    start_condition = "";
+    end_condition = "";
+    return;
+end
+
+if numel(unique(lower(condition_names))) ~= numel(condition_names)
+    error('Baseline condition names must be unique (case-insensitive).');
+end
+
+start_condition = strtrim(string(getfield_safe_impl(step_cfg, 'baseline_start_condition', "")));
+if isempty(start_condition)
+    start_condition = "";
+else
+    start_condition = start_condition(1);
+end
+if strlength(start_condition) == 0 && ~isempty(condition_names)
+    start_condition = condition_names(1);
+end
+start_ix = find(strcmpi(condition_names, start_condition), 1, 'first');
+if isempty(start_ix)
+    error('baseline_start_condition="%s" is not defined.', char(start_condition));
+end
+start_condition = condition_names(start_ix);
+
+end_condition = strtrim(string(getfield_safe_impl(step_cfg, 'baseline_end_condition', start_condition)));
+if isempty(end_condition)
+    end_condition = "";
+else
+    end_condition = end_condition(1);
+end
+if strlength(end_condition) == 0
+    end_condition = start_condition;
+end
+end_ix = find(strcmpi(condition_names, end_condition), 1, 'first');
+if isempty(end_ix)
+    error('baseline_end_condition="%s" is not defined.', char(end_condition));
+end
+end_condition = condition_names(end_ix);
 end
 
 function [EEG_final, rej_info] = finalize_epoched_dataset_impl( ...
@@ -3282,7 +3383,7 @@ if isfield(reject_cfg, 'faster_z') && ~isempty(reject_cfg.faster_z)
     faster_z = double(reject_cfg.faster_z);
 end
 
-ptp_uV_thresh = 300;
+ptp_uV_thresh = 100;
 if isfield(reject_cfg, 'ptp_uV_thresh') && ~isempty(reject_cfg.ptp_uV_thresh)
     ptp_uV_thresh = double(reject_cfg.ptp_uV_thresh);
 end
@@ -4241,7 +4342,13 @@ if ~iscell(condition_spec)
     error('min_trials condition spec must be a cell, string, or char array.');
 end
 
-is_grouped_cell = ismatrix(condition_spec) && size(condition_spec,2) == 2 && ~isvector(condition_spec);
+% An N-by-2 table is unambiguous for N>1. A single grouped condition is a
+% 1-by-2 vector, so recognize it when the second entry contains its code list
+% as a nested cell. A plain {'S 1','S 2'} event list remains ungrouped.
+is_single_group = isvector(condition_spec) && numel(condition_spec) == 2 && ...
+    iscell(condition_spec{1,2});
+is_grouped_cell = ismatrix(condition_spec) && size(condition_spec,2) == 2 && ...
+    (~isvector(condition_spec) || is_single_group);
 
 if is_grouped_cell
     for r = 1:size(condition_spec, 1)
@@ -4492,6 +4599,7 @@ row = table( ...
     step_cfg.base_start_ms, ...
     step_cfg.base_end_ms, ...
     step_cfg.max_reject_prop, ...
+    getfield_safe_impl(step_cfg, 'warn_if_reject_prop_gt', 0.25), ...
     shared_enable, ...
     shared_faster_z, ...
     shared_ptp, ...
@@ -4513,11 +4621,98 @@ row = table( ...
     'excluded_any_rule', 'excluded_by_max_reject_prop', 'excluded_by_min_trials_rule', 'exclusion_reason', ...
     'artifact_rejection_enabled', 'hard_threshold_enabled', 'hard_threshold_uv', ...
     'baseline_correction_enabled', 'baseline_start_ms', 'baseline_end_ms', ...
-    'max_reject_prop', ...
+    'max_reject_prop', 'warn_if_reject_prop_gt', ...
     'shared_rejection_enabled', 'shared_faster_z', 'shared_ptp_uV_thresh', 'shared_use_robust_z', ...
     'min_trials_rule_enabled', 'min_trials_min_n', 'min_trials_condition_counts', 'min_trials_insufficient_conditions', ...
     'settings_json', ...
     'output_set_paths'});
+end
+
+
+function rows = build_step06_summary_rows_impl( ...
+    subj_label, run_base, ica_method, step_cfg, ...
+    epoching_mode, condition_label, ...
+    input_name, rej_info, saved_paths, status_label, ...
+    n_eeg, n_eog, n_non_eeg)
+
+n_total = double(getfield_safe_impl(rej_info, 'n_total', 0));
+condition_labels = string(getfield_safe_impl( ...
+    rej_info, 'epoch_condition_labels', repmat(string(condition_label), n_total, 1)));
+condition_labels = condition_labels(:);
+
+if numel(condition_labels) ~= n_total
+    condition_labels = repmat(string(condition_label), n_total, 1);
+end
+
+if string(condition_label) ~= "event_locked"
+    condition_labels(:) = string(condition_label);
+end
+
+conditions = unique(condition_labels, 'stable');
+if isempty(conditions)
+    conditions = string(condition_label);
+end
+
+reason_names = ["hard_threshold","extreme_voltage","sample_diff","flatline", ...
+    "faster","ptp","mad_variance"];
+hard_mask = get_reason_mask_impl(rej_info, 'hard_threshold', n_total);
+backend_union = false(n_total, 1);
+all_union = hard_mask;
+for r = 2:numel(reason_names)
+    this_mask = get_reason_mask_impl(rej_info, char(reason_names(r)), n_total);
+    backend_union = backend_union | this_mask;
+    all_union = all_union | this_mask;
+end
+
+rows = table();
+for c = 1:numel(conditions)
+    condition_mask = condition_labels == conditions(c);
+    if ~any(condition_mask) && n_total > 0
+        continue;
+    end
+
+    local_info = rej_info;
+    local_info.n_total = sum(condition_mask);
+    local_info.n_rejected_hard = sum(condition_mask & hard_mask);
+    local_info.n_rejected_sophisticated = sum(condition_mask & backend_union);
+    local_info.n_rejected_total = sum(condition_mask & all_union);
+    local_info.n_kept = local_info.n_total - local_info.n_rejected_total;
+    local_info.n_rejected_extreme_voltage = sum(condition_mask & ...
+        get_reason_mask_impl(rej_info, 'extreme_voltage', n_total));
+    local_info.n_rejected_sample_diff = sum(condition_mask & ...
+        get_reason_mask_impl(rej_info, 'sample_diff', n_total));
+    local_info.n_rejected_flatline = sum(condition_mask & ...
+        get_reason_mask_impl(rej_info, 'flatline', n_total));
+    local_info.n_rejected_faster = sum(condition_mask & ...
+        get_reason_mask_impl(rej_info, 'faster', n_total));
+    local_info.n_rejected_ptp = sum(condition_mask & ...
+        get_reason_mask_impl(rej_info, 'ptp', n_total));
+    local_info.n_rejected_mad_variance = sum(condition_mask & ...
+        get_reason_mask_impl(rej_info, 'mad_variance', n_total));
+
+    count_label = conditions(c);
+    if strlength(count_label) == 0
+        count_label = "all";
+    end
+    local_info.min_trials_condition_counts = sprintf( ...
+        '%s=%d', char(count_label), local_info.n_kept);
+
+    local_status = string(status_label);
+    if local_info.n_kept == 0 && local_status == "saved"
+        local_status = "empty_after_rejection";
+    end
+
+    this_row = build_step06_summary_row_impl( ...
+        subj_label, run_base, ica_method, step_cfg, ...
+        epoching_mode, conditions(c), input_name, local_info, ...
+        saved_paths, local_status, n_eeg, n_eog, n_non_eeg);
+
+    if isempty(rows)
+        rows = this_row;
+    else
+        rows = [rows; this_row]; %#ok<AGROW>
+    end
+end
 end
 
 
@@ -4731,10 +4926,19 @@ end
 
 function labels = derive_epoch_condition_labels_impl(EEG, step_cfg)
 n_epochs = double(getfield_safe_impl(EEG, 'trials', 0));
-labels = repmat("baseline", n_epochs, 1);
+labels = repmat("", n_epochs, 1);
 
 mode = string(getfield_safe_impl(step_cfg, 'epoching_mode', "event_locked"));
 mode = string(normalize_epoching_mode_value_impl(mode));
+if mode == "baseline"
+    if isfield(EEG, 'etc') && isstruct(EEG.etc) && ...
+            isfield(EEG.etc, 'baseline_condition') && ...
+            strlength(string(EEG.etc.baseline_condition)) > 0
+        labels(:) = string(EEG.etc.baseline_condition);
+    end
+    return;
+end
+
 if mode ~= "event_locked" || n_epochs < 1 || ~isfield(EEG, 'epoch') || isempty(EEG.epoch)
     return;
 end
@@ -4842,7 +5046,7 @@ function t = build_epoch_rejection_qc_table_impl( ...
 if nargin < 8 || strlength(string(pipeline_step)) == 0
     pipeline_step = "prep_06_epoching";
 end
-if nargin < 7 || strlength(string(condition_label)) == 0
+if nargin < 7
     condition_label = "event_locked";
 end
 
@@ -5107,6 +5311,81 @@ end
 end
 
 
+function [warning_table, warning_message] = build_high_epoch_rejection_warning_impl( ...
+    t_all, processed_subject_ids, ica_method, qc_timestamp, threshold)
+warning_table = table();
+warning_message = "";
+
+if nargin < 5 || isempty(threshold) || ~isscalar(threshold) || ...
+        ~isfinite(threshold) || threshold < 0 || threshold > 1
+    threshold = 0.25;
+end
+
+required = {'subject_id','ica_method','qc_timestamp','n_epochs_total','n_rejected_total'};
+if isempty(t_all) || ~all(ismember(required, t_all.Properties.VariableNames))
+    return;
+end
+
+subject_ids = string(processed_subject_ids(:));
+for i = 1:numel(subject_ids)
+    if ~startsWith(subject_ids(i), "sub-")
+        subject_ids(i) = "sub-" + subject_ids(i);
+    end
+end
+
+keep = ismember(string(t_all.subject_id), subject_ids);
+if nargin >= 3 && strlength(string(ica_method)) > 0
+    keep = keep & strcmpi(string(t_all.ica_method), string(ica_method));
+end
+if nargin >= 4 && strlength(string(qc_timestamp)) > 0
+    keep = keep & string(t_all.qc_timestamp) == string(qc_timestamp);
+end
+t_current = t_all(keep, :);
+if isempty(t_current)
+    return;
+end
+
+subjects = unique(string(t_current.subject_id), 'stable');
+for s = 1:numel(subjects)
+    subject_mask = string(t_current.subject_id) == subjects(s);
+    n_total = sum(double(t_current.n_epochs_total(subject_mask)), 'omitnan');
+    n_rejected = sum(double(t_current.n_rejected_total(subject_mask)), 'omitnan');
+    if n_total <= 0
+        continue;
+    end
+
+    prop_rejected = n_rejected / n_total;
+    if prop_rejected > threshold
+        this_row = table(subjects(s), n_total, n_rejected, prop_rejected, ...
+            'VariableNames', {'subject_id','n_epochs_total','n_rejected_total','prop_rejected_total'});
+        if isempty(warning_table)
+            warning_table = this_row;
+        else
+            warning_table = [warning_table; this_row]; %#ok<AGROW>
+        end
+    end
+end
+
+if isempty(warning_table)
+    return;
+end
+
+lines = strings(height(warning_table) + 2, 1);
+lines(1) = string(sprintf( ...
+    'HIGH EPOCH REJECTION WARNING: %d subject(s) exceeded %.1f%% rejected epochs:', ...
+    height(warning_table), 100 * threshold));
+for r = 1:height(warning_table)
+    lines(r + 1) = string(sprintf('  %s: %d/%d epochs rejected (%.1f%%)', ...
+        char(warning_table.subject_id(r)), ...
+        round(warning_table.n_rejected_total(r)), ...
+        round(warning_table.n_epochs_total(r)), ...
+        100 * warning_table.prop_rejected_total(r)));
+end
+lines(end) = "Review the timestamped tables under qc/epoch_rej/.";
+warning_message = strjoin(lines, newline);
+end
+
+
 function [qc_root, timestamp, delimiter] = resolve_qc_collection_context_impl(cfg_or_qc_root)
 delimiter = ';';
 cfg = struct();
@@ -5236,6 +5515,7 @@ double_vars = {'n_eeg_channels','n_eog_channels','n_non_eeg_channels','n_epochs_
     'n_rejected_extreme_voltage','n_rejected_sample_diff','n_rejected_flatline', ...
     'n_rejected_faster','n_rejected_ptp','n_rejected_mad_variance','prop_rejected_total', ...
     'hard_threshold_uv','baseline_start_ms','baseline_end_ms','max_reject_prop', ...
+    'warn_if_reject_prop_gt', ...
     'shared_faster_z','shared_ptp_uV_thresh','min_trials_min_n'};
 logical_vars = {'excluded_any_rule','excluded_by_max_reject_prop','excluded_by_min_trials_rule', ...
     'artifact_rejection_enabled','hard_threshold_enabled','baseline_correction_enabled', ...
@@ -5505,7 +5785,7 @@ step_cfg.ica_prep_faster_ptp_epoch_rejection.faster_z     = 4;
 step_cfg.ica_prep_faster_ptp_epoch_rejection.use_robust_z = true;
 
 step_cfg.ica_prep_faster_ptp_epoch_rejection.use_ptp       = true;
-step_cfg.ica_prep_faster_ptp_epoch_rejection.ptp_uV_thresh = 800;
+step_cfg.ica_prep_faster_ptp_epoch_rejection.ptp_uV_thresh = 100;
 
 % 1.00 means disabled. Example: 0.50 stops Step 03 if >50% of ICA-prep
 % epochs are removed.
@@ -5553,10 +5833,13 @@ step_cfg.regepoch_step_sec   = 10;
 % false = treat the complete baseline recording as one continuous condition
 step_cfg.baseline_has_conditions = false;
 
-step_cfg.baseline_start_condition        = "open";
-step_cfg.baseline_open_marker_prefixes   = {'S 1'};
-step_cfg.baseline_closed_marker_prefixes = {'S 2'};
-step_cfg.baseline_end_markers            = {'S 99'};
+% Generic baseline condition definitions. Each row contains a freely chosen
+% condition name and the marker prefixes that start that condition.
+step_cfg.baseline_condition_definitions = {};
+step_cfg.baseline_start_condition        = "";
+step_cfg.baseline_end_condition          = "";
+
+step_cfg.baseline_end_markers            = {};
 
 % -------------------------------------------------------------------------
 % ARTIFACT REJECTION
@@ -5580,12 +5863,12 @@ step_cfg.epoch_rejection_method = "erplab";
 step_cfg.use_faster                    = true;
 step_cfg.faster_z_thresh               = 3;
 step_cfg.faster_use_robust_z           = true;
-step_cfg.faster_warn_if_reject_prop_gt = 0.25;
 
 step_cfg.use_ptp       = true;
-step_cfg.ptp_uV_thresh = 300;
+step_cfg.ptp_uV_thresh = 100;
 
 step_cfg.max_reject_prop = 1;
+step_cfg.warn_if_reject_prop_gt = 0.25;
 
 % MAD variance rejection settings.
 % Only used when epoch_rejection_method="mad_variance".
@@ -5651,7 +5934,7 @@ step_cfg.faster_ptp_epoch_rejection.use_faster    = true;
 step_cfg.faster_ptp_epoch_rejection.faster_z      = 3;
 step_cfg.faster_ptp_epoch_rejection.use_robust_z  = true;
 step_cfg.faster_ptp_epoch_rejection.use_ptp       = true;
-step_cfg.faster_ptp_epoch_rejection.ptp_uV_thresh = 300;
+step_cfg.faster_ptp_epoch_rejection.ptp_uV_thresh = 100;
 
 % -------------------------------------------------------------------------
 % MINIMUM TRIALS PER CONDITION (event_locked only)
