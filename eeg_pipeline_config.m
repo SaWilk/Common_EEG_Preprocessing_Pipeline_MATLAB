@@ -41,6 +41,13 @@ helpers = eeg_pipeline_helpers(bootstrap_log);
 
 cfg = struct();
 
+% One shared timestamp for all QC files produced by this pipeline run.
+% Filenames start with yyyy-mm-dd-hh-mm so runs can be compared directly.
+cfg.qc = struct();
+cfg.qc.filename_timestamp_format = 'yyyy-mm-dd-HH-MM';
+cfg.qc.run_timestamp = string(datestr(now, cfg.qc.filename_timestamp_format));
+cfg.qc.table_delimiter = ';';
+
 % -------------------------------------------------------------------------
 % Project identity
 % -------------------------------------------------------------------------
@@ -498,17 +505,23 @@ cfg.prep_03.ica_prep_highpass_hz = 1; % only for the ica training set; leave if 
 cfg.prep_03.bad_channel_detection_method = "clean_rawdata"; % "clean_rawdata" | "pop_rejchan" | "off"
 % Note: clean_rawdata used to be called "auto"
 
-% Only used for bad_channel_detection_method = "clean_rawdata"
-cfg.prep_03.clean_rawdata_flatline_sec           = 5;
+% Flat/invalid EEG-channel detection is applied exactly once, independently
+% of the selected bad-channel backend and always after cropping. AUX channels
+% are only removed if they are non-finite or completely constant.
+cfg.prep_03.flat_channel_detection = struct();
+cfg.prep_03.flat_channel_detection.enable = true;
+cfg.prep_03.flat_channel_detection.mode = "cumulative_fraction"; % "cumulative_fraction" | "continuous_seconds"
+cfg.prep_03.flat_channel_detection.max_flat_fraction = 0.10; % >=10% of complete post-crop recording, not necessarily continuously
+cfg.prep_03.flat_channel_detection.continuous_flat_sec = 5; % only used for mode="continuous_seconds"
+cfg.prep_03.flat_channel_detection.step_tolerance_uV = 0;
+
+% Only used for bad_channel_detection_method = "clean_rawdata". Its own
+% flatline criterion is disabled because flatness is already checked above.
 cfg.prep_03.clean_rawdata_channel_corr_threshold = 0.80;
 
 % Only used for bad_channel_detection_method = "pop_rejchan"
 cfg.prep_03.pop_rejchan_z_threshold  = 2.5;
 cfg.prep_03.pop_rejchan_freqrange_hz = [1, cfg.prep_03.lowpass_hz + 10];
-
-% Always used if enabled
-cfg.prep_03.flag_flat_channels_as_bad     = true;
-cfg.prep_03.flat_channel_variance_epsilon = 0;
 
 % Applied to final bad EEG channel list
 cfg.prep_03.interpolate_bad_channels_before_ica = true;
@@ -594,8 +607,9 @@ cfg.prep_03.ica_prep_erplab_epoch_rejection.use_sample_diff = true;
 cfg.prep_03.ica_prep_erplab_epoch_rejection.sample_diff_uV  = 75;
 cfg.prep_03.ica_prep_erplab_epoch_rejection.flag_sample_diff = 2;
 
-% 3) Exclude flatline/blocking, but more lenient than final rejection.
-cfg.prep_03.ica_prep_erplab_epoch_rejection.use_flatline = true;
+% 3) Optional flatline/blocking rejection. This may reject unexpectedly
+% many epochs, so it is off by default and should be enabled deliberately.
+cfg.prep_03.ica_prep_erplab_epoch_rejection.use_flatline = false;
 cfg.prep_03.ica_prep_erplab_epoch_rejection.flatline_tolerance_uV = 0.5;
 cfg.prep_03.ica_prep_erplab_epoch_rejection.flatline_duration_ms  = 200;
 cfg.prep_03.ica_prep_erplab_epoch_rejection.flag_flatline = 3;
@@ -609,11 +623,6 @@ cfg.prep_03.ica_prep_erplab_epoch_rejection.lowpass_hz = -1;
 cfg.prep_03.ica_prep_mad_z_threshold = 3;
 cfg.prep_03.ica_prep_mad_use_logvar  = true;
 cfg.prep_03.ica_prep_max_reject_prop = 1.00;
-
-% MAD variance rejection settings.
-% Only used when cfg.prep_06.epoch_rejection_method == "mad_variance".
-cfg.prep_06.mad_z_threshold = 3;
-cfg.prep_06.mad_use_logvar  = true;
 
 % -------------------------------------------------------------------------
 % FASTER/PTP ICA-prep epoch rejection
@@ -805,6 +814,8 @@ cfg.prep_06.erplab_epoch_rejection.use_sample_diff = true;
 cfg.prep_06.erplab_epoch_rejection.sample_diff_uV  = 50;
 cfg.prep_06.erplab_epoch_rejection.flag_sample_diff = 2;
 
+% Optional only: flatline rejection may reject unexpectedly many epochs.
+% Keep false unless its effect has been inspected for the current dataset.
 cfg.prep_06.erplab_epoch_rejection.use_flatline = false;
 cfg.prep_06.erplab_epoch_rejection.flatline_tolerance_uV = 0.5;
 cfg.prep_06.erplab_epoch_rejection.flatline_duration_ms  = 100;
@@ -862,8 +873,9 @@ cfg.prep_06.min_trials_per_condition_codes = {}; % adjust this to conditions
 % -------------------------------------------------------------------------
 % Summary tables
 % -------------------------------------------------------------------------
-cfg.prep_06.write_run_summary_table     = false;
-cfg.prep_06.write_subject_summary_table = false;
+% These are fixed QC outputs. Step 06 also refreshes all-subject summaries.
+cfg.prep_06.write_run_summary_table     = true;
+cfg.prep_06.write_subject_summary_table = true;
 cfg.prep_06.qc_table_delimiter          = ';';
 
 end

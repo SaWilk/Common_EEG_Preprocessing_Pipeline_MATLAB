@@ -64,7 +64,7 @@ OUTPUT_LABEL_CLOSED = "_cond-closed_epoched_final";
 %% ========================================================================
 %  STEP CFG DEFAULTS
 % ========================================================================
-step_cfg = local_default_prep06_cfg_impl();
+step_cfg = helpers.default_prep06_cfg();
 
 %% ========================================================================
 %  MERGE USER CONFIG
@@ -83,6 +83,7 @@ end
 step_cfg.epoching_mode = string(step_cfg.epoching_mode);
 step_cfg.epoching_mode = step_cfg.epoching_mode(1);
 step_cfg.epoching_mode = string(helpers.normalize_epoching_mode_value(step_cfg.epoching_mode));
+step_cfg.qc_timestamp = helpers.resolve_qc_timestamp(cfg);
 
 OVERWRITE_MODE = helpers.resolve_overwrite_mode(cfg, step_cfg.overwrite_mode);
 
@@ -105,10 +106,6 @@ if ~isfield(paths, 'prep_06_out_dir') || strlength(string(paths.prep_06_out_dir)
     error('prep_06_epoching: paths.prep_06_out_dir is missing or empty.');
 end
 
-if ~isfield(paths, 'qc_dir') || strlength(string(paths.qc_dir)) == 0
-    error('prep_06_epoching: paths.qc_dir is missing or empty.');
-end
-
 ica_method = "unknown";
 if isfield(cfg, 'prep_04') && isfield(cfg.prep_04, 'ica_method') && ...
         strlength(string(cfg.prep_04.ica_method)) > 0
@@ -118,7 +115,11 @@ ica_method_tag = lower(regexprep(char(ica_method), '[^\w\-]', '_'));
 
 IN_DIR        = paths.prep_05_out_dir;
 OUT_DIR       = paths.prep_06_out_dir;
-QC_METHOD_DIR = fullfile(paths.qc_dir, ica_method_tag);
+if isfield(paths, 'qc_epoch_rej_root') && strlength(string(paths.qc_epoch_rej_root)) > 0
+    QC_METHOD_DIR = fullfile(paths.qc_epoch_rej_root, ica_method_tag);
+else
+    QC_METHOD_DIR = fullfile(paths.derivatives_root, 'qc', 'epoch_rej', ica_method_tag);
+end
 
 helpers.ensure_dir(OUT_DIR);
 helpers.ensure_dir(QC_METHOD_DIR);
@@ -138,6 +139,7 @@ end
 outputs_written = {};
 summary_files   = {};
 summary_rows    = table();
+epoch_qc_rows  = table();
 
 %% ========================================================================
 %  MAIN LOOP
@@ -188,6 +190,7 @@ try
         EEG_ref = helpers.apply_reference_mode(EEG_in, step_cfg, helpers);
 
         run_summary_rows = table();
+        run_epoch_qc_rows = table();
 
         switch step_cfg.epoching_mode
 
@@ -308,6 +311,11 @@ try
                         SUBJ_LABEL, run_base_c);
                 end
 
+                event_epoch_qc = helpers.build_epoch_rejection_qc_table( ...
+                    rej_info, step_cfg, cfg, SUBJ_LABEL, run_base, ...
+                    MODE_EVENT_LOCKED, "event_locked", "prep_06_epoching");
+                run_epoch_qc_rows = event_epoch_qc;
+
                 row_event_locked = helpers.build_step06_summary_row( ...
                     SUBJ_LABEL, run_base, ica_method, step_cfg, ...
                     MODE_EVENT_LOCKED, "event_locked", ...
@@ -317,7 +325,10 @@ try
                 run_summary_rows = row_event_locked;
 
             case MODE_BASELINE
+            open_condition_label = "open";
             if ~step_cfg.baseline_has_conditions
+
+                open_condition_label = "baseline";
 
                 EEG_open = eeg_regepochs(EEG_ref, ...
                     'recurrence', step_cfg.regepoch_step_sec, ...
@@ -347,21 +358,22 @@ try
                         min_n = step_cfg.min_trials_per_condition_min_n;
 
                         rej_info_open.min_trials_required = min_n;
-                        rej_info_open.min_trials_condition_counts = sprintf('open=%d', EEG_open_final.trials);
+                        rej_info_open.min_trials_condition_counts = sprintf( ...
+                            '%s=%d', char(open_condition_label), EEG_open_final.trials);
 
                         if EEG_open_final.trials < min_n
                             rej_info_open.excluded = true;
                             rej_info_open.excluded_by_min_trials_rule = true;
                             rej_info_open.exclusion_reason = "min_trials_per_condition";
-                            rej_info_open.min_trials_insufficient_conditions = "open";
+                            rej_info_open.min_trials_insufficient_conditions = open_condition_label;
 
                             EEG_open_final = helpers.append_eeg_comment(EEG_open_final, sprintf( ...
-                                'prep_06_epoching: baseline OPEN excluded by min-trials rule | min_n=%d | open=%d', ...
-                                min_n, EEG_open_final.trials));
+                                'prep_06_epoching: baseline %s excluded by min-trials rule | min_n=%d | n=%d', ...
+                                char(open_condition_label), min_n, EEG_open_final.trials));
 
                             helpers.log_msg_default( ...
-                                'prep_06_epoching: %s | %s | baseline OPEN excluded by min-trials rule | min_n=%d | open=%d', ...
-                                SUBJ_LABEL, run_base_c, min_n, EEG_open_final.trials);
+                                'prep_06_epoching: %s | %s | baseline %s excluded by min-trials rule | min_n=%d | n=%d', ...
+                                SUBJ_LABEL, run_base_c, char(open_condition_label), min_n, EEG_open_final.trials);
                         end
                     end
 
@@ -389,9 +401,19 @@ try
                             SUBJ_LABEL, run_base_c);
                     end
 
+                    open_epoch_qc = helpers.build_epoch_rejection_qc_table( ...
+                        rej_info_open, step_cfg, cfg, SUBJ_LABEL, run_base, ...
+                        MODE_BASELINE, open_condition_label, "prep_06_epoching");
+
+                    if isempty(run_epoch_qc_rows)
+                        run_epoch_qc_rows = open_epoch_qc;
+                    else
+                        run_epoch_qc_rows = [run_epoch_qc_rows; open_epoch_qc]; %#ok<AGROW>
+                    end
+
                     row_open = helpers.build_step06_summary_row( ...
                         SUBJ_LABEL, run_base, ica_method, step_cfg, ...
-                        MODE_BASELINE, "open", ...
+                        MODE_BASELINE, open_condition_label, ...
                         in_name, rej_info_open, saved_paths_open, status_open, ...
                         numel(idx_eeg), numel(idx_eog), numel(idx_non_eeg));
 
@@ -457,6 +479,16 @@ try
                             SUBJ_LABEL, run_base_c);
                     end
 
+                    closed_epoch_qc = helpers.build_epoch_rejection_qc_table( ...
+                        rej_info_closed, step_cfg, cfg, SUBJ_LABEL, run_base, ...
+                        MODE_BASELINE, "closed", "prep_06_epoching");
+
+                    if isempty(run_epoch_qc_rows)
+                        run_epoch_qc_rows = closed_epoch_qc;
+                    else
+                        run_epoch_qc_rows = [run_epoch_qc_rows; closed_epoch_qc]; %#ok<AGROW>
+                    end
+
                     row_closed = helpers.build_step06_summary_row( ...
                         SUBJ_LABEL, run_base, ica_method, step_cfg, ...
                         MODE_BASELINE, "closed", ...
@@ -494,25 +526,56 @@ try
             if step_cfg.write_run_summary_table
                 run_summary_path = fullfile( ...
                     QC_METHOD_DIR, ...
-                    sprintf('%s_%s_prep06_run_summary.csv', SUBJ_LABEL, run_base_c));
+                    sprintf('%s_%s_%s_prep06_run_summary.csv', ...
+                    char(step_cfg.qc_timestamp), SUBJ_LABEL, run_base_c));
 
-                writetable(run_summary_rows, run_summary_path, ...
-                    'Delimiter', char(string(step_cfg.qc_table_delimiter)));
+                helpers.write_qc_table(run_summary_rows, run_summary_path, ...
+                    step_cfg.qc_table_delimiter);
 
                 summary_files{end+1} = run_summary_path; %#ok<AGROW>
             end
         end
+
+        if ~isempty(run_epoch_qc_rows)
+            if isempty(epoch_qc_rows)
+                epoch_qc_rows = run_epoch_qc_rows;
+            else
+                epoch_qc_rows = [epoch_qc_rows; run_epoch_qc_rows]; %#ok<AGROW>
+            end
+
+            epoch_qc_path = fullfile(QC_METHOD_DIR, sprintf( ...
+                '%s_%s_%s_epoch_rej.csv', ...
+                char(step_cfg.qc_timestamp), SUBJ_LABEL, run_base_c));
+            helpers.write_qc_table(run_epoch_qc_rows, epoch_qc_path, ...
+                step_cfg.qc_table_delimiter);
+            summary_files{end+1} = epoch_qc_path; %#ok<AGROW>
+        end
     end
 
-    if step_cfg.write_subject_summary_table && ~isempty(summary_rows)
+    % Required collector input: always write the subject-level summary.
+    if ~isempty(summary_rows)
         subject_summary_path = fullfile( ...
             QC_METHOD_DIR, ...
-            sprintf('%s_prep06_summary.csv', SUBJ_LABEL));
+            sprintf('%s_%s_prep06_summary.csv', ...
+            char(step_cfg.qc_timestamp), SUBJ_LABEL));
 
-        writetable(summary_rows, subject_summary_path, ...
-            'Delimiter', char(string(step_cfg.qc_table_delimiter)));
+        helpers.write_qc_table(summary_rows, subject_summary_path, ...
+            step_cfg.qc_table_delimiter);
 
         summary_files{end+1} = subject_summary_path; %#ok<AGROW>
+    end
+
+    % Fixed final part of Step 06: refresh the all-subject summaries from
+    % the latest subject-level QC files. Atomic writes make this safe when
+    % subjects finish in parallel; the last worker produces the full table.
+    try
+        [~, ~, ~, ~, group_summary_paths] = helpers.collect_prep06_summary(cfg);
+        for q = 1:numel(group_summary_paths)
+            summary_files{end+1} = group_summary_paths{q}; %#ok<AGROW>
+        end
+    catch qc_me
+        helpers.log_msg_default( ...
+            'prep_06_epoching: WARNING group QC collection failed: %s', qc_me.message);
     end
 
     if isempty(outputs_written)
@@ -544,154 +607,3 @@ catch me
 end
 end
 
-function step_cfg = local_default_prep06_cfg_impl()
-step_cfg = struct();
-
-% -------------------------------------------------------------------------
-% GENERAL
-% -------------------------------------------------------------------------
-step_cfg.epoching_mode  = "event_locked";
-step_cfg.overwrite_mode = "";
-
-step_cfg.save_final_only         = true;
-step_cfg.save_intermediate_steps = false;
-step_cfg.savemode                = 'twofiles';
-
-% -------------------------------------------------------------------------
-% REFERENCING
-% -------------------------------------------------------------------------
-step_cfg.reference_mode            = "keep";
-step_cfg.mastoid_channel_labels    = {'T9','T10'};
-step_cfg.reference_exclude_non_eeg = true;
-
-% -------------------------------------------------------------------------
-% EVENT-LOCKED EPOCHING
-% -------------------------------------------------------------------------
-step_cfg.events_phase  = {};
-step_cfg.epoch_start_s = -0.4;
-step_cfg.epoch_end_s   =  2.6;
-
-% -------------------------------------------------------------------------
-% BASELINE EPOCHING
-% -------------------------------------------------------------------------
-step_cfg.regepoch_length_sec = 10;
-step_cfg.regepoch_step_sec   = 10;
-
-% true  = split baseline data into conditions using the markers below
-% false = treat the complete baseline recording as one continuous condition
-step_cfg.baseline_has_conditions = true;
-
-step_cfg.baseline_start_condition        = "open";
-step_cfg.baseline_open_marker_prefixes   = {'S 1'};
-step_cfg.baseline_closed_marker_prefixes = {'S 2'};
-step_cfg.baseline_end_markers            = {'S 99'};
-
-% -------------------------------------------------------------------------
-% ARTIFACT REJECTION
-% -------------------------------------------------------------------------
-step_cfg.do_artifact_rejection               = true;
-
-% Optional first-pass hard rejection.
-% Usually keep this false when epoch_rejection_backend="erplab", because
-% ERPLAB's extreme-value rule can implement the same threshold.
-step_cfg.do_initial_hard_threshold_rejection = false;
-step_cfg.initial_hard_threshold_uv           = 100;
-
-% Select exactly one final epoch-rejection method:
-%   "erplab"     = ERPLAB pop_artextval/pop_artdiff/pop_artflatline
-%   "faster_ptp" = FASTER epoch_properties + peak-to-peak threshold
-%   "mad_variance" = original MAD variance rejection helper
-%   "none"       = no final epoch rejection
-step_cfg.epoch_rejection_method = "erplab";
-
-% Legacy / fallback settings
-step_cfg.use_faster                    = true;
-step_cfg.faster_z_thresh               = 3;
-step_cfg.faster_use_robust_z           = true;
-step_cfg.faster_warn_if_reject_prop_gt = 0.25;
-
-step_cfg.use_ptp       = true;
-step_cfg.ptp_uV_thresh = 300;
-
-step_cfg.max_reject_prop = 1;
-
-% MAD variance rejection settings.
-% Only used when epoch_rejection_method="mad_variance".
-% Reuses reject_ica_prep_epochs_by_mad_variance_impl.
-step_cfg.mad_z_threshold = 3;
-step_cfg.mad_use_logvar  = true;
-
-% -------------------------------------------------------------------------
-% ERPLAB EPOCH REJECTION
-% -------------------------------------------------------------------------
-step_cfg.erplab_epoch_rejection = struct();
-
-% "eeg" checks only EEG channels; "all" checks all channels.
-step_cfg.erplab_epoch_rejection.channel_scope = "eeg";
-
-% [] means use the whole epoch window.
-step_cfg.erplab_epoch_rejection.twindow_ms = [];
-
-% Clear previous EEGLAB/ERPLAB manual artifact flags before running ERPLAB.
-step_cfg.erplab_epoch_rejection.clear_existing_flags = true;
-
-% 1) Extreme voltage threshold: reject if signal exceeds +/- threshold.
-step_cfg.erplab_epoch_rejection.use_extreme_voltage = true;
-step_cfg.erplab_epoch_rejection.extreme_voltage_uV  = 200;
-step_cfg.erplab_epoch_rejection.flag_extreme_voltage = 1;
-
-% 2) Sample-to-sample voltage difference.
-step_cfg.erplab_epoch_rejection.use_sample_diff = true;
-step_cfg.erplab_epoch_rejection.sample_diff_uV  = 50;
-step_cfg.erplab_epoch_rejection.flag_sample_diff = 2;
-
-% 3) Flatline / blocking: signal stays within tolerance for duration.
-step_cfg.erplab_epoch_rejection.use_flatline = true;
-step_cfg.erplab_epoch_rejection.flatline_tolerance_uV = 0.5;
-step_cfg.erplab_epoch_rejection.flatline_duration_ms  = 100;
-step_cfg.erplab_epoch_rejection.flag_flatline = 3;
-
-step_cfg.erplab_epoch_rejection.review = "off";
-step_cfg.erplab_epoch_rejection.history = "off";
-step_cfg.erplab_epoch_rejection.lowpass_hz = -1;
-
-% -------------------------------------------------------------------------
-% BASELINE CORRECTION
-% -------------------------------------------------------------------------
-step_cfg.do_baseline_correction = false;
-step_cfg.base_start_ms          = -200;
-step_cfg.base_end_ms            = 0;
-
-% -------------------------------------------------------------------------
-% OUTPUT SPLITTING
-% -------------------------------------------------------------------------
-step_cfg.split_non_eeg_channels = false;
-step_cfg.eeg_only_keep_eog      = false;
-
-% -------------------------------------------------------------------------
-% SHARED EPOCH REJECTION
-% -------------------------------------------------------------------------
-% FASTER/PTP epoch rejection.
-% Only used when epoch_rejection_method="faster_ptp".
-step_cfg.faster_ptp_epoch_rejection = struct();
-step_cfg.faster_ptp_epoch_rejection.use_faster    = true;
-step_cfg.faster_ptp_epoch_rejection.faster_z      = 3;
-step_cfg.faster_ptp_epoch_rejection.use_robust_z  = true;
-step_cfg.faster_ptp_epoch_rejection.use_ptp       = true;
-step_cfg.faster_ptp_epoch_rejection.ptp_uV_thresh = 300;
-
-% -------------------------------------------------------------------------
-% MINIMUM TRIALS PER CONDITION (event_locked only)
-% -------------------------------------------------------------------------
-step_cfg.min_trials_per_condition_enable      = false;
-step_cfg.min_trials_per_condition_min_n       = 3;
-step_cfg.min_trials_per_condition_zero_tol_ms = 2;
-step_cfg.min_trials_per_condition_codes       = {};
-
-% -------------------------------------------------------------------------
-% SUMMARY TABLES
-% -------------------------------------------------------------------------
-step_cfg.write_run_summary_table     = true;
-step_cfg.write_subject_summary_table = true;
-step_cfg.qc_table_delimiter          = ';';
-end

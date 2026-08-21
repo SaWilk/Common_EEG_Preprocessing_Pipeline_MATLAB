@@ -39,6 +39,13 @@ helpers = eeg_pipeline_helpers(bootstrap_log);
 
 cfg = struct();
 
+% One shared timestamp for all QC files produced by this pipeline run.
+% Filenames start with yyyy-mm-dd-hh-mm so runs can be compared directly.
+cfg.qc = struct();
+cfg.qc.filename_timestamp_format = 'yyyy-mm-dd-HH-MM';
+cfg.qc.run_timestamp = string(datestr(now, cfg.qc.filename_timestamp_format));
+cfg.qc.table_delimiter = ';';
+
 % -------------------------------------------------------------------------
 % Project identity
 % -------------------------------------------------------------------------
@@ -625,11 +632,6 @@ cfg.prep_03.ica_prep_mad_z_threshold = 3;
 cfg.prep_03.ica_prep_mad_use_logvar  = true;
 cfg.prep_03.ica_prep_max_reject_prop = 1.00;
 
-% MAD variance rejection settings.
-% Only used when cfg.prep_06.epoch_rejection_method == "mad_variance".
-cfg.prep_06.mad_z_threshold = 3;
-cfg.prep_06.mad_use_logvar  = true;
-
 % -------------------------------------------------------------------------
 % FASTER/PTP ICA-prep epoch rejection
 % Only used when cfg.prep_03.ica_prep_epoch_rejection_method == "faster_ptp".
@@ -764,6 +766,8 @@ cfg.prep_06.regepoch_length_sec = 10; % length of epochs to be created
 cfg.prep_06.regepoch_step_sec = 10; % seconds between starts of consecutive 
 % regepochs; same as length = non-overlapping epochs without gaps
 
+cfg.prep_06.baseline_has_conditions = false; % false = treat complete baseline as one condition
+
 % for inconsistency's sake, in the baseline condition you already label your
 % epochs here. For now, the pipeline assumes there was an eyes "open" and
 % an eyes "closed" condition; will be made more customizable in a future update
@@ -880,7 +884,7 @@ cfg.prep_06.min_trials_per_condition_codes = { ... % adjust this to conditions
     };
 
 % -------------------------------------------------------------------------
-% Summary tables
+% Fixed QC outputs. Step 06 also refreshes all-subject summaries.
 % -------------------------------------------------------------------------
 cfg.prep_06.write_run_summary_table     = true;
 cfg.prep_06.write_subject_summary_table = true;
