@@ -105,7 +105,7 @@ helpers.build_eeg_key_token_stream_with_time  = @build_eeg_key_token_stream_with
 helpers.find_first_event_latency              = @find_first_event_latency_impl;
 helpers.ensure_channel_types                  = @ensure_channel_types_impl;
 helpers.find_flat_or_invalid_channels         = @find_flat_or_invalid_channels_impl;
-helpers.detect_bad_channels_emulation_style   = @detect_bad_channels_emulation_style_impl;
+helpers.detect_bad_channels_clean_rawdata     = @detect_bad_channels_clean_rawdata_impl;
 helpers.apply_filter_to_subset_only           = @apply_filter_to_subset_only_impl;
 helpers.apply_pop_cleanline_to_subset         = @apply_pop_cleanline_to_subset_impl;
 helpers.apply_jointprob_safely                = @apply_jointprob_safely_impl;
@@ -2785,29 +2785,131 @@ EEG = eeg_checkset(EEG);
     end
 end
 
-function [flat_indices, flat_labels] = find_flat_or_invalid_channels_impl(EEG, candidate_indices, variance_epsilon)
+function [flat_indices, flat_labels, info] = find_flat_or_invalid_channels_impl(EEG, candidate_indices, detection_cfg)
 flat_indices = [];
 flat_labels  = {};
+info = struct();
 
 if isempty(candidate_indices)
     return;
 end
 
-data_2d = double(EEG.data(candidate_indices, :));
+if nargin < 3 || ~isstruct(detection_cfg)
+    error('flat-channel detection settings must be provided as a struct.');
+end
+
+candidate_indices = candidate_indices(:)';
+data_2d = double(reshape(EEG.data(candidate_indices, :, :), numel(candidate_indices), []));
+
+mode = "cumulative_fraction";
+if isfield(detection_cfg, 'mode') && strlength(string(detection_cfg.mode)) > 0
+    mode = lower(strtrim(string(detection_cfg.mode)));
+    mode = mode(1);
+end
+
+step_tolerance_uV = 0;
+if isfield(detection_cfg, 'step_tolerance_uV') && ~isempty(detection_cfg.step_tolerance_uV)
+    step_tolerance_uV = double(detection_cfg.step_tolerance_uV);
+end
+
+if ~isscalar(step_tolerance_uV) || ~isfinite(step_tolerance_uV) || step_tolerance_uV < 0
+    error('flat_channel_detection.step_tolerance_uV must be a finite scalar >= 0.');
+end
 
 has_invalid = any(~isfinite(data_2d), 2);
-chan_var    = var(data_2d, 0, 2);
+flat_fraction = zeros(numel(candidate_indices), 1);
+max_contiguous_flat_sec = zeros(numel(candidate_indices), 1);
+is_flat = false(numel(candidate_indices), 1);
+criterion_threshold = NaN;
 
-is_flat = (chan_var <= variance_epsilon) | has_invalid;
+recording_duration_sec = NaN;
+if isscalar(EEG.srate) && isfinite(EEG.srate) && EEG.srate > 0
+    recording_duration_sec = max(size(data_2d, 2) - 1, 0) / double(EEG.srate);
+end
 
-flat_indices = candidate_indices(is_flat);
+if size(data_2d, 2) < 2
+    is_flat(:) = true;
+else
+    finite_pairs = isfinite(data_2d(:, 1:end-1)) & isfinite(data_2d(:, 2:end));
+    flat_intervals = finite_pairs & ...
+        (abs(diff(data_2d, 1, 2)) <= step_tolerance_uV);
+
+    flat_fraction = sum(flat_intervals, 2) ./ size(flat_intervals, 2);
+
+    switch mode
+        case "cumulative_fraction"
+            max_flat_fraction = 0.10;
+            if isfield(detection_cfg, 'max_flat_fraction') && ...
+                    ~isempty(detection_cfg.max_flat_fraction)
+                max_flat_fraction = double(detection_cfg.max_flat_fraction);
+            end
+
+            if ~isscalar(max_flat_fraction) || ~isfinite(max_flat_fraction) || ...
+                    max_flat_fraction <= 0 || max_flat_fraction > 1
+                error('flat_channel_detection.max_flat_fraction must be in (0, 1].');
+            end
+
+            criterion_threshold = max_flat_fraction;
+            is_flat = flat_fraction >= max_flat_fraction;
+
+        case "continuous_seconds"
+            continuous_flat_sec = 5;
+            if isfield(detection_cfg, 'continuous_flat_sec') && ...
+                    ~isempty(detection_cfg.continuous_flat_sec)
+                continuous_flat_sec = double(detection_cfg.continuous_flat_sec);
+            end
+
+            if ~isscalar(continuous_flat_sec) || ~isfinite(continuous_flat_sec) || ...
+                    continuous_flat_sec <= 0
+                error('flat_channel_detection.continuous_flat_sec must be a finite scalar > 0.');
+            end
+
+            if ~isscalar(EEG.srate) || ~isfinite(EEG.srate) || EEG.srate <= 0
+                error('EEG.srate must be a finite scalar > 0 for continuous flat-channel detection.');
+            end
+
+            for ch = 1:size(flat_intervals, 1)
+                padded = [false, flat_intervals(ch, :), false];
+                transitions = diff(padded);
+                run_starts = find(transitions == 1);
+                run_ends = find(transitions == -1) - 1;
+
+                if ~isempty(run_starts)
+                    max_flat_steps = max(run_ends - run_starts + 1);
+                    max_contiguous_flat_sec(ch) = max_flat_steps / double(EEG.srate);
+                end
+            end
+
+            criterion_threshold = continuous_flat_sec;
+            is_flat = max_contiguous_flat_sec >= continuous_flat_sec;
+
+        otherwise
+            error(['flat_channel_detection.mode must be "cumulative_fraction" ' ...
+                'or "continuous_seconds". Got: %s'], char(mode));
+    end
+end
+
+is_bad = is_flat | has_invalid;
+
+flat_indices = candidate_indices(is_bad(:)');
 
 if ~isempty(flat_indices)
     flat_labels = {EEG.chanlocs(flat_indices).labels};
 end
+
+info.mode = mode;
+info.step_tolerance_uV = step_tolerance_uV;
+info.criterion_threshold = criterion_threshold;
+info.recording_duration_sec = recording_duration_sec;
+info.n_samples = size(data_2d, 2);
+info.candidate_indices = candidate_indices;
+info.flat_fraction = flat_fraction(:)';
+info.max_contiguous_flat_sec = max_contiguous_flat_sec(:)';
+info.has_invalid = has_invalid(:)';
+info.is_flat = is_flat(:)';
 end
 
-function [bad_indices, bad_labels] = detect_bad_channels_emulation_style_impl(EEG, eeg_indices, flatline_sec, corr_threshold)
+function [bad_indices, bad_labels] = detect_bad_channels_clean_rawdata_impl(EEG, eeg_indices, corr_threshold)
 bad_indices = [];
 bad_labels  = {};
 
@@ -2825,7 +2927,10 @@ EEG_tmp = eeg_checkset(EEG_tmp);
 
 labels_before = {EEG_tmp.chanlocs.labels};
 
-EEG_clean = clean_rawdata(EEG_tmp, flatline_sec, -1, corr_threshold, -1, -1, -1);
+% Flat-channel detection has already been performed centrally in Step 03.
+% Disable clean_rawdata's own continuous-flatline criterion here so each
+% channel is evaluated for flatness exactly once.
+EEG_clean = clean_rawdata(EEG_tmp, -1, -1, corr_threshold, -1, -1, -1);
 EEG_clean = eeg_checkset(EEG_clean);
 
 labels_after = {EEG_clean.chanlocs.labels};
@@ -3219,7 +3324,7 @@ function [EEG_out, info] = apply_erplab_epoch_rejection_impl( ...
 %
 %   pop_artextval    : extreme voltage threshold
 %   pop_artdiff      : sample-to-sample voltage difference
-%   pop_artflatline  : blocking / flatline detection
+%   pop_artflatline  : optional blocking / flatline detection (off by default)
 %
 % The function also creates the minimal ERPLAB-compatible EVENTLIST / epoch
 % fields needed for artificial regepochs, such as ICA-prep 1-s epochs or
@@ -3261,7 +3366,20 @@ if ~isfield(reject_cfg, 'enable') || ~reject_cfg.enable
     return;
 end
 
-required_erplab_functions = {'pop_artextval', 'pop_artdiff', 'pop_artflatline'};
+required_erplab_functions = {};
+
+if isfield(reject_cfg, 'use_extreme_voltage') && logical(reject_cfg.use_extreme_voltage)
+    required_erplab_functions{end+1} = 'pop_artextval'; %#ok<AGROW>
+end
+
+if isfield(reject_cfg, 'use_sample_diff') && logical(reject_cfg.use_sample_diff)
+    required_erplab_functions{end+1} = 'pop_artdiff'; %#ok<AGROW>
+end
+
+if isfield(reject_cfg, 'use_flatline') && logical(reject_cfg.use_flatline)
+    required_erplab_functions{end+1} = 'pop_artflatline'; %#ok<AGROW>
+end
+
 for f = 1:numel(required_erplab_functions)
     if exist(required_erplab_functions{f}, 'file') ~= 2
         error(['ERPLAB function %s was not found on the MATLAB path. ' ...

@@ -517,23 +517,23 @@ cfg.prep_03.interp_method = 'spherical';
 % Step 03 debug/intermediate exports.
 % Master switch. Default false = no Step 03 intermediate debug files.
 % If true, the individual switches below decide which stages are written.
-step_cfg.save_intermediate_steps = false;
+cfg.prep_03.save_intermediate_steps = false;
 
 % Save after final bad EEG channel list has been applied.
 % In this pipeline, bad EEG channels are usually interpolated rather than
 % permanently removed.
-step_cfg.save_intermediate_after_bad_channel_rejection = true;
+cfg.prep_03.save_intermediate_after_bad_channel_rejection = true;
 
 % Save after rereferencing.
-step_cfg.save_intermediate_after_rereference = true;
+cfg.prep_03.save_intermediate_after_rereference = true;
 
 % Save after high-pass filtering.
-step_cfg.save_intermediate_after_highpass = true;
+cfg.prep_03.save_intermediate_after_highpass = true;
 
 % Save after low-pass filtering.
-step_cfg.save_intermediate_after_lowpass = true;
+cfg.prep_03.save_intermediate_after_lowpass = true;
 
-step_cfg.intermediate_savemode = 'twofiles';
+cfg.prep_03.intermediate_savemode = 'twofiles';
 
 % -------------------------------------------------------------------------
 % Re-Referencing

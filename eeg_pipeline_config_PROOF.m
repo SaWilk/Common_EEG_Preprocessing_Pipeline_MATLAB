@@ -496,17 +496,24 @@ cfg.prep_03.ica_prep_highpass_hz = 1; % only for the ica training set; leave if 
 cfg.prep_03.bad_channel_detection_method = "pop_rejchan"; % "clean_rawdata" | "pop_rejchan" | "off"
 % Note: clean_rawdata used to be called "auto"
 
-% Only used for bad_channel_detection_method = "clean_rawdata"
-cfg.prep_03.clean_rawdata_flatline_sec           = 5;
+% Flat/invalid EEG-channel detection is applied exactly once, independently
+% of the selected bad-channel backend. AUX channels are only removed if they
+% are non-finite or completely constant.
+cfg.prep_03.flat_channel_detection = struct();
+cfg.prep_03.flat_channel_detection.enable = true;
+cfg.prep_03.flat_channel_detection.mode = "cumulative_fraction"; % "cumulative_fraction" | "continuous_seconds"
+cfg.prep_03.flat_channel_detection.max_flat_fraction = 0.10; % reject if flat for >=10% of the complete post-crop recording, not necessarily continuously
+cfg.prep_03.flat_channel_detection.continuous_flat_sec = 5; % only used for mode="continuous_seconds"
+cfg.prep_03.flat_channel_detection.step_tolerance_uV = 0; % consecutive samples count as flat if their absolute difference is <= this value
+
+% Only used for bad_channel_detection_method = "clean_rawdata".
+% Flat-channel detection is disabled inside clean_rawdata because it is
+% already performed once by cfg.prep_03.flat_channel_detection.
 cfg.prep_03.clean_rawdata_channel_corr_threshold = 0.80;
 
 % Only used for bad_channel_detection_method = "pop_rejchan"
 cfg.prep_03.pop_rejchan_z_threshold  = 5;
 cfg.prep_03.pop_rejchan_freqrange_hz = [1, cfg.prep_03.lowpass_hz + 10];
-
-% Always used if enabled
-cfg.prep_03.flag_flat_channels_as_bad     = true;
-cfg.prep_03.flat_channel_variance_epsilon = 0;
 
 % Applied to final bad EEG channel list
 cfg.prep_03.interpolate_bad_channels_before_ica = true;
@@ -579,9 +586,9 @@ cfg.prep_03.pop_cleanline_computepower      = 0;
 cfg.prep_03.pop_cleanline_verbose           = false;
 
 % ERPLAB ICA-prep rejection.
-% Same criteria as final Step 06 rejection, but more lenient:
-%   final:     +/-200 uV, 50 uV step, 100 ms flatline
-%   ICA-prep:  +/-300 uV, 75 uV step, 200 ms flatline
+% Flatline rejection is OFF by default because it can cause unexpectedly
+% high rejection rates. Enable it only after inspecting its effect on the
+% data. If enabled, the settings below use 0.5 uV over 200 ms.
 cfg.prep_03.ica_prep_erplab_epoch_rejection = struct();
 
 % Check only EEG channels, not EOG/SCR/Startle/EKG.
@@ -602,8 +609,8 @@ cfg.prep_03.ica_prep_erplab_epoch_rejection.use_sample_diff = true;
 cfg.prep_03.ica_prep_erplab_epoch_rejection.sample_diff_uV  = 75;
 cfg.prep_03.ica_prep_erplab_epoch_rejection.flag_sample_diff = 2;
 
-% 3) Exclude flatline/blocking, but more lenient than final rejection.
-cfg.prep_03.ica_prep_erplab_epoch_rejection.use_flatline = true;
+% 3) Optional flatline/blocking rejection. May reject unexpectedly many epochs.
+cfg.prep_03.ica_prep_erplab_epoch_rejection.use_flatline = false;
 cfg.prep_03.ica_prep_erplab_epoch_rejection.flatline_tolerance_uV = 0.5;
 cfg.prep_03.ica_prep_erplab_epoch_rejection.flatline_duration_ms  = 200;
 cfg.prep_03.ica_prep_erplab_epoch_rejection.flag_flatline = 3;
@@ -810,7 +817,9 @@ cfg.prep_06.erplab_epoch_rejection.use_sample_diff = true;
 cfg.prep_06.erplab_epoch_rejection.sample_diff_uV  = 50;
 cfg.prep_06.erplab_epoch_rejection.flag_sample_diff = 2;
 
-cfg.prep_06.erplab_epoch_rejection.use_flatline = true;
+% Optional only: flatline rejection may reject unexpectedly many epochs.
+% Keep false unless its effect has been inspected for the current dataset.
+cfg.prep_06.erplab_epoch_rejection.use_flatline = false;
 cfg.prep_06.erplab_epoch_rejection.flatline_tolerance_uV = 0.5;
 cfg.prep_06.erplab_epoch_rejection.flatline_duration_ms  = 100;
 cfg.prep_06.erplab_epoch_rejection.flag_flatline = 3;

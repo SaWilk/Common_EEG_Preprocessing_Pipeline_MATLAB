@@ -317,8 +317,7 @@ try
                 run_summary_rows = row_event_locked;
 
             case MODE_BASELINE
-%% #TODO: check if this works with the new baseline_has_conditions flag
-            if isfield(step_cfg, 'baseline_has_conditions') && ~step_cfg.baseline_has_conditions
+            if ~step_cfg.baseline_has_conditions
 
                 EEG_open = eeg_regepochs(EEG_ref, ...
                     'recurrence', step_cfg.regepoch_step_sec, ...
@@ -577,6 +576,10 @@ step_cfg.epoch_end_s   =  2.6;
 % -------------------------------------------------------------------------
 step_cfg.regepoch_length_sec = 10;
 step_cfg.regepoch_step_sec   = 10;
+
+% true  = split baseline data into conditions using the markers below
+% false = treat the complete baseline recording as one continuous condition
+step_cfg.baseline_has_conditions = true;
 
 step_cfg.baseline_start_condition        = "open";
 step_cfg.baseline_open_marker_prefixes   = {'S 1'};
