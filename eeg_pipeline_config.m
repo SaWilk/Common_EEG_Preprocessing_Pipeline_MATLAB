@@ -41,6 +41,13 @@ helpers = eeg_pipeline_helpers(bootstrap_log);
 
 cfg = struct();
 
+% One shared timestamp for all QC files produced by this pipeline run.
+% Filenames start with yyyy-mm-dd-hh-mm so runs can be compared directly.
+cfg.qc = struct();
+cfg.qc.filename_timestamp_format = 'yyyy-mm-dd-HH-MM';
+cfg.qc.run_timestamp = string(datestr(now, cfg.qc.filename_timestamp_format));
+cfg.qc.table_delimiter = ';';
+
 % -------------------------------------------------------------------------
 % Project identity
 % -------------------------------------------------------------------------
@@ -498,17 +505,23 @@ cfg.prep_03.ica_prep_highpass_hz = 1; % only for the ica training set; leave if 
 cfg.prep_03.bad_channel_detection_method = "clean_rawdata"; % "clean_rawdata" | "pop_rejchan" | "off"
 % Note: clean_rawdata used to be called "auto"
 
-% Only used for bad_channel_detection_method = "clean_rawdata"
-cfg.prep_03.clean_rawdata_flatline_sec           = 5;
+% Flat/invalid EEG-channel detection is applied exactly once, independently
+% of the selected bad-channel backend and always after cropping. AUX channels
+% are only removed if they are non-finite or completely constant.
+cfg.prep_03.flat_channel_detection = struct();
+cfg.prep_03.flat_channel_detection.enable = true;
+cfg.prep_03.flat_channel_detection.mode = "cumulative_fraction"; % "cumulative_fraction" | "continuous_seconds"
+cfg.prep_03.flat_channel_detection.max_flat_fraction = 0.10; % >=10% of complete post-crop recording, not necessarily continuously
+cfg.prep_03.flat_channel_detection.continuous_flat_sec = 5; % only used for mode="continuous_seconds"
+cfg.prep_03.flat_channel_detection.step_tolerance_uV = 0;
+
+% Only used for bad_channel_detection_method = "clean_rawdata". Its own
+% flatline criterion is disabled because flatness is already checked above.
 cfg.prep_03.clean_rawdata_channel_corr_threshold = 0.80;
 
 % Only used for bad_channel_detection_method = "pop_rejchan"
 cfg.prep_03.pop_rejchan_z_threshold  = 2.5;
 cfg.prep_03.pop_rejchan_freqrange_hz = [1, cfg.prep_03.lowpass_hz + 10];
-
-% Always used if enabled
-cfg.prep_03.flag_flat_channels_as_bad     = true;
-cfg.prep_03.flat_channel_variance_epsilon = 0;
 
 % Applied to final bad EEG channel list
 cfg.prep_03.interpolate_bad_channels_before_ica = true;
@@ -517,23 +530,23 @@ cfg.prep_03.interp_method = 'spherical';
 % Step 03 debug/intermediate exports.
 % Master switch. Default false = no Step 03 intermediate debug files.
 % If true, the individual switches below decide which stages are written.
-step_cfg.save_intermediate_steps = false;
+cfg.prep_03.save_intermediate_steps = false;
 
 % Save after final bad EEG channel list has been applied.
 % In this pipeline, bad EEG channels are usually interpolated rather than
 % permanently removed.
-step_cfg.save_intermediate_after_bad_channel_rejection = true;
+cfg.prep_03.save_intermediate_after_bad_channel_rejection = true;
 
 % Save after rereferencing.
-step_cfg.save_intermediate_after_rereference = true;
+cfg.prep_03.save_intermediate_after_rereference = true;
 
 % Save after high-pass filtering.
-step_cfg.save_intermediate_after_highpass = true;
+cfg.prep_03.save_intermediate_after_highpass = true;
 
 % Save after low-pass filtering.
-step_cfg.save_intermediate_after_lowpass = true;
+cfg.prep_03.save_intermediate_after_lowpass = true;
 
-step_cfg.intermediate_savemode = 'twofiles';
+cfg.prep_03.intermediate_savemode = 'twofiles';
 
 % -------------------------------------------------------------------------
 % Re-Referencing
@@ -594,8 +607,9 @@ cfg.prep_03.ica_prep_erplab_epoch_rejection.use_sample_diff = true;
 cfg.prep_03.ica_prep_erplab_epoch_rejection.sample_diff_uV  = 75;
 cfg.prep_03.ica_prep_erplab_epoch_rejection.flag_sample_diff = 2;
 
-% 3) Exclude flatline/blocking, but more lenient than final rejection.
-cfg.prep_03.ica_prep_erplab_epoch_rejection.use_flatline = true;
+% 3) Optional flatline/blocking rejection. This may reject unexpectedly
+% many epochs, so it is off by default and should be enabled deliberately.
+cfg.prep_03.ica_prep_erplab_epoch_rejection.use_flatline = false;
 cfg.prep_03.ica_prep_erplab_epoch_rejection.flatline_tolerance_uV = 0.5;
 cfg.prep_03.ica_prep_erplab_epoch_rejection.flatline_duration_ms  = 200;
 cfg.prep_03.ica_prep_erplab_epoch_rejection.flag_flatline = 3;
@@ -609,11 +623,6 @@ cfg.prep_03.ica_prep_erplab_epoch_rejection.lowpass_hz = -1;
 cfg.prep_03.ica_prep_mad_z_threshold = 3;
 cfg.prep_03.ica_prep_mad_use_logvar  = true;
 cfg.prep_03.ica_prep_max_reject_prop = 1.00;
-
-% MAD variance rejection settings.
-% Only used when cfg.prep_06.epoch_rejection_method == "mad_variance".
-cfg.prep_06.mad_z_threshold = 3;
-cfg.prep_06.mad_use_logvar  = true;
 
 % -------------------------------------------------------------------------
 % FASTER/PTP ICA-prep epoch rejection
@@ -633,7 +642,7 @@ cfg.prep_03.ica_prep_faster_ptp_epoch_rejection.faster_z     = 4;
 cfg.prep_03.ica_prep_faster_ptp_epoch_rejection.use_robust_z = true;
 
 cfg.prep_03.ica_prep_faster_ptp_epoch_rejection.use_ptp       = true;
-cfg.prep_03.ica_prep_faster_ptp_epoch_rejection.ptp_uV_thresh = 800;
+cfg.prep_03.ica_prep_faster_ptp_epoch_rejection.ptp_uV_thresh = 100;
 
 % 1.00 means disabled. Example: 0.50 would stop Step 03 if >50% of
 % ICA-training epochs are removed.
@@ -736,8 +745,8 @@ cfg.prep_06.events_phase = {}; % enter here triggers that mark where your epochs
     % 'S 2041','S 2441','S 2042','S 2442','S 2043','S 2443', ...
     % 'S 205','S 245' ...
     % }
- % note: currently as a design choices you should label these epoch types
- % in your analysis scripts as it is not really part of preprocessing
+% To propagate freely chosen event-locked condition names into the QC tables,
+% group these event codes in min_trials_per_condition_codes below.
 
 cfg.prep_06.epoch_start_s = -0.4; % start of epoch relative to event in seconds
 cfg.prep_06.epoch_end_s   =  2.6; % end of epoch relative to event in seconds
@@ -750,17 +759,19 @@ cfg.prep_06.regepoch_length_sec = 10; % length of epochs to be created
 cfg.prep_06.regepoch_step_sec = 10; % seconds between starts of consecutive 
 % regepochs; same as length = non-overlapping epochs without gaps
 
-cfg.prep_06.baseline_has_conditions = false; % indicates if baseline data have conditions (e.g. eyes open/closed)
+cfg.prep_06.baseline_has_conditions = false;
 
-% for inconsistency's sake, in the baseline condition you already label your
-% epochs here. For now, the pipeline assumes there was an eyes "open" and
-% an eyes "closed" condition; will be made more customizable in a future update
-cfg.prep_06.baseline_start_condition        = "open"; % assumes that data contains 
-% data from before first phase, in which participants had their eyes open
-cfg.prep_06.baseline_open_marker_prefixes   = {}; % triggers marking 
-% the start of open-eye baseline segments, e.g. "S 1", "S 11", "S 12"
-cfg.prep_06.baseline_closed_marker_prefixes = {}; % triggers marking the start of closed-eye baseline segments, e.g. "S 2", "S 21", "S 22"
-cfg.prep_06.baseline_end_markers            = {};
+% Ignored while baseline_has_conditions=false. If enabled, define arbitrary
+% names as rows of {condition_name, marker prefixes starting that condition}.
+% These names are propagated to output filenames and QC tables, for example:
+% cfg.prep_06.baseline_condition_definitions = { ...
+%     'condition_a', {'S 11','S 12'}; ...
+%     'condition_b', {'S 21','S 22'} ...
+%     };
+cfg.prep_06.baseline_condition_definitions = {};
+cfg.prep_06.baseline_start_condition = "";
+cfg.prep_06.baseline_end_markers = {};
+cfg.prep_06.baseline_end_condition = "";
 
 % -------------------------------------------------------------------------
 % Artifact rejection
@@ -787,6 +798,10 @@ cfg.prep_06.epoch_rejection_method = "erplab";  % "erplab" | "faster_ptp" | "mad
 % 1 means disabled. Example: 0.50 would exclude subjects with >50% rejected epochs.
 cfg.prep_06.max_reject_prop = 1;
 
+% Warning only (no exclusion): report all subjects with >25% rejected epochs
+% once more at the very end of the console output and in the master run log.
+cfg.prep_06.warn_if_reject_prop_gt = 0.25;
+
 % -------------------------------------------------------------------------
 % ERPLAB epoch rejection
 % Only used when cfg.prep_06.epoch_rejection_method == "erplab".
@@ -805,6 +820,8 @@ cfg.prep_06.erplab_epoch_rejection.use_sample_diff = true;
 cfg.prep_06.erplab_epoch_rejection.sample_diff_uV  = 50;
 cfg.prep_06.erplab_epoch_rejection.flag_sample_diff = 2;
 
+% Optional only: flatline rejection may reject unexpectedly many epochs.
+% Keep false unless its effect has been inspected for the current dataset.
 cfg.prep_06.erplab_epoch_rejection.use_flatline = false;
 cfg.prep_06.erplab_epoch_rejection.flatline_tolerance_uV = 0.5;
 cfg.prep_06.erplab_epoch_rejection.flatline_duration_ms  = 100;
@@ -829,7 +846,7 @@ cfg.prep_06.faster_ptp_epoch_rejection.faster_z      = 3;
 cfg.prep_06.faster_ptp_epoch_rejection.use_robust_z  = false;
 
 cfg.prep_06.faster_ptp_epoch_rejection.use_ptp       = true;
-cfg.prep_06.faster_ptp_epoch_rejection.ptp_uV_thresh = 300;
+cfg.prep_06.faster_ptp_epoch_rejection.ptp_uV_thresh = 100;
 
 % -------------------------------------------------------------------------
 % MAD variance epoch rejection
@@ -845,7 +862,8 @@ cfg.prep_06.mad_use_logvar  = true;
 %   checks minimum trial counts for the event-code groups listed below.
 %
 % baseline:
-%   checks minimum number of valid regepochs separately for open and closed.
+%   checks minimum valid regepochs separately for every configured condition.
+%   Without conditions, the check applies once to the complete recording.
 %   The code list below is ignored in baseline mode.
 % -------------------------------------------------------------------------
 cfg.prep_06.min_trials_per_condition_enable      = true; 
@@ -862,8 +880,9 @@ cfg.prep_06.min_trials_per_condition_codes = {}; % adjust this to conditions
 % -------------------------------------------------------------------------
 % Summary tables
 % -------------------------------------------------------------------------
-cfg.prep_06.write_run_summary_table     = false;
-cfg.prep_06.write_subject_summary_table = false;
+% These are fixed QC outputs. Step 06 also refreshes all-subject summaries.
+cfg.prep_06.write_run_summary_table     = true;
+cfg.prep_06.write_subject_summary_table = true;
 cfg.prep_06.qc_table_delimiter          = ';';
 
 end

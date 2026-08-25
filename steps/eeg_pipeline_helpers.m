@@ -27,6 +27,8 @@ helpers.get_hostname             = @get_hostname_impl;
 helpers.get_env_first_nonempty   = @get_env_first_nonempty_impl;
 helpers.get_raw_trigger_from_key = @get_raw_trigger_from_key_impl;
 helpers.map_trigger_by_table     = @map_trigger_by_table_impl;
+helpers.default_prep03_cfg       = @default_prep03_cfg_impl;
+helpers.default_prep06_cfg       = @default_prep06_cfg_impl;
 
 % -------------------------------------------------------------------------
 % Logging and basic filesystem helpers
@@ -95,17 +97,27 @@ helpers.get_present_events                    = @get_present_events_impl;
 helpers.preview_event_types                   = @preview_event_types_impl;
 helpers.evaluate_min_trials_per_condition     = @evaluate_min_trials_per_condition_impl;
 helpers.build_step06_summary_row              = @build_step06_summary_row_impl;
+helpers.build_step06_summary_rows             = @build_step06_summary_rows_impl;
+helpers.build_bad_channel_qc_table            = @build_bad_channel_qc_table_impl;
+helpers.build_epoch_rejection_qc_table        = @build_epoch_rejection_qc_table_impl;
+helpers.write_qc_table                        = @write_qc_table_impl;
+helpers.resolve_qc_timestamp                  = @resolve_qc_timestamp_impl;
+helpers.collect_bad_channel_qc                = @collect_bad_channel_qc_impl;
+helpers.collect_prep06_summary                = @collect_prep06_summary_impl;
+helpers.build_high_epoch_rejection_warning    = @build_high_epoch_rejection_warning_impl;
 helpers.save_intermediate_set                 = @save_intermediate_set_impl;
 helpers.apply_hard_epoch_threshold_rejection  = @apply_hard_epoch_threshold_rejection_impl;
 helpers.apply_fallback_epoch_rejection        = @apply_fallback_epoch_rejection_impl;
 helpers.create_baseline_condition_datasets    = @create_baseline_condition_datasets_impl;
+helpers.resolve_baseline_condition_definitions = @resolve_baseline_condition_definitions_impl;
+helpers.build_epoching_output_stem             = @build_epoching_output_stem_impl;
 helpers.finalize_epoched_dataset              = @finalize_epoched_dataset_impl;
 helpers.save_final_epoched_outputs            = @save_final_epoched_outputs_impl;
 helpers.build_eeg_key_token_stream_with_time  = @build_eeg_key_token_stream_with_time_impl;
 helpers.find_first_event_latency              = @find_first_event_latency_impl;
 helpers.ensure_channel_types                  = @ensure_channel_types_impl;
 helpers.find_flat_or_invalid_channels         = @find_flat_or_invalid_channels_impl;
-helpers.detect_bad_channels_emulation_style   = @detect_bad_channels_emulation_style_impl;
+helpers.detect_bad_channels_clean_rawdata     = @detect_bad_channels_clean_rawdata_impl;
 helpers.apply_filter_to_subset_only           = @apply_filter_to_subset_only_impl;
 helpers.apply_pop_cleanline_to_subset         = @apply_pop_cleanline_to_subset_impl;
 helpers.apply_jointprob_safely                = @apply_jointprob_safely_impl;
@@ -884,19 +896,30 @@ paths.prep_04_out_dir           = fullfile(paths.step_04_root, paths.subj_label)
 paths.prep_05_out_dir           = fullfile(paths.step_05_root, paths.subj_label);
 paths.prep_06_out_dir           = fullfile(paths.step_06_root, paths.subj_label);
 
-% QA / checks roots
-paths.checks_root = fullfile(paths.derivatives_root, 'checks');
-ensure_dir_impl(paths.checks_root);
-
-paths.checks_ica_components_root = fullfile(paths.checks_root, 'ica_comps');
-ensure_dir_impl(paths.checks_ica_components_root);
-
-paths.checks_ica_components_subj_dir = fullfile(paths.checks_ica_components_root, paths.subj_label);
-paths.checks_ica_components_rej_dir  = fullfile(paths.checks_ica_components_subj_dir, 'rej');
-paths.checks_ica_components_edge_dir = fullfile(paths.checks_ica_components_subj_dir, 'edge');
-
+% Unified quality-control root. Logs remain separate because they are
+% diagnostic text streams; all user-facing QC artifacts live below qc/.
 paths.qc_root = fullfile(paths.derivatives_root, 'qc');
 ensure_dir_impl(paths.qc_root);
+
+paths.qc_ica_components_root = fullfile(paths.qc_root, 'ica_comps');
+paths.qc_bad_chans_root       = fullfile(paths.qc_root, 'bad_chans');
+paths.qc_epoch_rej_root       = fullfile(paths.qc_root, 'epoch_rej');
+
+ensure_dir_impl(paths.qc_ica_components_root);
+ensure_dir_impl(paths.qc_bad_chans_root);
+ensure_dir_impl(paths.qc_epoch_rej_root);
+
+paths.qc_ica_components_subj_dir = fullfile(paths.qc_ica_components_root, paths.subj_label);
+paths.qc_bad_chans_subj_dir       = fullfile(paths.qc_bad_chans_root, paths.subj_label);
+paths.qc_epoch_rej_subj_dir       = fullfile(paths.qc_epoch_rej_root, paths.subj_label);
+
+% Backward-compatible aliases for Step 05 and older callers. Their values
+% now point into qc/ica_comps; no new derivatives/checks tree is created.
+paths.checks_root = paths.qc_root;
+paths.checks_ica_components_root = paths.qc_ica_components_root;
+paths.checks_ica_components_subj_dir = paths.qc_ica_components_subj_dir;
+paths.checks_ica_components_rej_dir  = fullfile(paths.checks_ica_components_subj_dir, 'rej');
+paths.checks_ica_components_edge_dir = fullfile(paths.checks_ica_components_subj_dir, 'edge');
 
 paths.qc_dir = fullfile(paths.qc_root, paths.subj_label);
 end
@@ -1723,14 +1746,6 @@ if exist(vhdr_dir, 'dir') ~= 7
     error('safe_load_bv: directory not found: %s', vhdr_dir);
 end
 
-function value = getfield_safe_impl(S, field_name, default_value)
-if isstruct(S) && isfield(S, field_name)
-    value = S.(field_name);
-else
-    value = default_value;
-end
-end
-
 full_path = fullfile(vhdr_dir, vhdr_name);
 if exist(full_path, 'file') ~= 2
     error('safe_load_bv: file not found: %s', full_path);
@@ -2029,26 +2044,52 @@ mode_raw = step_cfg.epoching_mode;
 mode = normalize_epoching_mode_value_impl(mode_raw);
 
 if strcmp(mode, 'event_locked')
-    base_stem = string(run_base) + "_epoched_final";
+    base_stem = build_epoching_output_stem_impl(run_base, "", false);
     output_spec.all_paths = build_output_paths_for_base_stem_epoching_impl( ...
         base_stem, out_dir, step_cfg, idx_eeg, idx_eog, idx_non_eeg);
 
 elseif strcmp(mode, 'baseline')
-    base_stem_open   = string(run_base) + "_cond-open_epoched_final";
-    base_stem_closed = string(run_base) + "_cond-closed_epoched_final";
+    has_conditions = logical(getfield_safe_impl(step_cfg, 'baseline_has_conditions', false));
 
-    paths_open = build_output_paths_for_base_stem_epoching_impl( ...
-        base_stem_open, out_dir, step_cfg, idx_eeg, idx_eog, idx_non_eeg);
+    if has_conditions
+        [condition_names, ~, ~, ~] = resolve_baseline_condition_definitions_impl(step_cfg);
+        if isempty(condition_names)
+            error(['cfg.prep_06.baseline_has_conditions=true, but no baseline condition ' ...
+                'definitions were provided.']);
+        end
+    else
+        condition_names = "";
+    end
 
-    paths_closed = build_output_paths_for_base_stem_epoching_impl( ...
-        base_stem_closed, out_dir, step_cfg, idx_eeg, idx_eog, idx_non_eeg);
-
-    output_spec.all_paths = [paths_open(:); paths_closed(:)];
+    for c = 1:numel(condition_names)
+        base_stem = build_epoching_output_stem_impl( ...
+            run_base, condition_names(c), has_conditions);
+        condition_paths = build_output_paths_for_base_stem_epoching_impl( ...
+            base_stem, out_dir, step_cfg, idx_eeg, idx_eog, idx_non_eeg);
+        output_spec.all_paths = [output_spec.all_paths; condition_paths(:)]; %#ok<AGROW>
+    end
 
 else
     error('Unsupported cfg.prep_06.epoching_mode: raw=>>%s<< | normalized=>>%s<<', ...
         char(string(mode_raw)), mode);
 end
+end
+
+function base_stem = build_epoching_output_stem_impl(run_base, condition_name, include_condition)
+base_stem = string(run_base);
+
+if nargin >= 3 && logical(include_condition)
+    condition_name = string(condition_name);
+    condition_name = strtrim(condition_name(1));
+    if strlength(condition_name) == 0
+        error('A non-empty condition name is required when include_condition=true.');
+    end
+
+    condition_token = lower(string(sanitize_filename_impl(condition_name)));
+    base_stem = base_stem + "_cond-" + condition_token;
+end
+
+base_stem = base_stem + "_epoched_final";
 end
 
 function out_path = save_intermediate_set_impl(EEG, out_dir, base_stem, overwrite_mode, cfg, savemode, helpers) %#ok<INUSD>
@@ -2085,6 +2126,7 @@ info.n_total    = EEG_in.trials;
 info.n_rejected = 0;
 info.n_kept     = EEG_in.trials;
 info.thresh_uv  = thresh_uv;
+info.rejected_epochs = [];
 
 if isempty(idx_eeg) || EEG_in.trials < 1
     return;
@@ -2109,6 +2151,7 @@ EEG_out = eeg_checkset(EEG_out);
 
 info.n_rejected = numel(bad_epochs);
 info.n_kept     = EEG_out.trials;
+info.rejected_epochs = bad_epochs(:)';
 end
 
 function [EEG_out, info] = apply_fallback_epoch_rejection_impl(EEG_in, idx_eeg, step_cfg)
@@ -2172,53 +2215,59 @@ info.n_rejected = numel(bad_epochs);
 info.n_kept     = EEG_out.trials;
 end
 
-function [EEG_open, EEG_closed] = create_baseline_condition_datasets_impl(EEG, step_cfg, helpers, run_base)
-EEG_open   = [];
-EEG_closed = [];
+function [condition_datasets, condition_names] = create_baseline_condition_datasets_impl(EEG, step_cfg, helpers, run_base)
+condition_datasets = {};
 
 if ~isfield(EEG, 'event') || isempty(EEG.event)
-    error('No EEG.event present -> cannot segment baseline open/closed.');
+    error('No EEG.event present -> cannot segment baseline conditions.');
 end
 
 if ~isfield(EEG, 'srate') || isempty(EEG.srate)
-    error('EEG.srate missing -> cannot segment baseline open/closed.');
+    error('EEG.srate missing -> cannot segment baseline conditions.');
 end
 
+[condition_names, marker_prefixes, start_condition, end_condition] = ...
+    resolve_baseline_condition_definitions_impl(step_cfg);
+
+if isempty(condition_names)
+    error(['No baseline condition definitions found. Use ' ...
+        'cfg.prep_06.baseline_condition_definitions.']);
+end
+
+end_markers = getfield_safe_impl(step_cfg, 'baseline_end_markers', {});
 event_times = [];
 event_codes = strings(0,1);
 
-% identify events and their timings matching defined triggers
 for k = 1:numel(EEG.event)
-    code = normalize_trigger_type_impl(EEG.event(k).type); % make sure that triggers are understood by script (?)
-
-    %disregard evnts added by EEGLab, called 'boundary'
+    code = normalize_trigger_type_impl(EEG.event(k).type);
     if strcmpi(code, 'boundary')
         continue;
     end
 
-    %only add events (+timing) if they match open, closed or end-markers as
-    %defined in config
-    if matches_any_prefix_impl(code, step_cfg.baseline_open_marker_prefixes) || ...
-            matches_any_prefix_impl(code, step_cfg.baseline_closed_marker_prefixes) || ...
-            matches_any_exact_impl(code, step_cfg.baseline_end_markers)
+    is_condition_marker = false;
+    for c = 1:numel(condition_names)
+        if matches_any_prefix_impl(code, marker_prefixes{c})
+            is_condition_marker = true;
+            break;
+        end
+    end
 
+    if is_condition_marker || matches_any_exact_impl(code, end_markers)
         event_codes(end+1,1) = string(code); %#ok<AGROW>
         event_times(end+1,1) = double(EEG.event(k).latency) / double(EEG.srate); %#ok<AGROW>
     end
 end
 
 if isempty(event_times)
-    error('No open/closed segmentation markers found in baseline recording.');
+    error('No configured baseline condition markers found in the recording.');
 end
 
-% sort events chronologically
 [event_times, sort_ix] = sort(event_times);
 event_codes = event_codes(sort_ix);
 
 recording_end_s = double(EEG.pnts) / double(EEG.srate);
 sample_eps = 1.0 / double(EEG.srate);
-
-current_condition = string(step_cfg.baseline_start_condition);
+current_condition = start_condition;
 current_t1 = 0;
 
 seg_condition = strings(0,1);
@@ -2234,20 +2283,21 @@ for i = 1:numel(event_codes)
     end
 
     next_condition = current_condition;
-
-    if matches_any_exact_impl(code, step_cfg.baseline_end_markers)
-        next_condition = "open";
-    elseif matches_any_prefix_impl(code, step_cfg.baseline_open_marker_prefixes)
-        next_condition = "open";
-    elseif matches_any_prefix_impl(code, step_cfg.baseline_closed_marker_prefixes)
-        next_condition = "closed";
+    if matches_any_exact_impl(code, end_markers)
+        next_condition = end_condition;
+    else
+        for c = 1:numel(condition_names)
+            if matches_any_prefix_impl(code, marker_prefixes{c})
+                next_condition = condition_names(c);
+                break;
+            end
+        end
     end
 
     if next_condition ~= current_condition
         seg_condition(end+1,1) = current_condition; %#ok<AGROW>
         seg_t1(end+1,1) = current_t1; %#ok<AGROW>
         seg_t2(end+1,1) = t_ev; %#ok<AGROW>
-
         current_condition = next_condition;
         current_t1 = t_ev;
     end
@@ -2260,16 +2310,14 @@ if current_t1 < recording_end_s - sample_eps
 end
 
 if isempty(seg_t1)
-    error('Could not derive any baseline segments.');
+    error('Could not derive any baseline condition segments.');
 end
 
 helpers.log_msg_default( ...
-    'prep_06_epoching: %s | derived %d baseline segments', ...
-    char(string(run_base)), numel(seg_t1));
+    'prep_06_epoching: %s | derived %d baseline segments across conditions: %s', ...
+    char(string(run_base)), numel(seg_t1), strjoin(cellstr(condition_names), ', '));
 
-open_parts = {};
-closed_parts = {};
-
+condition_parts = repmat({{}}, numel(condition_names), 1);
 epoch_len = double(step_cfg.regepoch_length_sec);
 epoch_step = double(step_cfg.regepoch_step_sec);
 if epoch_step <= 0
@@ -2279,36 +2327,102 @@ end
 for s = 1:numel(seg_t1)
     t1 = seg_t1(s);
     t2 = seg_t2(s);
-
     if (t2 - t1) < epoch_len
         continue;
     end
 
+    condition_ix = find(strcmpi(condition_names, seg_condition(s)), 1, 'first');
+    if isempty(condition_ix)
+        error('Derived unknown baseline condition: %s', char(seg_condition(s)));
+    end
+
     EEG_seg = pop_select(EEG, 'time', [t1, t2 - sample_eps]);
     EEG_seg = eeg_checkset(EEG_seg);
-
     EEG_ep = eeg_regepochs( ...
         EEG_seg, ...
         'recurrence', epoch_step, ...
         'limits', [0 epoch_len], ...
         'eventtype', 'regepoch');
-
     EEG_ep = eeg_checkset(EEG_ep);
-    EEG_ep.etc.baseline_condition = char(seg_condition(s));
-
+    EEG_ep.etc.baseline_condition = char(condition_names(condition_ix));
     EEG_ep = append_eeg_comment_impl(EEG_ep, sprintf( ...
         'prep_06_epoching: baseline_condition=%s | chunk=[%.3f %.3f] s | regepoch_length=%.1f s | regepoch_step=%.1f s', ...
-        seg_condition(s), t1, t2, epoch_len, epoch_step));
+        condition_names(condition_ix), t1, t2, epoch_len, epoch_step));
+    condition_parts{condition_ix}{end+1} = EEG_ep; %#ok<AGROW>
+end
 
-    if seg_condition(s) == "open"
-        open_parts{end+1} = EEG_ep; %#ok<AGROW>
-    else
-        closed_parts{end+1} = EEG_ep; %#ok<AGROW>
+condition_datasets = cell(numel(condition_names), 1);
+for c = 1:numel(condition_names)
+    condition_datasets{c} = merge_eeg_sets_impl(condition_parts{c});
+end
+end
+
+function [condition_names, marker_prefixes, start_condition, end_condition] = resolve_baseline_condition_definitions_impl(step_cfg)
+condition_names = strings(0,1);
+marker_prefixes = {};
+
+definitions = getfield_safe_impl(step_cfg, 'baseline_condition_definitions', {});
+if ~isempty(definitions)
+    if ~iscell(definitions) || size(definitions, 2) ~= 2
+        error(['cfg.prep_06.baseline_condition_definitions must be an N-by-2 cell array: ' ...
+            '{condition_name, marker_prefixes}.']);
+    end
+
+    for r = 1:size(definitions, 1)
+        this_name = strtrim(string(definitions{r,1}));
+        if isempty(this_name)
+            this_name = "";
+        else
+            this_name = this_name(1);
+        end
+        this_markers = normalize_event_list_impl(definitions{r,2});
+        if strlength(this_name) == 0 || isempty(this_markers)
+            error('Baseline condition definition row %d has an empty name or marker list.', r);
+        end
+        condition_names(end+1,1) = this_name; %#ok<AGROW>
+        marker_prefixes{end+1,1} = cellstr(this_markers); %#ok<AGROW>
     end
 end
 
-EEG_open   = merge_eeg_sets_impl(open_parts);
-EEG_closed = merge_eeg_sets_impl(closed_parts);
+if isempty(condition_names)
+    start_condition = "";
+    end_condition = "";
+    return;
+end
+
+if numel(unique(lower(condition_names))) ~= numel(condition_names)
+    error('Baseline condition names must be unique (case-insensitive).');
+end
+
+start_condition = strtrim(string(getfield_safe_impl(step_cfg, 'baseline_start_condition', "")));
+if isempty(start_condition)
+    start_condition = "";
+else
+    start_condition = start_condition(1);
+end
+if strlength(start_condition) == 0 && ~isempty(condition_names)
+    start_condition = condition_names(1);
+end
+start_ix = find(strcmpi(condition_names, start_condition), 1, 'first');
+if isempty(start_ix)
+    error('baseline_start_condition="%s" is not defined.', char(start_condition));
+end
+start_condition = condition_names(start_ix);
+
+end_condition = strtrim(string(getfield_safe_impl(step_cfg, 'baseline_end_condition', start_condition)));
+if isempty(end_condition)
+    end_condition = "";
+else
+    end_condition = end_condition(1);
+end
+if strlength(end_condition) == 0
+    end_condition = start_condition;
+end
+end_ix = find(strcmpi(condition_names, end_condition), 1, 'first');
+if isempty(end_ix)
+    error('baseline_end_condition="%s" is not defined.', char(end_condition));
+end
+end_condition = condition_names(end_ix);
 end
 
 function [EEG_final, rej_info] = finalize_epoched_dataset_impl( ...
@@ -2330,6 +2444,22 @@ rej_info.rejection_method                = "";
 rej_info.min_trials_required             = NaN;
 rej_info.min_trials_condition_counts     = "";
 rej_info.min_trials_insufficient_conditions = "";
+rej_info.epoch_condition_labels          = derive_epoch_condition_labels_impl(EEG_ep, step_cfg);
+rej_info.reason_masks                    = struct();
+rej_info.reason_enabled                  = struct();
+rej_info.reason_settings                 = struct();
+rej_info.n_rejected_extreme_voltage      = 0;
+rej_info.n_rejected_sample_diff          = 0;
+rej_info.n_rejected_flatline             = 0;
+rej_info.n_rejected_faster               = 0;
+rej_info.n_rejected_ptp                  = 0;
+rej_info.n_rejected_mad_variance         = 0;
+
+n_original_epochs = double(EEG_ep.trials);
+remaining_original_epochs = 1:n_original_epochs;
+rej_info.reason_masks.hard_threshold = false(n_original_epochs, 1);
+rej_info.reason_enabled.hard_threshold = logical(step_cfg.do_initial_hard_threshold_rejection);
+rej_info.reason_settings.hard_threshold_uv = step_cfg.initial_hard_threshold_uv;
 
 if isfield(step_cfg, 'epoch_rejection_method') && ...
         strlength(string(step_cfg.epoch_rejection_method)) > 0
@@ -2374,6 +2504,12 @@ if step_cfg.do_artifact_rejection
 
             rej_info.n_rejected_hard = hard_info.n_rejected;
             rej_info.n_kept = EEG_work.trials;
+
+            hard_current = hard_info.rejected_epochs(:)';
+            hard_current = hard_current(hard_current >= 1 & hard_current <= numel(remaining_original_epochs));
+            hard_original = remaining_original_epochs(hard_current);
+            rej_info.reason_masks.hard_threshold(hard_original) = true;
+            remaining_original_epochs(hard_current) = [];
 
             EEG_work = helpers.append_eeg_comment(EEG_work, sprintf( ...
                 'prep_06_epoching: hard threshold rejection | abs(amplitude) > %.1f uV | rejected=%d/%d | kept=%d', ...
@@ -2428,6 +2564,9 @@ if step_cfg.do_artifact_rejection
                     rej_info.n_rejected_sophisticated = erplab_info.n_rejected;
                     rej_info.n_kept = EEG_work.trials;
 
+                    [rej_info, remaining_original_epochs] = record_backend_reason_masks_impl( ...
+                        rej_info, remaining_original_epochs, "erplab", erplab_info, erplab_reject_cfg);
+
                     EEG_work = helpers.append_eeg_comment(EEG_work, sprintf( ...
                         ['prep_06_epoching: ERPLAB rejection | rejected=%d/%d | kept=%d | ' ...
                         'extreme_voltage=%d | sample_diff=%d | flatline=%d'], ...
@@ -2470,6 +2609,9 @@ if step_cfg.do_artifact_rejection
                     rej_info.n_rejected_sophisticated = mad_info.n_rejected;
                     rej_info.n_kept = EEG_work.trials;
 
+                    [rej_info, remaining_original_epochs] = record_backend_reason_masks_impl( ...
+                        rej_info, remaining_original_epochs, "mad_variance", mad_info, step_cfg);
+
                     EEG_work = helpers.append_eeg_comment(EEG_work, sprintf( ...
                         ['prep_06_epoching: MAD variance rejection | rejected=%d/%d | kept=%d | ' ...
                          'z=%.2f | logvar=%d'], ...
@@ -2503,6 +2645,9 @@ if step_cfg.do_artifact_rejection
 
                     rej_info.n_rejected_sophisticated = faster_ptp_info.n_rejected;
                     rej_info.n_kept = EEG_work.trials;
+
+                    [rej_info, remaining_original_epochs] = record_backend_reason_masks_impl( ...
+                        rej_info, remaining_original_epochs, "faster_ptp", faster_ptp_info, faster_ptp_cfg);
 
                     EEG_work = helpers.append_eeg_comment(EEG_work, sprintf( ...
                         'prep_06_epoching: FASTER/PTP rejection | rejected=%d/%d | kept=%d', ...
@@ -2785,29 +2930,132 @@ EEG = eeg_checkset(EEG);
     end
 end
 
-function [flat_indices, flat_labels] = find_flat_or_invalid_channels_impl(EEG, candidate_indices, variance_epsilon)
+function [flat_indices, flat_labels, info] = find_flat_or_invalid_channels_impl(EEG, candidate_indices, detection_cfg)
 flat_indices = [];
 flat_labels  = {};
+info = struct();
 
 if isempty(candidate_indices)
     return;
 end
 
-data_2d = double(EEG.data(candidate_indices, :));
+if nargin < 3 || ~isstruct(detection_cfg)
+    error('flat-channel detection settings must be provided as a struct.');
+end
+
+candidate_indices = candidate_indices(:)';
+data_2d = double(reshape(EEG.data(candidate_indices, :, :), numel(candidate_indices), []));
+
+mode = "cumulative_fraction";
+if isfield(detection_cfg, 'mode') && strlength(string(detection_cfg.mode)) > 0
+    mode = lower(strtrim(string(detection_cfg.mode)));
+    mode = mode(1);
+end
+
+step_tolerance_uV = 0;
+if isfield(detection_cfg, 'step_tolerance_uV') && ~isempty(detection_cfg.step_tolerance_uV)
+    step_tolerance_uV = double(detection_cfg.step_tolerance_uV);
+end
+
+if ~isscalar(step_tolerance_uV) || ~isfinite(step_tolerance_uV) || step_tolerance_uV < 0
+    error('flat_channel_detection.step_tolerance_uV must be a finite scalar >= 0.');
+end
 
 has_invalid = any(~isfinite(data_2d), 2);
-chan_var    = var(data_2d, 0, 2);
+flat_fraction = zeros(numel(candidate_indices), 1);
+max_contiguous_flat_sec = zeros(numel(candidate_indices), 1);
+is_flat = false(numel(candidate_indices), 1);
+criterion_threshold = NaN;
 
-is_flat = (chan_var <= variance_epsilon) | has_invalid;
+recording_duration_sec = NaN;
+if isscalar(EEG.srate) && isfinite(EEG.srate) && EEG.srate > 0
+    recording_duration_sec = max(size(data_2d, 2) - 1, 0) / double(EEG.srate);
+end
 
-flat_indices = candidate_indices(is_flat);
+if size(data_2d, 2) < 2
+    is_flat(:) = true;
+else
+    finite_pairs = isfinite(data_2d(:, 1:end-1)) & isfinite(data_2d(:, 2:end));
+    flat_intervals = finite_pairs & ...
+        (abs(diff(data_2d, 1, 2)) <= step_tolerance_uV);
+
+    flat_fraction = sum(flat_intervals, 2) ./ size(flat_intervals, 2);
+
+    switch mode
+        case "cumulative_fraction"
+            max_flat_fraction = 0.10;
+            if isfield(detection_cfg, 'max_flat_fraction') && ...
+                    ~isempty(detection_cfg.max_flat_fraction)
+                max_flat_fraction = double(detection_cfg.max_flat_fraction);
+            end
+
+            if ~isscalar(max_flat_fraction) || ~isfinite(max_flat_fraction) || ...
+                    max_flat_fraction <= 0 || max_flat_fraction > 1
+                error('flat_channel_detection.max_flat_fraction must be in (0, 1].');
+            end
+
+            criterion_threshold = max_flat_fraction;
+            is_flat = flat_fraction >= max_flat_fraction;
+
+        case "continuous_seconds"
+            continuous_flat_sec = 5;
+            if isfield(detection_cfg, 'continuous_flat_sec') && ...
+                    ~isempty(detection_cfg.continuous_flat_sec)
+                continuous_flat_sec = double(detection_cfg.continuous_flat_sec);
+            end
+
+            if ~isscalar(continuous_flat_sec) || ~isfinite(continuous_flat_sec) || ...
+                    continuous_flat_sec <= 0
+                error('flat_channel_detection.continuous_flat_sec must be a finite scalar > 0.');
+            end
+
+            if ~isscalar(EEG.srate) || ~isfinite(EEG.srate) || EEG.srate <= 0
+                error('EEG.srate must be a finite scalar > 0 for continuous flat-channel detection.');
+            end
+
+            for ch = 1:size(flat_intervals, 1)
+                padded = [false, flat_intervals(ch, :), false];
+                transitions = diff(padded);
+                run_starts = find(transitions == 1);
+                run_ends = find(transitions == -1) - 1;
+
+                if ~isempty(run_starts)
+                    max_flat_steps = max(run_ends - run_starts + 1);
+                    max_contiguous_flat_sec(ch) = max_flat_steps / double(EEG.srate);
+                end
+            end
+
+            criterion_threshold = continuous_flat_sec;
+            is_flat = max_contiguous_flat_sec >= continuous_flat_sec;
+
+        otherwise
+            error(['flat_channel_detection.mode must be "cumulative_fraction" ' ...
+                'or "continuous_seconds". Got: %s'], char(mode));
+    end
+end
+
+is_bad = is_flat | has_invalid;
+
+flat_indices = candidate_indices(is_bad(:)');
 
 if ~isempty(flat_indices)
     flat_labels = {EEG.chanlocs(flat_indices).labels};
 end
+
+info.mode = mode;
+info.step_tolerance_uV = step_tolerance_uV;
+info.criterion_threshold = criterion_threshold;
+info.recording_duration_sec = recording_duration_sec;
+info.n_samples = size(data_2d, 2);
+info.candidate_indices = candidate_indices;
+info.candidate_labels = string({EEG.chanlocs(candidate_indices).labels});
+info.flat_fraction = flat_fraction(:)';
+info.max_contiguous_flat_sec = max_contiguous_flat_sec(:)';
+info.has_invalid = has_invalid(:)';
+info.is_flat = is_flat(:)';
 end
 
-function [bad_indices, bad_labels] = detect_bad_channels_emulation_style_impl(EEG, eeg_indices, flatline_sec, corr_threshold)
+function [bad_indices, bad_labels] = detect_bad_channels_clean_rawdata_impl(EEG, eeg_indices, corr_threshold)
 bad_indices = [];
 bad_labels  = {};
 
@@ -2825,7 +3073,10 @@ EEG_tmp = eeg_checkset(EEG_tmp);
 
 labels_before = {EEG_tmp.chanlocs.labels};
 
-EEG_clean = clean_rawdata(EEG_tmp, flatline_sec, -1, corr_threshold, -1, -1, -1);
+% Flat-channel detection has already been performed centrally in Step 03.
+% Disable clean_rawdata's own continuous-flatline criterion here so each
+% channel is evaluated for flatness exactly once.
+EEG_clean = clean_rawdata(EEG_tmp, -1, -1, corr_threshold, -1, -1, -1);
 EEG_clean = eeg_checkset(EEG_clean);
 
 labels_after = {EEG_clean.chanlocs.labels};
@@ -2985,8 +3236,10 @@ function [EEG, info] = reject_ica_prep_epochs_by_mad_variance_impl(EEG, chan_idx
 info = struct();
 info.did_apply       = false;
 info.z_thresh        = z_thresh;
+info.use_logvar      = logical(use_logvar);
 info.n_before        = EEG.trials;
 info.n_rejected      = 0;
+info.n_kept          = EEG.trials;
 info.rejected_epochs = [];
 
 if EEG.trials < 2 || isempty(chan_idx)
@@ -3037,6 +3290,7 @@ EEG.etc.ica_prep_mad_rejection.rejected_epochs = bad_epochs;
 
 info.did_apply       = true;
 info.n_rejected      = numel(bad_epochs);
+info.n_kept          = EEG.trials;
 info.rejected_epochs = bad_epochs;
 end
 
@@ -3070,6 +3324,8 @@ info.ptp_uV_thresh   = NaN;
 
 info.n_bad_faster    = 0;
 info.n_bad_ptp       = 0;
+info.rejected_epochs_faster = [];
+info.rejected_epochs_ptp = [];
 
 if nargin < 2 || isempty(reject_cfg) || ~isstruct(reject_cfg)
     return;
@@ -3127,7 +3383,7 @@ if isfield(reject_cfg, 'faster_z') && ~isempty(reject_cfg.faster_z)
     faster_z = double(reject_cfg.faster_z);
 end
 
-ptp_uV_thresh = 300;
+ptp_uV_thresh = 100;
 if isfield(reject_cfg, 'ptp_uV_thresh') && ~isempty(reject_cfg.ptp_uV_thresh)
     ptp_uV_thresh = double(reject_cfg.ptp_uV_thresh);
 end
@@ -3191,6 +3447,10 @@ bad_epochs = find(bad);
 
 info.n_bad_faster = sum(bad_faster);
 info.n_bad_ptp    = sum(bad_ptp);
+info.rejected_epochs_faster = find(bad_faster(:))';
+% Assign overlapping FASTER+PTP epochs to FASTER first so reason counts
+% remain additive and equal the union rejected by this backend.
+info.rejected_epochs_ptp = find(bad_ptp(:) & ~bad_faster(:))';
 
 if ~isempty(bad_epochs)
     EEG = pop_rejepoch(EEG, bad_epochs, 0);
@@ -3219,7 +3479,7 @@ function [EEG_out, info] = apply_erplab_epoch_rejection_impl( ...
 %
 %   pop_artextval    : extreme voltage threshold
 %   pop_artdiff      : sample-to-sample voltage difference
-%   pop_artflatline  : blocking / flatline detection
+%   pop_artflatline  : optional blocking / flatline detection (off by default)
 %
 % The function also creates the minimal ERPLAB-compatible EVENTLIST / epoch
 % fields needed for artificial regepochs, such as ICA-prep 1-s epochs or
@@ -3238,6 +3498,10 @@ info.rejected_epochs = [];
 info.n_rejected_extreme_voltage = 0;
 info.n_rejected_sample_diff = 0;
 info.n_rejected_flatline = 0;
+info.rejected_epochs_extreme_voltage = [];
+info.rejected_epochs_sample_diff = [];
+info.rejected_epochs_flatline = [];
+info.reason_assignment = "exclusive_first_match";
 info.channel_scope = "";
 info.n_channels_checked = 0;
 info.twindow_ms = [];
@@ -3261,7 +3525,20 @@ if ~isfield(reject_cfg, 'enable') || ~reject_cfg.enable
     return;
 end
 
-required_erplab_functions = {'pop_artextval', 'pop_artdiff', 'pop_artflatline'};
+required_erplab_functions = {};
+
+if isfield(reject_cfg, 'use_extreme_voltage') && logical(reject_cfg.use_extreme_voltage)
+    required_erplab_functions{end+1} = 'pop_artextval'; %#ok<AGROW>
+end
+
+if isfield(reject_cfg, 'use_sample_diff') && logical(reject_cfg.use_sample_diff)
+    required_erplab_functions{end+1} = 'pop_artdiff'; %#ok<AGROW>
+end
+
+if isfield(reject_cfg, 'use_flatline') && logical(reject_cfg.use_flatline)
+    required_erplab_functions{end+1} = 'pop_artflatline'; %#ok<AGROW>
+end
+
 for f = 1:numel(required_erplab_functions)
     if exist(required_erplab_functions{f}, 'file') ~= 2
         error(['ERPLAB function %s was not found on the MATLAB path. ' ...
@@ -3366,7 +3643,9 @@ if use_extreme_voltage
     EEG_work = eeg_checkset(EEG_work);
 
     bad_after = erplab_rejmanual_mask_impl(EEG_work);
-    info.n_rejected_extreme_voltage = sum(bad_after & ~bad_before);
+    new_bad = bad_after & ~bad_before;
+    info.n_rejected_extreme_voltage = sum(new_bad);
+    info.rejected_epochs_extreme_voltage = find(new_bad(:))';
     info.functions_called{end+1} = 'pop_artextval';
 end
 
@@ -3396,7 +3675,9 @@ if use_sample_diff
     EEG_work = eeg_checkset(EEG_work);
 
     bad_after = erplab_rejmanual_mask_impl(EEG_work);
-    info.n_rejected_sample_diff = sum(bad_after & ~bad_before);
+    new_bad = bad_after & ~bad_before;
+    info.n_rejected_sample_diff = sum(new_bad);
+    info.rejected_epochs_sample_diff = find(new_bad(:))';
     info.functions_called{end+1} = 'pop_artdiff';
 end
 
@@ -3428,7 +3709,9 @@ if use_flatline
     EEG_work = eeg_checkset(EEG_work);
 
     bad_after = erplab_rejmanual_mask_impl(EEG_work);
-    info.n_rejected_flatline = sum(bad_after & ~bad_before);
+    new_bad = bad_after & ~bad_before;
+    info.n_rejected_flatline = sum(new_bad);
+    info.rejected_epochs_flatline = find(new_bad(:))';
     info.functions_called{end+1} = 'pop_artflatline';
 end
 
@@ -4059,7 +4342,13 @@ if ~iscell(condition_spec)
     error('min_trials condition spec must be a cell, string, or char array.');
 end
 
-is_grouped_cell = ismatrix(condition_spec) && size(condition_spec,2) == 2 && ~isvector(condition_spec);
+% An N-by-2 table is unambiguous for N>1. A single grouped condition is a
+% 1-by-2 vector, so recognize it when the second entry contains its code list
+% as a nested cell. A plain {'S 1','S 2'} event list remains ungrouped.
+is_single_group = isvector(condition_spec) && numel(condition_spec) == 2 && ...
+    iscell(condition_spec{1,2});
+is_grouped_cell = ismatrix(condition_spec) && size(condition_spec,2) == 2 && ...
+    (~isvector(condition_spec) || is_single_group);
 
 if is_grouped_cell
     for r = 1:size(condition_spec, 1)
@@ -4244,19 +4533,12 @@ shared_faster_z = NaN;
 shared_ptp      = NaN;
 shared_robust   = false;
 
-if isfield(step_cfg, 'shared_epoch_rejection') && isstruct(step_cfg.shared_epoch_rejection)
-    if isfield(step_cfg.shared_epoch_rejection, 'enable')
-        shared_enable = logical(step_cfg.shared_epoch_rejection.enable);
-    end
-    if isfield(step_cfg.shared_epoch_rejection, 'faster_z')
-        shared_faster_z = step_cfg.shared_epoch_rejection.faster_z;
-    end
-    if isfield(step_cfg.shared_epoch_rejection, 'ptp_uV_thresh')
-        shared_ptp = step_cfg.shared_epoch_rejection.ptp_uV_thresh;
-    end
-    if isfield(step_cfg.shared_epoch_rejection, 'use_robust_z')
-        shared_robust = logical(step_cfg.shared_epoch_rejection.use_robust_z);
-    end
+if isfield(step_cfg, 'faster_ptp_epoch_rejection') && isstruct(step_cfg.faster_ptp_epoch_rejection)
+    fp_cfg = step_cfg.faster_ptp_epoch_rejection;
+    shared_enable = lower(string(getfield_safe_impl(step_cfg, 'epoch_rejection_method', ""))) == "faster_ptp";
+    shared_faster_z = getfield_safe_impl(fp_cfg, 'faster_z', NaN);
+    shared_ptp = getfield_safe_impl(fp_cfg, 'ptp_uV_thresh', NaN);
+    shared_robust = logical(getfield_safe_impl(fp_cfg, 'use_robust_z', false));
 end
 
 excluded_by_max_reject_prop = logical(getfield_safe_impl(rej_info, 'excluded_by_max_reject_prop', false));
@@ -4269,7 +4551,20 @@ min_trials_min_n        = getfield_safe_impl(step_cfg, 'min_trials_per_condition
 min_trials_counts       = string(getfield_safe_impl(rej_info, 'min_trials_condition_counts', ""));
 min_trials_insufficient = string(getfield_safe_impl(rej_info, 'min_trials_insufficient_conditions', ""));
 
+qc_timestamp = string(getfield_safe_impl(step_cfg, 'qc_timestamp', ""));
+settings_json = safe_jsonencode_impl(step_cfg);
+rejection_method = string(getfield_safe_impl(rej_info, 'rejection_method', ...
+    getfield_safe_impl(step_cfg, 'epoch_rejection_method', "")));
+
+n_extreme = double(getfield_safe_impl(rej_info, 'n_rejected_extreme_voltage', 0));
+n_sample  = double(getfield_safe_impl(rej_info, 'n_rejected_sample_diff', 0));
+n_flat    = double(getfield_safe_impl(rej_info, 'n_rejected_flatline', 0));
+n_faster  = double(getfield_safe_impl(rej_info, 'n_rejected_faster', 0));
+n_ptp     = double(getfield_safe_impl(rej_info, 'n_rejected_ptp', 0));
+n_mad     = double(getfield_safe_impl(rej_info, 'n_rejected_mad_variance', 0));
+
 row = table( ...
+    qc_timestamp, ...
     string(subj_label), ...
     string(run_base), ...
     string(ica_method), ...
@@ -4285,6 +4580,13 @@ row = table( ...
     rej_info.n_rejected_sophisticated, ...
     rej_info.n_rejected_total, ...
     rej_info.n_kept, ...
+    rejection_method, ...
+    n_extreme, ...
+    n_sample, ...
+    n_flat, ...
+    n_faster, ...
+    n_ptp, ...
+    n_mad, ...
     prop_rejected_total, ...
     excluded_any_rule, ...
     excluded_by_max_reject_prop, ...
@@ -4297,6 +4599,7 @@ row = table( ...
     step_cfg.base_start_ms, ...
     step_cfg.base_end_ms, ...
     step_cfg.max_reject_prop, ...
+    getfield_safe_impl(step_cfg, 'warn_if_reject_prop_gt', 0.25), ...
     shared_enable, ...
     shared_faster_z, ...
     shared_ptp, ...
@@ -4305,20 +4608,1348 @@ row = table( ...
     min_trials_min_n, ...
     min_trials_counts, ...
     min_trials_insufficient, ...
+    settings_json, ...
     string(output_paths_joined), ...
     'VariableNames', { ...
-    'subject_id', 'run_base', 'ica_method', 'epoching_mode', 'condition', 'status', ...
+    'qc_timestamp', 'subject_id', 'run_base', 'ica_method', 'epoching_mode', 'condition', 'status', ...
     'input_set_name', ...
     'n_eeg_channels', 'n_eog_channels', 'n_non_eeg_channels', ...
     'n_epochs_total', 'n_rejected_hard', 'n_rejected_sophisticated', 'n_rejected_total', 'n_epochs_kept', ...
+    'rejection_method', 'n_rejected_extreme_voltage', 'n_rejected_sample_diff', ...
+    'n_rejected_flatline', 'n_rejected_faster', 'n_rejected_ptp', 'n_rejected_mad_variance', ...
     'prop_rejected_total', ...
     'excluded_any_rule', 'excluded_by_max_reject_prop', 'excluded_by_min_trials_rule', 'exclusion_reason', ...
     'artifact_rejection_enabled', 'hard_threshold_enabled', 'hard_threshold_uv', ...
     'baseline_correction_enabled', 'baseline_start_ms', 'baseline_end_ms', ...
-    'max_reject_prop', ...
+    'max_reject_prop', 'warn_if_reject_prop_gt', ...
     'shared_rejection_enabled', 'shared_faster_z', 'shared_ptp_uV_thresh', 'shared_use_robust_z', ...
     'min_trials_rule_enabled', 'min_trials_min_n', 'min_trials_condition_counts', 'min_trials_insufficient_conditions', ...
+    'settings_json', ...
     'output_set_paths'});
+end
+
+
+function rows = build_step06_summary_rows_impl( ...
+    subj_label, run_base, ica_method, step_cfg, ...
+    epoching_mode, condition_label, ...
+    input_name, rej_info, saved_paths, status_label, ...
+    n_eeg, n_eog, n_non_eeg)
+
+n_total = double(getfield_safe_impl(rej_info, 'n_total', 0));
+condition_labels = string(getfield_safe_impl( ...
+    rej_info, 'epoch_condition_labels', repmat(string(condition_label), n_total, 1)));
+condition_labels = condition_labels(:);
+
+if numel(condition_labels) ~= n_total
+    condition_labels = repmat(string(condition_label), n_total, 1);
+end
+
+if string(condition_label) ~= "event_locked"
+    condition_labels(:) = string(condition_label);
+end
+
+conditions = unique(condition_labels, 'stable');
+if isempty(conditions)
+    conditions = string(condition_label);
+end
+
+reason_names = ["hard_threshold","extreme_voltage","sample_diff","flatline", ...
+    "faster","ptp","mad_variance"];
+hard_mask = get_reason_mask_impl(rej_info, 'hard_threshold', n_total);
+backend_union = false(n_total, 1);
+all_union = hard_mask;
+for r = 2:numel(reason_names)
+    this_mask = get_reason_mask_impl(rej_info, char(reason_names(r)), n_total);
+    backend_union = backend_union | this_mask;
+    all_union = all_union | this_mask;
+end
+
+rows = table();
+for c = 1:numel(conditions)
+    condition_mask = condition_labels == conditions(c);
+    if ~any(condition_mask) && n_total > 0
+        continue;
+    end
+
+    local_info = rej_info;
+    local_info.n_total = sum(condition_mask);
+    local_info.n_rejected_hard = sum(condition_mask & hard_mask);
+    local_info.n_rejected_sophisticated = sum(condition_mask & backend_union);
+    local_info.n_rejected_total = sum(condition_mask & all_union);
+    local_info.n_kept = local_info.n_total - local_info.n_rejected_total;
+    local_info.n_rejected_extreme_voltage = sum(condition_mask & ...
+        get_reason_mask_impl(rej_info, 'extreme_voltage', n_total));
+    local_info.n_rejected_sample_diff = sum(condition_mask & ...
+        get_reason_mask_impl(rej_info, 'sample_diff', n_total));
+    local_info.n_rejected_flatline = sum(condition_mask & ...
+        get_reason_mask_impl(rej_info, 'flatline', n_total));
+    local_info.n_rejected_faster = sum(condition_mask & ...
+        get_reason_mask_impl(rej_info, 'faster', n_total));
+    local_info.n_rejected_ptp = sum(condition_mask & ...
+        get_reason_mask_impl(rej_info, 'ptp', n_total));
+    local_info.n_rejected_mad_variance = sum(condition_mask & ...
+        get_reason_mask_impl(rej_info, 'mad_variance', n_total));
+
+    count_label = conditions(c);
+    if strlength(count_label) == 0
+        count_label = "all";
+    end
+    local_info.min_trials_condition_counts = sprintf( ...
+        '%s=%d', char(count_label), local_info.n_kept);
+
+    local_status = string(status_label);
+    if local_info.n_kept == 0 && local_status == "saved"
+        local_status = "empty_after_rejection";
+    end
+
+    this_row = build_step06_summary_row_impl( ...
+        subj_label, run_base, ica_method, step_cfg, ...
+        epoching_mode, conditions(c), input_name, local_info, ...
+        saved_paths, local_status, n_eeg, n_eog, n_non_eeg);
+
+    if isempty(rows)
+        rows = this_row;
+    else
+        rows = [rows; this_row]; %#ok<AGROW>
+    end
+end
+end
+
+
+function timestamp = resolve_qc_timestamp_impl(cfg)
+% One timestamp is resolved when the config is created and is reused by all
+% subjects in that pipeline run. This makes before/after runs easy to group.
+timestamp = "";
+
+if nargin >= 1 && isstruct(cfg) && isfield(cfg, 'qc') && isstruct(cfg.qc) && ...
+        isfield(cfg.qc, 'run_timestamp') && strlength(string(cfg.qc.run_timestamp)) > 0
+    timestamp = string(cfg.qc.run_timestamp);
+end
+
+if strlength(timestamp) == 0
+    timestamp = string(datestr(now, 'yyyy-mm-dd-HH-MM'));
+end
+
+timestamp = regexprep(timestamp(1), '[^0-9\-]', '-');
+end
+
+
+function out_path = write_qc_table_impl(t, out_path, delimiter)
+% Write through a temporary file so concurrent subject workers never leave
+% a partially written group summary behind.
+if nargin < 3 || strlength(string(delimiter)) == 0
+    delimiter = ';';
+end
+
+out_path = char(string(out_path));
+out_dir = fileparts(out_path);
+ensure_dir_impl(out_dir);
+
+tmp_path = [tempname(out_dir) '.csv'];
+cleanup_obj = onCleanup(@() delete_if_exists_impl(tmp_path)); %#ok<NASGU>
+
+writetable(t, tmp_path, 'Delimiter', char(string(delimiter)));
+[ok, msg] = movefile(tmp_path, out_path, 'f');
+if ~ok
+    error('Could not finalize QC table %s: %s', out_path, msg);
+end
+end
+
+
+function delete_if_exists_impl(path_value)
+if exist(path_value, 'file') == 2
+    try
+        delete(path_value);
+    catch
+    end
+end
+end
+
+
+function json_text = safe_jsonencode_impl(value)
+try
+    json_text = string(jsonencode(value));
+catch
+    json_text = "";
+end
+end
+
+
+function t = build_bad_channel_qc_table_impl( ...
+    EEG, subj_label, run_base, bad_idx, step_cfg, flat_info, ...
+    backend_reason_indices, cfg, backend_status)
+
+if nargin < 7 || ~isstruct(backend_reason_indices)
+    backend_reason_indices = struct();
+end
+if nargin < 8
+    cfg = struct();
+end
+if nargin < 9 || strlength(string(backend_status)) == 0
+    backend_status = "ok";
+end
+
+timestamp = resolve_qc_timestamp_impl(cfg);
+settings_json = safe_jsonencode_impl(step_cfg);
+backend = lower(string(getfield_safe_impl(step_cfg, 'bad_channel_detection_method', "off")));
+bad_idx = unique(double(bad_idx(:)'), 'stable');
+bad_idx = bad_idx(bad_idx >= 1 & bad_idx <= EEG.nbchan);
+bad_labels = string({EEG.chanlocs(bad_idx).labels});
+
+row_idx = zeros(0,1);
+row_label = strings(0,1);
+row_reason = strings(0,1);
+
+% Flatness and invalid values are stored by label because AUX removal can
+% shift numeric indices between flat detection and the final bad list.
+if isstruct(flat_info) && isfield(flat_info, 'candidate_labels')
+    candidate_labels = string(flat_info.candidate_labels(:));
+    is_flat = logical(getfield_safe_impl(flat_info, 'is_flat', false(size(candidate_labels))));
+    is_flat = is_flat(:);
+    has_invalid = logical(getfield_safe_impl(flat_info, 'has_invalid', false(size(candidate_labels))));
+    has_invalid = has_invalid(:);
+    flat_mode = string(getfield_safe_impl(flat_info, 'mode', "cumulative_fraction"));
+
+    for i = 1:numel(candidate_labels)
+        current_idx = find(strcmpi({EEG.chanlocs.labels}, char(candidate_labels(i))), 1, 'first');
+        if isempty(current_idx) || ~ismember(current_idx, bad_idx)
+            continue;
+        end
+
+        if i <= numel(is_flat) && is_flat(i)
+            if flat_mode == "continuous_seconds"
+                this_reason = "flat_continuous_seconds";
+            else
+                this_reason = "flat_cumulative_fraction";
+            end
+            row_idx(end+1,1) = current_idx; %#ok<AGROW>
+            row_label(end+1,1) = string(EEG.chanlocs(current_idx).labels); %#ok<AGROW>
+            row_reason(end+1,1) = this_reason; %#ok<AGROW>
+        end
+
+        if i <= numel(has_invalid) && has_invalid(i)
+            row_idx(end+1,1) = current_idx; %#ok<AGROW>
+            row_label(end+1,1) = string(EEG.chanlocs(current_idx).labels); %#ok<AGROW>
+            row_reason(end+1,1) = "invalid_nonfinite"; %#ok<AGROW>
+        end
+    end
+end
+
+backend_fields = fieldnames(backend_reason_indices);
+for f = 1:numel(backend_fields)
+    reason_name = string(backend_fields{f});
+    reason_idx_raw = backend_reason_indices.(backend_fields{f});
+    reason_idx = unique(double(reason_idx_raw(:)), 'stable');
+    reason_idx = reason_idx(reason_idx >= 1 & reason_idx <= EEG.nbchan);
+    reason_idx = intersect(reason_idx, bad_idx, 'stable');
+
+    for i = 1:numel(reason_idx)
+        row_idx(end+1,1) = reason_idx(i); %#ok<AGROW>
+        row_label(end+1,1) = string(EEG.chanlocs(reason_idx(i)).labels); %#ok<AGROW>
+        row_reason(end+1,1) = reason_name; %#ok<AGROW>
+    end
+end
+
+if ~isempty(row_idx)
+    pair_key = strcat(lower(row_label), "__", row_reason);
+    [~, keep] = unique(pair_key, 'stable');
+    row_idx = row_idx(keep);
+    row_label = row_label(keep);
+    row_reason = row_reason(keep);
+end
+
+% Preserve every rejected channel even if a backend failed to provide a
+% more specific reason code.
+represented = unique(lower(row_label));
+for i = 1:numel(bad_idx)
+    if ~ismember(lower(bad_labels(i)), represented)
+        row_idx(end+1,1) = bad_idx(i); %#ok<AGROW>
+        row_label(end+1,1) = bad_labels(i); %#ok<AGROW>
+        row_reason(end+1,1) = "backend_unspecified"; %#ok<AGROW>
+    end
+end
+
+if isempty(row_idx)
+    row_idx = NaN;
+    row_label = "";
+    row_reason = "none";
+end
+
+n_rows = numel(row_reason);
+n_reason = zeros(n_rows,1);
+for i = 1:n_rows
+    if row_reason(i) == "none"
+        n_reason(i) = 0;
+    else
+        n_reason(i) = numel(unique(lower(row_label(row_reason == row_reason(i)))));
+    end
+end
+
+flat_mode = string(getfield_safe_impl(flat_info, 'mode', ""));
+flat_duration = double(getfield_safe_impl(flat_info, 'recording_duration_sec', NaN));
+flat_tolerance = double(getfield_safe_impl(flat_info, 'step_tolerance_uV', NaN));
+flat_threshold = double(getfield_safe_impl(flat_info, 'criterion_threshold', NaN));
+clean_corr = double(getfield_safe_impl(step_cfg, 'clean_rawdata_channel_corr_threshold', NaN));
+pop_z = double(getfield_safe_impl(step_cfg, 'pop_rejchan_z_threshold', NaN));
+pop_freq = string(mat2str(getfield_safe_impl(step_cfg, 'pop_rejchan_freqrange_hz', [])));
+[qc_eeg_idx, ~, ~] = get_channel_indices_by_type_impl(EEG);
+
+t = table( ...
+    repmat(timestamp, n_rows, 1), ...
+    repmat("prep_03_until_ica", n_rows, 1), ...
+    repmat(string(subj_label), n_rows, 1), ...
+    repmat(string(run_base), n_rows, 1), ...
+    row_label, row_idx, row_reason, ...
+    repmat("channel_can_have_multiple_reasons", n_rows, 1), n_reason, ...
+    repmat(numel(bad_idx), n_rows, 1), ...
+    repmat(numel(qc_eeg_idx), n_rows, 1), ...
+    repmat(backend, n_rows, 1), ...
+    repmat(string(backend_status), n_rows, 1), ...
+    repmat(logical(getfield_safe_impl(step_cfg, 'interpolate_bad_channels_before_ica', false)), n_rows, 1), ...
+    repmat(string(getfield_safe_impl(step_cfg, 'interp_method', "")), n_rows, 1), ...
+    repmat(flat_mode, n_rows, 1), ...
+    repmat(flat_duration, n_rows, 1), ...
+    repmat(flat_tolerance, n_rows, 1), ...
+    repmat(flat_threshold, n_rows, 1), ...
+    repmat(clean_corr, n_rows, 1), ...
+    repmat(pop_z, n_rows, 1), ...
+    repmat(pop_freq, n_rows, 1), ...
+    repmat(settings_json, n_rows, 1), ...
+    'VariableNames', { ...
+    'qc_timestamp','pipeline_step','subject_id','run_base','channel_label','channel_index', ...
+    'rejection_reason','reason_counting_rule','n_channels_rejected_for_reason','n_bad_channels_unique','n_eeg_channels_checked', ...
+    'backend','backend_status','interpolated_before_ica','interpolation_method', ...
+    'flat_mode','post_crop_recording_duration_sec','flat_step_tolerance_uV','flat_criterion_threshold', ...
+    'clean_rawdata_corr_threshold','pop_rejchan_z_threshold','pop_rejchan_freqrange_hz','settings_json'});
+end
+
+
+function labels = derive_epoch_condition_labels_impl(EEG, step_cfg)
+n_epochs = double(getfield_safe_impl(EEG, 'trials', 0));
+labels = repmat("", n_epochs, 1);
+
+mode = string(getfield_safe_impl(step_cfg, 'epoching_mode', "event_locked"));
+mode = string(normalize_epoching_mode_value_impl(mode));
+if mode == "baseline"
+    if isfield(EEG, 'etc') && isstruct(EEG.etc) && ...
+            isfield(EEG.etc, 'baseline_condition') && ...
+            strlength(string(EEG.etc.baseline_condition)) > 0
+        labels(:) = string(EEG.etc.baseline_condition);
+    end
+    return;
+end
+
+if mode ~= "event_locked" || n_epochs < 1 || ~isfield(EEG, 'epoch') || isempty(EEG.epoch)
+    return;
+end
+
+condition_spec = getfield_safe_impl(step_cfg, 'min_trials_per_condition_codes', {});
+if isempty(condition_spec)
+    condition_spec = getfield_safe_impl(step_cfg, 'events_phase', {});
+end
+
+[group_names, group_members, raw_codes] = parse_condition_group_spec_impl(condition_spec);
+if isempty(raw_codes)
+    labels(:) = "event_locked";
+    return;
+end
+
+labels(:) = "unclassified";
+n = min(n_epochs, numel(EEG.epoch));
+zero_tol = double(getfield_safe_impl(step_cfg, 'min_trials_per_condition_zero_tol_ms', 2));
+
+for e = 1:n
+    raw_code = extract_epoch_time_locking_condition_code_impl(EEG.epoch(e), raw_codes, zero_tol);
+    if strlength(raw_code) == 0
+        continue;
+    end
+    for g = 1:numel(group_names)
+        if any(group_members{g} == raw_code)
+            labels(e) = group_names(g);
+            break;
+        end
+    end
+end
+end
+
+
+function [rej_info, remaining_original] = record_backend_reason_masks_impl( ...
+    rej_info, remaining_original, backend, backend_info, backend_cfg)
+
+n_total = double(rej_info.n_total);
+backend = string(backend);
+
+switch backend
+    case "erplab"
+        reason_names = ["extreme_voltage","sample_diff","flatline"];
+        index_fields = ["rejected_epochs_extreme_voltage","rejected_epochs_sample_diff","rejected_epochs_flatline"];
+        enabled_values = [ ...
+            logical(getfield_safe_impl(backend_cfg, 'use_extreme_voltage', false)), ...
+            logical(getfield_safe_impl(backend_cfg, 'use_sample_diff', false)), ...
+            logical(getfield_safe_impl(backend_cfg, 'use_flatline', false))];
+    case "faster_ptp"
+        reason_names = ["faster","ptp"];
+        index_fields = ["rejected_epochs_faster","rejected_epochs_ptp"];
+        enabled_values = [ ...
+            logical(getfield_safe_impl(backend_cfg, 'use_faster', false)), ...
+            logical(getfield_safe_impl(backend_cfg, 'use_ptp', false))];
+    case "mad_variance"
+        reason_names = "mad_variance";
+        index_fields = "rejected_epochs";
+        enabled_values = true;
+    otherwise
+        reason_names = strings(0,1);
+        index_fields = strings(0,1);
+        enabled_values = false(0,1);
+end
+
+for r = 1:numel(reason_names)
+    mask = false(n_total, 1);
+    current_idx = double(getfield_safe_impl(backend_info, char(index_fields(r)), []));
+    current_idx = current_idx(:)';
+    current_idx = current_idx(current_idx >= 1 & current_idx <= numel(remaining_original));
+    original_idx = remaining_original(current_idx);
+    mask(original_idx) = true;
+    rej_info.reason_masks.(char(reason_names(r))) = mask;
+    rej_info.reason_enabled.(char(reason_names(r))) = logical(enabled_values(r));
+end
+
+union_current = double(getfield_safe_impl(backend_info, 'rejected_epochs', []));
+union_current = union_current(:)';
+union_current = union_current(union_current >= 1 & union_current <= numel(remaining_original));
+remaining_original(union_current) = [];
+
+rej_info.n_rejected_extreme_voltage = sum(get_reason_mask_impl(rej_info, 'extreme_voltage', n_total));
+rej_info.n_rejected_sample_diff = sum(get_reason_mask_impl(rej_info, 'sample_diff', n_total));
+rej_info.n_rejected_flatline = sum(get_reason_mask_impl(rej_info, 'flatline', n_total));
+rej_info.n_rejected_faster = sum(get_reason_mask_impl(rej_info, 'faster', n_total));
+rej_info.n_rejected_ptp = sum(get_reason_mask_impl(rej_info, 'ptp', n_total));
+rej_info.n_rejected_mad_variance = sum(get_reason_mask_impl(rej_info, 'mad_variance', n_total));
+end
+
+
+function mask = get_reason_mask_impl(rej_info, reason_name, n_total)
+mask = false(n_total, 1);
+if isfield(rej_info, 'reason_masks') && isstruct(rej_info.reason_masks) && ...
+        isfield(rej_info.reason_masks, reason_name)
+    candidate_raw = rej_info.reason_masks.(reason_name);
+    candidate = logical(candidate_raw(:));
+    n = min(numel(candidate), n_total);
+    mask(1:n) = candidate(1:n);
+end
+end
+
+
+function t = build_epoch_rejection_qc_table_impl( ...
+    rej_info, step_cfg, cfg, subj_label, run_base, epoching_mode, condition_label, pipeline_step)
+
+if nargin < 8 || strlength(string(pipeline_step)) == 0
+    pipeline_step = "prep_06_epoching";
+end
+if nargin < 7
+    condition_label = "event_locked";
+end
+
+n_total = double(getfield_safe_impl(rej_info, 'n_total', 0));
+condition_labels = string(getfield_safe_impl(rej_info, 'epoch_condition_labels', repmat(string(condition_label), n_total, 1)));
+condition_labels = condition_labels(:);
+if numel(condition_labels) ~= n_total
+    condition_labels = repmat(string(condition_label), n_total, 1);
+end
+if string(condition_label) ~= "event_locked"
+    condition_labels(:) = string(condition_label);
+end
+
+method = lower(string(getfield_safe_impl(rej_info, 'rejection_method', ...
+    getfield_safe_impl(step_cfg, 'epoch_rejection_method', "none"))));
+artifact_rejection_enabled = logical(getfield_safe_impl(step_cfg, 'do_artifact_rejection', false));
+reason_names = "hard_threshold";
+reason_enabled = artifact_rejection_enabled && ...
+    logical(getfield_safe_impl(step_cfg, 'do_initial_hard_threshold_rejection', false));
+
+switch method
+    case "erplab"
+        erp = getfield_safe_impl(step_cfg, 'erplab_epoch_rejection', struct());
+        reason_names = [reason_names, "extreme_voltage", "sample_diff", "flatline"];
+        reason_enabled = [reason_enabled, ...
+            logical(getfield_safe_impl(erp, 'use_extreme_voltage', false)), ...
+            logical(getfield_safe_impl(erp, 'use_sample_diff', false)), ...
+            logical(getfield_safe_impl(erp, 'use_flatline', false))];
+    case "faster_ptp"
+        fp = getfield_safe_impl(step_cfg, 'faster_ptp_epoch_rejection', struct());
+        reason_names = [reason_names, "faster", "ptp"];
+        reason_enabled = [reason_enabled, ...
+            logical(getfield_safe_impl(fp, 'use_faster', false)), ...
+            logical(getfield_safe_impl(fp, 'use_ptp', false))];
+    case "mad_variance"
+        reason_names = [reason_names, "mad_variance"];
+        reason_enabled = [reason_enabled, true];
+end
+reason_enabled = logical(reason_enabled) & artifact_rejection_enabled;
+
+all_masks = false(n_total, numel(reason_names));
+for r = 1:numel(reason_names)
+    all_masks(:,r) = get_reason_mask_impl(rej_info, char(reason_names(r)), n_total);
+end
+union_mask = any(all_masks, 2);
+
+conditions = unique(condition_labels, 'stable');
+if isempty(conditions)
+    conditions = string(condition_label);
+end
+
+timestamp = resolve_qc_timestamp_impl(cfg);
+ica_method = "unknown";
+if isstruct(cfg) && isfield(cfg, 'prep_04')
+    ica_method = string(getfield_safe_impl(cfg.prep_04, 'ica_method', "unknown"));
+end
+settings_json = safe_jsonencode_impl(step_cfg);
+excluded = logical(getfield_safe_impl(rej_info, 'excluded', false));
+exclusion_reason = string(getfield_safe_impl(rej_info, 'exclusion_reason', ""));
+reason_counting_rule = "exclusive_first_match_then_union";
+
+t = table();
+for c = 1:numel(conditions)
+    condition_mask = condition_labels == conditions(c);
+    n_before = sum(condition_mask);
+    n_any = sum(condition_mask & union_mask);
+    n_kept = n_before - n_any;
+
+    names_with_union = [reason_names, "any_reason"];
+    enabled_with_union = [reason_enabled, any(reason_enabled)];
+
+    for r = 1:numel(names_with_union)
+        if names_with_union(r) == "any_reason"
+            n_reason = n_any;
+        else
+            n_reason = sum(condition_mask & all_masks(:,r));
+        end
+
+        criterion_setting = describe_epoch_rejection_setting_impl( ...
+            names_with_union(r), step_cfg);
+
+        row = table( ...
+            timestamp, string(pipeline_step), string(subj_label), string(run_base), ...
+            ica_method, string(epoching_mode), conditions(c), method, ...
+            names_with_union(r), logical(enabled_with_union(r)), criterion_setting, ...
+            reason_counting_rule, n_before, n_reason, n_any, n_kept, ...
+            excluded, exclusion_reason, settings_json, ...
+            'VariableNames', { ...
+            'qc_timestamp','pipeline_step','subject_id','run_base','ica_method','epoching_mode', ...
+            'condition','rejection_method','rejection_reason','criterion_enabled','criterion_setting','reason_counting_rule', ...
+            'n_epochs_before','n_rejected_for_reason','n_rejected_any_reason','n_epochs_kept', ...
+            'dataset_excluded','exclusion_reason','settings_json'});
+
+        if isempty(t)
+            t = row;
+        else
+            t = [t; row]; %#ok<AGROW>
+        end
+    end
+end
+end
+
+
+function description = describe_epoch_rejection_setting_impl(reason_name, step_cfg)
+reason_name = string(reason_name);
+description = "";
+
+switch reason_name
+    case "hard_threshold"
+        description = "abs_uv=" + string(getfield_safe_impl(step_cfg, 'initial_hard_threshold_uv', NaN));
+    case {"extreme_voltage","sample_diff","flatline"}
+        erp = getfield_safe_impl(step_cfg, 'erplab_epoch_rejection', struct());
+        switch reason_name
+            case "extreme_voltage"
+                description = "abs_uv=" + string(getfield_safe_impl(erp, 'extreme_voltage_uV', NaN));
+            case "sample_diff"
+                description = "sample_diff_uv=" + string(getfield_safe_impl(erp, 'sample_diff_uV', NaN));
+            case "flatline"
+                description = "tolerance_uv=" + string(getfield_safe_impl(erp, 'flatline_tolerance_uV', NaN)) + ...
+                    ";duration_ms=" + string(getfield_safe_impl(erp, 'flatline_duration_ms', NaN));
+        end
+    case {"faster","ptp"}
+        fp = getfield_safe_impl(step_cfg, 'faster_ptp_epoch_rejection', struct());
+        if reason_name == "faster"
+            description = "z=" + string(getfield_safe_impl(fp, 'faster_z', NaN)) + ...
+                ";robust_z=" + string(getfield_safe_impl(fp, 'use_robust_z', false));
+        else
+            description = "ptp_uv=" + string(getfield_safe_impl(fp, 'ptp_uV_thresh', NaN));
+        end
+    case "mad_variance"
+        description = "z=" + string(getfield_safe_impl(step_cfg, 'mad_z_threshold', NaN)) + ...
+            ";logvar=" + string(getfield_safe_impl(step_cfg, 'mad_use_logvar', true));
+    case "any_reason"
+        description = "union_of_enabled_criteria";
+end
+end
+
+
+function [t_all, t_by_reason, output_paths] = collect_bad_channel_qc_impl(cfg_or_qc_root)
+[qc_root, timestamp, delimiter] = resolve_qc_collection_context_impl(cfg_or_qc_root);
+bad_root = fullfile(qc_root, 'bad_chans');
+t_all = table();
+t_by_reason = table();
+output_paths = {};
+
+if exist(bad_root, 'dir') ~= 7
+    return;
+end
+
+files = dir(fullfile(bad_root, '**', '*_bad_chans.csv'));
+files = files(~contains({files.name}, '_all_subjects') & ~contains({files.name}, '_by_reason'));
+t_all = read_latest_qc_tables_impl(files, {'subject_id','run_base'}, delimiter);
+if isempty(t_all)
+    return;
+end
+
+sort_vars = intersect({'subject_id','run_base','channel_label','rejection_reason'}, ...
+    t_all.Properties.VariableNames, 'stable');
+if ~isempty(sort_vars)
+    t_all = sortrows(t_all, sort_vars);
+end
+
+t_all.channel_rejection_row = double(strlength(string(t_all.channel_label)) > 0 & ...
+    string(t_all.rejection_reason) ~= "none");
+
+group_vars = intersect({'backend','rejection_reason','settings_json'}, ...
+    t_all.Properties.VariableNames, 'stable');
+t_by_reason = groupsummary(t_all, group_vars, {'sum','mean'}, ...
+    {'channel_rejection_row','n_bad_channels_unique'});
+
+all_path = fullfile(bad_root, sprintf('%s_bad_channels_all_subjects.csv', char(timestamp)));
+reason_path = fullfile(bad_root, sprintf('%s_bad_channels_by_reason.csv', char(timestamp)));
+write_qc_table_impl(t_all, all_path, delimiter);
+write_qc_table_impl(t_by_reason, reason_path, delimiter);
+output_paths = {all_path, reason_path};
+end
+
+
+function [t_all, t_by_method, t_pair, t_reasons, output_paths] = collect_prep06_summary_impl(cfg_or_qc_root)
+[qc_root, timestamp, delimiter] = resolve_qc_collection_context_impl(cfg_or_qc_root);
+epoch_root = fullfile(qc_root, 'epoch_rej');
+t_all = table();
+t_by_method = table();
+t_pair = table();
+t_reasons = table();
+output_paths = {};
+
+if exist(epoch_root, 'dir') ~= 7
+    return;
+end
+
+summary_files = dir(fullfile(epoch_root, '**', '*_prep06_summary.csv'));
+summary_files = summary_files(~contains({summary_files.name}, '_all_subjects') & ...
+    ~contains({summary_files.name}, '_by_method'));
+t_all = read_latest_qc_tables_impl(summary_files, {'subject_id','ica_method'}, delimiter);
+
+if ~isempty(t_all)
+    t_all = normalize_prep06_summary_table_impl(t_all);
+    sort_vars = intersect({'ica_method','subject_id','run_base','epoching_mode','condition'}, ...
+        t_all.Properties.VariableNames, 'stable');
+    if ~isempty(sort_vars)
+        t_all = sortrows(t_all, sort_vars);
+    end
+
+    t_all.saved_numeric = double(string(t_all.status) == "saved");
+    t_all.excluded_numeric = double(logical(t_all.excluded_any_rule));
+    t_all.empty_numeric = double(string(t_all.status) == "empty_after_rejection");
+
+    numeric_vars = intersect({ ...
+        'n_eeg_channels','n_eog_channels','n_non_eeg_channels','n_epochs_total', ...
+        'n_rejected_hard','n_rejected_sophisticated','n_rejected_total','n_epochs_kept', ...
+        'n_rejected_extreme_voltage','n_rejected_sample_diff','n_rejected_flatline', ...
+        'n_rejected_faster','n_rejected_ptp','n_rejected_mad_variance', ...
+        'prop_rejected_total','saved_numeric','excluded_numeric','empty_numeric'}, ...
+        t_all.Properties.VariableNames, 'stable');
+    group_vars = intersect({'ica_method','epoching_mode','condition','rejection_method','settings_json'}, ...
+        t_all.Properties.VariableNames, 'stable');
+    t_by_method = groupsummary(t_all, group_vars, {'mean','std','median'}, numeric_vars);
+    t_pair = build_paired_ica_summary_impl(t_all);
+
+    all_path = fullfile(epoch_root, sprintf('%s_prep06_epoching_summary_all_subjects.csv', char(timestamp)));
+    method_path = fullfile(epoch_root, sprintf('%s_prep06_epoching_summary_by_method_condition.csv', char(timestamp)));
+    write_qc_table_impl(t_all, all_path, delimiter);
+    write_qc_table_impl(t_by_method, method_path, delimiter);
+    output_paths = {all_path, method_path};
+
+    if ~isempty(t_pair)
+        pair_path = fullfile(epoch_root, sprintf('%s_prep06_comparison_runica_vs_amica.csv', char(timestamp)));
+        write_qc_table_impl(t_pair, pair_path, delimiter);
+        output_paths{end+1} = pair_path; %#ok<AGROW>
+    end
+end
+
+reason_files = dir(fullfile(epoch_root, '**', '*_epoch_rej.csv'));
+reason_files = reason_files(~contains({reason_files.name}, '_all_subjects') & ...
+    ~contains({reason_files.name}, '_by_condition'));
+t_reasons = read_latest_qc_tables_impl(reason_files, ...
+    {'subject_id','run_base','ica_method'}, delimiter);
+
+if ~isempty(t_reasons)
+    sort_vars = intersect({'ica_method','subject_id','run_base','condition','rejection_reason'}, ...
+        t_reasons.Properties.VariableNames, 'stable');
+    if ~isempty(sort_vars)
+        t_reasons = sortrows(t_reasons, sort_vars);
+    end
+
+    reason_group_vars = intersect({ ...
+        'ica_method','epoching_mode','condition','rejection_method', ...
+        'rejection_reason','criterion_enabled','criterion_setting','settings_json'}, ...
+        t_reasons.Properties.VariableNames, 'stable');
+    reason_numeric = intersect({'n_epochs_before','n_rejected_for_reason','n_rejected_any_reason','n_epochs_kept'}, ...
+        t_reasons.Properties.VariableNames, 'stable');
+    t_reason_group = groupsummary(t_reasons, reason_group_vars, {'sum','mean'}, reason_numeric);
+
+    reason_all_path = fullfile(epoch_root, sprintf('%s_epoch_rejection_reasons_all_subjects.csv', char(timestamp)));
+    reason_group_path = fullfile(epoch_root, sprintf('%s_epoch_rejection_reasons_by_condition.csv', char(timestamp)));
+    write_qc_table_impl(t_reasons, reason_all_path, delimiter);
+    write_qc_table_impl(t_reason_group, reason_group_path, delimiter);
+    output_paths{end+1} = reason_all_path; %#ok<AGROW>
+    output_paths{end+1} = reason_group_path; %#ok<AGROW>
+end
+end
+
+
+function [warning_table, warning_message] = build_high_epoch_rejection_warning_impl( ...
+    t_all, processed_subject_ids, ica_method, qc_timestamp, threshold)
+warning_table = table();
+warning_message = "";
+
+if nargin < 5 || isempty(threshold) || ~isscalar(threshold) || ...
+        ~isfinite(threshold) || threshold < 0 || threshold > 1
+    threshold = 0.25;
+end
+
+required = {'subject_id','ica_method','qc_timestamp','n_epochs_total','n_rejected_total'};
+if isempty(t_all) || ~all(ismember(required, t_all.Properties.VariableNames))
+    return;
+end
+
+subject_ids = string(processed_subject_ids(:));
+for i = 1:numel(subject_ids)
+    if ~startsWith(subject_ids(i), "sub-")
+        subject_ids(i) = "sub-" + subject_ids(i);
+    end
+end
+
+keep = ismember(string(t_all.subject_id), subject_ids);
+if nargin >= 3 && strlength(string(ica_method)) > 0
+    keep = keep & strcmpi(string(t_all.ica_method), string(ica_method));
+end
+if nargin >= 4 && strlength(string(qc_timestamp)) > 0
+    keep = keep & string(t_all.qc_timestamp) == string(qc_timestamp);
+end
+t_current = t_all(keep, :);
+if isempty(t_current)
+    return;
+end
+
+subjects = unique(string(t_current.subject_id), 'stable');
+for s = 1:numel(subjects)
+    subject_mask = string(t_current.subject_id) == subjects(s);
+    n_total = sum(double(t_current.n_epochs_total(subject_mask)), 'omitnan');
+    n_rejected = sum(double(t_current.n_rejected_total(subject_mask)), 'omitnan');
+    if n_total <= 0
+        continue;
+    end
+
+    prop_rejected = n_rejected / n_total;
+    if prop_rejected > threshold
+        this_row = table(subjects(s), n_total, n_rejected, prop_rejected, ...
+            'VariableNames', {'subject_id','n_epochs_total','n_rejected_total','prop_rejected_total'});
+        if isempty(warning_table)
+            warning_table = this_row;
+        else
+            warning_table = [warning_table; this_row]; %#ok<AGROW>
+        end
+    end
+end
+
+if isempty(warning_table)
+    return;
+end
+
+lines = strings(height(warning_table) + 2, 1);
+lines(1) = string(sprintf( ...
+    'HIGH EPOCH REJECTION WARNING: %d subject(s) exceeded %.1f%% rejected epochs:', ...
+    height(warning_table), 100 * threshold));
+for r = 1:height(warning_table)
+    lines(r + 1) = string(sprintf('  %s: %d/%d epochs rejected (%.1f%%)', ...
+        char(warning_table.subject_id(r)), ...
+        round(warning_table.n_rejected_total(r)), ...
+        round(warning_table.n_epochs_total(r)), ...
+        100 * warning_table.prop_rejected_total(r)));
+end
+lines(end) = "Review the timestamped tables under qc/epoch_rej/.";
+warning_message = strjoin(lines, newline);
+end
+
+
+function [qc_root, timestamp, delimiter] = resolve_qc_collection_context_impl(cfg_or_qc_root)
+delimiter = ';';
+cfg = struct();
+
+if nargin < 1 || isempty(cfg_or_qc_root)
+    cfg = eeg_pipeline_config();
+    qc_root = fullfile(char(cfg.paths.derivatives_root), 'qc');
+elseif isstruct(cfg_or_qc_root)
+    cfg = cfg_or_qc_root;
+    qc_root = fullfile(char(cfg.paths.derivatives_root), 'qc');
+else
+    qc_root = char(string(cfg_or_qc_root));
+end
+
+if isstruct(cfg) && isfield(cfg, 'qc') && isstruct(cfg.qc) && ...
+        isfield(cfg.qc, 'table_delimiter')
+    delimiter = char(string(cfg.qc.table_delimiter));
+elseif isstruct(cfg) && isfield(cfg, 'prep_06')
+    delimiter = char(string(getfield_safe_impl(cfg.prep_06, 'qc_table_delimiter', ';')));
+end
+timestamp = resolve_qc_timestamp_impl(cfg);
+end
+
+
+function t_all = read_latest_qc_tables_impl(files, key_vars, delimiter)
+t_all = table();
+if isempty(files)
+    return;
+end
+
+tables = cell(numel(files),1);
+keys = strings(numel(files),1);
+valid = false(numel(files),1);
+
+for k = 1:numel(files)
+    this_path = fullfile(files(k).folder, files(k).name);
+    try
+        t = readtable(this_path, 'Delimiter', delimiter, 'TextType', 'string');
+    catch
+        continue;
+    end
+    if isempty(t)
+        continue;
+    end
+
+    key_parts = strings(1,numel(key_vars));
+    key_ok = true;
+    for v = 1:numel(key_vars)
+        if ~ismember(key_vars{v}, t.Properties.VariableNames)
+            key_ok = false;
+            break;
+        end
+        key_parts(v) = string(t.(key_vars{v})(1));
+    end
+    if ~key_ok
+        continue;
+    end
+
+    t.source_qc_file = repmat(string(this_path), height(t), 1);
+    tables{k} = t;
+    keys(k) = strjoin(cellstr(key_parts), '__');
+    valid(k) = true;
+end
+
+tables = tables(valid);
+keys = keys(valid);
+files = files(valid);
+if isempty(tables)
+    return;
+end
+
+unique_keys = unique(keys, 'stable');
+for i = 1:numel(unique_keys)
+    candidates = find(keys == unique_keys(i));
+    [~, latest_local] = max([files(candidates).datenum]);
+    selected = tables{candidates(latest_local)};
+    if isempty(t_all)
+        t_all = selected;
+    else
+        t_all = append_compatible_tables_impl(t_all, selected);
+    end
+end
+end
+
+
+function out = append_compatible_tables_impl(a, b)
+all_vars = union(a.Properties.VariableNames, b.Properties.VariableNames, 'stable');
+a = add_missing_table_variables_impl(a, b, all_vars);
+b = add_missing_table_variables_impl(b, a, all_vars);
+a = a(:, all_vars);
+b = b(:, all_vars);
+out = [a; b];
+end
+
+
+function t = add_missing_table_variables_impl(t, template, all_vars)
+for i = 1:numel(all_vars)
+    vn = all_vars{i};
+    if ismember(vn, t.Properties.VariableNames)
+        continue;
+    end
+    if ismember(vn, template.Properties.VariableNames)
+        sample = template.(vn);
+        if islogical(sample)
+            t.(vn) = false(height(t),1);
+        elseif isnumeric(sample)
+            t.(vn) = nan(height(t),1);
+        elseif isstring(sample)
+            t.(vn) = strings(height(t),1);
+        else
+            t.(vn) = repmat({[]}, height(t),1);
+        end
+    else
+        t.(vn) = strings(height(t),1);
+    end
+end
+end
+
+
+function t = normalize_prep06_summary_table_impl(t)
+n = height(t);
+string_vars = {'qc_timestamp','subject_id','run_base','ica_method','epoching_mode', ...
+    'condition','status','input_set_name','rejection_method','exclusion_reason', ...
+    'min_trials_condition_counts','min_trials_insufficient_conditions','settings_json','output_set_paths'};
+double_vars = {'n_eeg_channels','n_eog_channels','n_non_eeg_channels','n_epochs_total', ...
+    'n_rejected_hard','n_rejected_sophisticated','n_rejected_total','n_epochs_kept', ...
+    'n_rejected_extreme_voltage','n_rejected_sample_diff','n_rejected_flatline', ...
+    'n_rejected_faster','n_rejected_ptp','n_rejected_mad_variance','prop_rejected_total', ...
+    'hard_threshold_uv','baseline_start_ms','baseline_end_ms','max_reject_prop', ...
+    'warn_if_reject_prop_gt', ...
+    'shared_faster_z','shared_ptp_uV_thresh','min_trials_min_n'};
+logical_vars = {'excluded_any_rule','excluded_by_max_reject_prop','excluded_by_min_trials_rule', ...
+    'artifact_rejection_enabled','hard_threshold_enabled','baseline_correction_enabled', ...
+    'shared_rejection_enabled','shared_use_robust_z','min_trials_rule_enabled'};
+
+for i = 1:numel(string_vars)
+    vn = string_vars{i};
+    if ~ismember(vn, t.Properties.VariableNames)
+        t.(vn) = strings(n,1);
+    else
+        t.(vn) = qc_to_string_column_impl(t.(vn));
+    end
+end
+for i = 1:numel(double_vars)
+    vn = double_vars{i};
+    if ~ismember(vn, t.Properties.VariableNames)
+        t.(vn) = nan(n,1);
+    else
+        t.(vn) = qc_to_double_column_impl(t.(vn));
+    end
+end
+for i = 1:numel(logical_vars)
+    vn = logical_vars{i};
+    if ~ismember(vn, t.Properties.VariableNames)
+        t.(vn) = false(n,1);
+    else
+        t.(vn) = qc_to_logical_column_impl(t.(vn));
+    end
+end
+t.ica_method = lower(string(t.ica_method));
+t.excluded_any_rule = logical(t.excluded_any_rule) | ...
+    logical(t.excluded_by_max_reject_prop) | logical(t.excluded_by_min_trials_rule);
+end
+
+
+function out = qc_to_string_column_impl(x)
+if isstring(x)
+    out = x;
+elseif iscell(x)
+    try
+        out = string(x);
+    catch
+        out = repmat("", numel(x), 1);
+    end
+else
+    out = string(x);
+end
+out = out(:);
+end
+
+
+function out = qc_to_double_column_impl(x)
+if isnumeric(x) || islogical(x)
+    out = double(x(:));
+else
+    out = str2double(replace(qc_to_string_column_impl(x), ',', '.'));
+end
+end
+
+
+function out = qc_to_logical_column_impl(x)
+if islogical(x)
+    out = x(:);
+elseif isnumeric(x)
+    out = x(:) ~= 0;
+else
+    s = lower(strtrim(qc_to_string_column_impl(x)));
+    out = ismember(s, ["1","true","yes","y","ja"]);
+end
+end
+
+
+function t_pair = build_paired_ica_summary_impl(t_all)
+t_pair = table();
+required = {'subject_id','run_base','epoching_mode','condition','ica_method', ...
+    'status','n_epochs_total','n_rejected_total','n_epochs_kept','prop_rejected_total'};
+if ~all(ismember(required, t_all.Properties.VariableNames))
+    return;
+end
+
+pair_key = strcat(string(t_all.subject_id), "__", string(t_all.run_base), "__", ...
+    string(t_all.epoching_mode), "__", string(t_all.condition));
+for key = unique(pair_key)'
+    row_runica = t_all(pair_key == key & lower(string(t_all.ica_method)) == "runica", :);
+    row_amica = t_all(pair_key == key & lower(string(t_all.ica_method)) == "amica", :);
+    if height(row_runica) ~= 1 || height(row_amica) ~= 1
+        continue;
+    end
+
+    row = table( ...
+        string(row_runica.subject_id(1)), string(row_runica.run_base(1)), ...
+        string(row_runica.epoching_mode(1)), string(row_runica.condition(1)), ...
+        string(row_runica.status(1)), string(row_amica.status(1)), ...
+        row_runica.n_epochs_total(1), row_amica.n_epochs_total(1), ...
+        row_runica.n_rejected_total(1), row_amica.n_rejected_total(1), ...
+        row_runica.n_epochs_kept(1), row_amica.n_epochs_kept(1), ...
+        row_runica.prop_rejected_total(1), row_amica.prop_rejected_total(1), ...
+        row_amica.n_rejected_total(1) - row_runica.n_rejected_total(1), ...
+        row_amica.n_epochs_kept(1) - row_runica.n_epochs_kept(1), ...
+        row_amica.prop_rejected_total(1) - row_runica.prop_rejected_total(1), ...
+        'VariableNames', { ...
+        'subject_id','run_base','epoching_mode','condition','status_runica','status_amica', ...
+        'n_epochs_total_runica','n_epochs_total_amica','n_rejected_total_runica','n_rejected_total_amica', ...
+        'n_epochs_kept_runica','n_epochs_kept_amica','prop_rejected_total_runica','prop_rejected_total_amica', ...
+        'delta_n_rejected_total_amica_minus_runica','delta_n_epochs_kept_amica_minus_runica', ...
+        'delta_prop_rejected_amica_minus_runica'});
+    if isempty(t_pair)
+        t_pair = row;
+    else
+        t_pair = [t_pair; row]; %#ok<AGROW>
+    end
+end
+end
+
+
+function step_cfg = default_prep03_cfg_impl()
+step_cfg = struct();
+
+% Crop
+step_cfg.crop_to_task_markers = true;
+step_cfg.crop_start_marker    = 'S 91';
+step_cfg.crop_end_marker      = 'S 97';
+step_cfg.crop_padding_sec     = [0 0];
+
+% Channel typing labels
+step_cfg.eog_channel_labels     = {'IO1','IO2','LO1','LO2'};
+step_cfg.scr_channel_labels     = {'SCR'};
+step_cfg.startle_channel_labels = {'Startle'};
+step_cfg.ekg_channel_labels     = {'EKG'};
+
+% Downsample
+step_cfg.downsample_hz = 250;
+
+% Bad channel detection
+step_cfg.bad_channel_detection_method = "clean_rawdata"; % "clean_rawdata" | "pop_rejchan" | "off"
+
+% Flat/invalid EEG-channel detection is applied exactly once, independently
+% of the selected bad-channel backend. AUX channels are only removed if they
+% are non-finite or completely constant.
+step_cfg.flat_channel_detection = struct();
+step_cfg.flat_channel_detection.enable = true;
+step_cfg.flat_channel_detection.mode = "cumulative_fraction"; % "cumulative_fraction" | "continuous_seconds"
+step_cfg.flat_channel_detection.max_flat_fraction = 0.10; % fraction of complete post-crop recording
+step_cfg.flat_channel_detection.continuous_flat_sec = 5;
+step_cfg.flat_channel_detection.step_tolerance_uV = 0;
+
+% Used when bad_channel_detection_method = "clean_rawdata".
+% Flat-channel detection is disabled inside clean_rawdata because it has
+% already been performed once above.
+step_cfg.clean_rawdata_channel_corr_threshold = 0.80;
+
+% Used when bad_channel_detection_method = "pop_rejchan"
+step_cfg.pop_rejchan_z_threshold  = 3.29;
+step_cfg.pop_rejchan_freqrange_hz = [1 125];
+
+% Interpolation timing
+step_cfg.interpolate_bad_channels_before_ica = true;
+step_cfg.interp_method = 'spherical';
+
+% Step 03 debug/intermediate exports.
+% Master switch. Default false = no Step 03 intermediate debug files.
+% If true, the individual switches below decide which stages are written.
+step_cfg.save_intermediate_steps = false;
+
+% Save after final bad EEG channel list has been applied.
+% In this pipeline, bad EEG channels are usually interpolated rather than
+% permanently removed.
+step_cfg.save_intermediate_after_bad_channel_rejection = true;
+
+% Save after rereferencing.
+step_cfg.save_intermediate_after_rereference = true;
+
+% Save after high-pass filtering.
+step_cfg.save_intermediate_after_highpass = true;
+
+% Save after low-pass filtering.
+step_cfg.save_intermediate_after_lowpass = true;
+
+step_cfg.intermediate_savemode = 'twofiles';
+
+% Referencing
+step_cfg.reference_mode            = "avg";  % "keep" | "avg" | "mastoid"
+step_cfg.reference_exclude_non_eeg = true;
+step_cfg.mastoid_channel_labels    = {'T9','T10'};
+
+% Filters
+step_cfg.highpass_hz          = 0.01;
+step_cfg.lowpass_hz           = 40;
+step_cfg.ica_prep_highpass_hz = 1;
+
+% Line noise
+step_cfg.line_noise_method          = "pop_cleanline"; % "pop_cleanline" | "off"
+step_cfg.line_noise_frequencies_hz  = [50 100];
+step_cfg.pop_cleanline_bandwidth_hz = 2;
+step_cfg.pop_cleanline_p_value      = 0.01;
+step_cfg.pop_cleanline_scanforlines      = true;
+step_cfg.pop_cleanline_winsize_sec       = 2;
+step_cfg.pop_cleanline_winstep_sec       = 1;
+step_cfg.pop_cleanline_tau               = 50;
+step_cfg.pop_cleanline_pad               = 4;
+step_cfg.pop_cleanline_taperbandwidth_hz = 4;
+step_cfg.pop_cleanline_norm_spectrum     = 0;
+step_cfg.pop_cleanline_computepower      = 0;
+step_cfg.pop_cleanline_verbose           = false;
+
+% ICA-prep: regepochs + rejection
+step_cfg.ica_prep_use_regepochs       = true;
+step_cfg.ica_prep_regepoch_length_sec = 1;
+
+% Main ICA-prep epoch-rejection method.
+% Select exactly one:
+%   "erplab"     = ERPLAB pop_artextval/pop_artdiff; optional pop_artflatline
+%   "faster_ptp" = FASTER epoch_properties + peak-to-peak threshold
+%   "mad_variance" = robust MAD rejection on epoch variance
+%   "none"       = no ICA-prep epoch rejection
+step_cfg.ica_prep_epoch_rejection_method = "erplab";
+
+% Legacy jointprob settings.
+% Currently retained for backward compatibility with older configs.
+step_cfg.ica_prep_use_jointprob_rejection = true;
+step_cfg.ica_prep_jointprob_local         = 3;
+step_cfg.ica_prep_jointprob_global        = 3;
+
+% MAD ICA-prep rejection settings.
+% Only used when ica_prep_epoch_rejection_method="mad_variance".
+% These are the original scalar settings used by
+% reject_ica_prep_epochs_by_mad_variance_impl.
+step_cfg.ica_prep_use_mad_epoch_rejection = true;
+step_cfg.ica_prep_mad_z_threshold         = 4;
+step_cfg.ica_prep_mad_use_logvar          = true;
+step_cfg.ica_prep_max_reject_prop         = 1.00;
+
+% ERPLAB ICA-prep rejection.
+% Same logic as final Step 06 rejection, but more lenient.
+step_cfg.ica_prep_erplab_epoch_rejection = struct();
+step_cfg.ica_prep_erplab_epoch_rejection.enable = true;
+step_cfg.ica_prep_erplab_epoch_rejection.channel_scope = "eeg";
+step_cfg.ica_prep_erplab_epoch_rejection.twindow_ms = [];
+step_cfg.ica_prep_erplab_epoch_rejection.clear_existing_flags = true;
+
+step_cfg.ica_prep_erplab_epoch_rejection.use_extreme_voltage = true;
+step_cfg.ica_prep_erplab_epoch_rejection.extreme_voltage_uV  = 300;
+step_cfg.ica_prep_erplab_epoch_rejection.flag_extreme_voltage = 1;
+
+step_cfg.ica_prep_erplab_epoch_rejection.use_sample_diff = true;
+step_cfg.ica_prep_erplab_epoch_rejection.sample_diff_uV  = 75;
+step_cfg.ica_prep_erplab_epoch_rejection.flag_sample_diff = 2;
+
+% Optional only: flatline rejection may reject unexpectedly many epochs.
+% Keep false unless its effect has been inspected for the current dataset.
+step_cfg.ica_prep_erplab_epoch_rejection.use_flatline = false;
+step_cfg.ica_prep_erplab_epoch_rejection.flatline_tolerance_uV = 0.5;
+step_cfg.ica_prep_erplab_epoch_rejection.flatline_duration_ms  = 200;
+step_cfg.ica_prep_erplab_epoch_rejection.flag_flatline = 3;
+
+step_cfg.ica_prep_erplab_epoch_rejection.review = "off";
+step_cfg.ica_prep_erplab_epoch_rejection.history = "off";
+step_cfg.ica_prep_erplab_epoch_rejection.lowpass_hz = -1;
+
+% FASTER/PTP ICA-prep rejection.
+% Only used when ica_prep_epoch_rejection_method="faster_ptp".
+step_cfg.ica_prep_faster_ptp_epoch_rejection = struct();
+
+step_cfg.ica_prep_faster_ptp_epoch_rejection.enable       = true;
+step_cfg.ica_prep_faster_ptp_epoch_rejection.use_faster   = true;
+step_cfg.ica_prep_faster_ptp_epoch_rejection.faster_z     = 4;
+step_cfg.ica_prep_faster_ptp_epoch_rejection.use_robust_z = true;
+
+step_cfg.ica_prep_faster_ptp_epoch_rejection.use_ptp       = true;
+step_cfg.ica_prep_faster_ptp_epoch_rejection.ptp_uV_thresh = 100;
+
+% 1.00 means disabled. Example: 0.50 stops Step 03 if >50% of ICA-prep
+% epochs are removed.
+step_cfg.ica_prep_faster_ptp_epoch_rejection.max_reject_prop = 1.00;
+
+% Overwrite override
+step_cfg.overwrite_mode = "";
+end
+
+
+function step_cfg = default_prep06_cfg_impl()
+step_cfg = struct();
+
+% -------------------------------------------------------------------------
+% GENERAL
+% -------------------------------------------------------------------------
+step_cfg.epoching_mode  = "event_locked";
+step_cfg.overwrite_mode = "";
+
+step_cfg.save_final_only         = true;
+step_cfg.save_intermediate_steps = false;
+step_cfg.savemode                = 'twofiles';
+
+% -------------------------------------------------------------------------
+% REFERENCING
+% -------------------------------------------------------------------------
+step_cfg.reference_mode            = "keep";
+step_cfg.mastoid_channel_labels    = {'T9','T10'};
+step_cfg.reference_exclude_non_eeg = true;
+
+% -------------------------------------------------------------------------
+% EVENT-LOCKED EPOCHING
+% -------------------------------------------------------------------------
+step_cfg.events_phase  = {};
+step_cfg.epoch_start_s = -0.4;
+step_cfg.epoch_end_s   =  2.6;
+
+% -------------------------------------------------------------------------
+% BASELINE EPOCHING
+% -------------------------------------------------------------------------
+step_cfg.regepoch_length_sec = 10;
+step_cfg.regepoch_step_sec   = 10;
+
+% true  = split baseline data into conditions using the markers below
+% false = treat the complete baseline recording as one continuous condition
+step_cfg.baseline_has_conditions = false;
+
+% Generic baseline condition definitions. Each row contains a freely chosen
+% condition name and the marker prefixes that start that condition.
+step_cfg.baseline_condition_definitions = {};
+step_cfg.baseline_start_condition        = "";
+step_cfg.baseline_end_condition          = "";
+
+step_cfg.baseline_end_markers            = {};
+
+% -------------------------------------------------------------------------
+% ARTIFACT REJECTION
+% -------------------------------------------------------------------------
+step_cfg.do_artifact_rejection               = true;
+
+% Optional first-pass hard rejection.
+% Usually keep this false when epoch_rejection_backend="erplab", because
+% ERPLAB's extreme-value rule can implement the same threshold.
+step_cfg.do_initial_hard_threshold_rejection = false;
+step_cfg.initial_hard_threshold_uv           = 100;
+
+% Select exactly one final epoch-rejection method:
+%   "erplab"     = ERPLAB pop_artextval/pop_artdiff/pop_artflatline
+%   "faster_ptp" = FASTER epoch_properties + peak-to-peak threshold
+%   "mad_variance" = original MAD variance rejection helper
+%   "none"       = no final epoch rejection
+step_cfg.epoch_rejection_method = "erplab";
+
+% Legacy / fallback settings
+step_cfg.use_faster                    = true;
+step_cfg.faster_z_thresh               = 3;
+step_cfg.faster_use_robust_z           = true;
+
+step_cfg.use_ptp       = true;
+step_cfg.ptp_uV_thresh = 100;
+
+step_cfg.max_reject_prop = 1;
+step_cfg.warn_if_reject_prop_gt = 0.25;
+
+% MAD variance rejection settings.
+% Only used when epoch_rejection_method="mad_variance".
+% Reuses reject_ica_prep_epochs_by_mad_variance_impl.
+step_cfg.mad_z_threshold = 3;
+step_cfg.mad_use_logvar  = true;
+
+% -------------------------------------------------------------------------
+% ERPLAB EPOCH REJECTION
+% -------------------------------------------------------------------------
+step_cfg.erplab_epoch_rejection = struct();
+
+% "eeg" checks only EEG channels; "all" checks all channels.
+step_cfg.erplab_epoch_rejection.channel_scope = "eeg";
+
+% [] means use the whole epoch window.
+step_cfg.erplab_epoch_rejection.twindow_ms = [];
+
+% Clear previous EEGLAB/ERPLAB manual artifact flags before running ERPLAB.
+step_cfg.erplab_epoch_rejection.clear_existing_flags = true;
+
+% 1) Extreme voltage threshold: reject if signal exceeds +/- threshold.
+step_cfg.erplab_epoch_rejection.use_extreme_voltage = true;
+step_cfg.erplab_epoch_rejection.extreme_voltage_uV  = 200;
+step_cfg.erplab_epoch_rejection.flag_extreme_voltage = 1;
+
+% 2) Sample-to-sample voltage difference.
+step_cfg.erplab_epoch_rejection.use_sample_diff = true;
+step_cfg.erplab_epoch_rejection.sample_diff_uV  = 50;
+step_cfg.erplab_epoch_rejection.flag_sample_diff = 2;
+
+% Optional only: epoch-level flatline rejection may reject unexpectedly
+% many epochs. Keep it off unless its impact has been inspected explicitly.
+step_cfg.erplab_epoch_rejection.use_flatline = false;
+step_cfg.erplab_epoch_rejection.flatline_tolerance_uV = 0.5;
+step_cfg.erplab_epoch_rejection.flatline_duration_ms  = 100;
+step_cfg.erplab_epoch_rejection.flag_flatline = 3;
+
+step_cfg.erplab_epoch_rejection.review = "off";
+step_cfg.erplab_epoch_rejection.history = "off";
+step_cfg.erplab_epoch_rejection.lowpass_hz = -1;
+
+% -------------------------------------------------------------------------
+% BASELINE CORRECTION
+% -------------------------------------------------------------------------
+step_cfg.do_baseline_correction = false;
+step_cfg.base_start_ms          = -200;
+step_cfg.base_end_ms            = 0;
+
+% -------------------------------------------------------------------------
+% OUTPUT SPLITTING
+% -------------------------------------------------------------------------
+step_cfg.split_non_eeg_channels = false;
+step_cfg.eeg_only_keep_eog      = false;
+
+% -------------------------------------------------------------------------
+% SHARED EPOCH REJECTION
+% -------------------------------------------------------------------------
+% FASTER/PTP epoch rejection.
+% Only used when epoch_rejection_method="faster_ptp".
+step_cfg.faster_ptp_epoch_rejection = struct();
+step_cfg.faster_ptp_epoch_rejection.use_faster    = true;
+step_cfg.faster_ptp_epoch_rejection.faster_z      = 3;
+step_cfg.faster_ptp_epoch_rejection.use_robust_z  = true;
+step_cfg.faster_ptp_epoch_rejection.use_ptp       = true;
+step_cfg.faster_ptp_epoch_rejection.ptp_uV_thresh = 100;
+
+% -------------------------------------------------------------------------
+% MINIMUM TRIALS PER CONDITION (event_locked only)
+% -------------------------------------------------------------------------
+step_cfg.min_trials_per_condition_enable      = false;
+step_cfg.min_trials_per_condition_min_n       = 3;
+step_cfg.min_trials_per_condition_zero_tol_ms = 2;
+step_cfg.min_trials_per_condition_codes       = {};
+
+% -------------------------------------------------------------------------
+% SUMMARY TABLES
+% -------------------------------------------------------------------------
+step_cfg.write_run_summary_table     = true;
+step_cfg.write_subject_summary_table = true;
+step_cfg.qc_table_delimiter          = ';';
 end
 
 
