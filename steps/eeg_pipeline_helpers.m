@@ -130,6 +130,32 @@ helpers.safe_rmdir                            = @safe_rmdir_impl;
 helpers.write_ic_topography_pngs              = @write_ic_topography_pngs_impl;
 helpers.merge_structs_recursive               = @merge_structs_recursive_impl;
 
+% -------------------------------------------------------------------------
+% ICA QC, ICLabel, pilot, and Step-05 collection helpers
+% -------------------------------------------------------------------------
+helpers.default_amica_qc                       = @default_amica_qc_impl;
+helpers.validate_amica_config                  = @validate_amica_config_impl;
+helpers.evaluate_amica_convergence             = @evaluate_amica_convergence_impl;
+helpers.validate_ica_matrices                  = @validate_ica_matrices_impl;
+helpers.build_step04_ica_qc_row                = @build_step04_ica_qc_row_impl;
+helpers.write_step04_run_qc                    = @write_step04_run_qc_impl;
+helpers.append_step04_qc_row                   = @append_step04_qc_row_impl;
+helpers.write_step04_subject_qc                = @write_step04_subject_qc_impl;
+helpers.validate_prep05_config                 = @validate_prep05_config_impl;
+helpers.infer_n_ic                             = @infer_n_ic_impl;
+helpers.get_iclabel_classifications            = @get_iclabel_classifications_impl;
+helpers.build_iclabel_flags                    = @build_iclabel_flags_impl;
+helpers.build_iclabel_component_table          = @build_iclabel_component_table_impl;
+helpers.empty_ica_decomposition_qc             = @empty_ica_decomposition_qc_impl;
+helpers.compute_ica_decomposition_qc           = @compute_ica_decomposition_qc_impl;
+helpers.evaluate_ic_rejection_signal_change    = @evaluate_ic_rejection_signal_change_impl;
+helpers.extract_prep04_qc_from_eeg             = @extract_prep04_qc_from_eeg_impl;
+helpers.build_prep05_summary_row               = @build_prep05_summary_row_impl;
+helpers.append_prep05_summary_row              = @append_prep05_summary_row_impl;
+helpers.write_prep05_run_summary               = @write_prep05_run_summary_impl;
+helpers.write_prep05_subject_summary           = @write_prep05_subject_summary_impl;
+helpers.collect_prep05_summary                 = @collect_prep05_summary_impl;
+helpers.run_ica_pilot                          = @run_ica_pilot_impl;
 
 % -------------------------------------------------------------------------
 % Behavior-log helpers
@@ -2913,21 +2939,26 @@ for k = 1:numel(EEG.chanlocs)
     EEG.chanlocs(k).type = 'EEG';
 end
 
-set_type_by_labels_local(step_cfg.eog_channel_labels,     'EOG');
-set_type_by_labels_local(step_cfg.scr_channel_labels,     'SCR');
-set_type_by_labels_local(step_cfg.startle_channel_labels, 'Startle');
-set_type_by_labels_local(step_cfg.ekg_channel_labels,     'EKG');
+EEG = set_channel_types_by_labels_impl( ...
+    EEG, labels, step_cfg.eog_channel_labels, 'EOG');
+EEG = set_channel_types_by_labels_impl( ...
+    EEG, labels, step_cfg.scr_channel_labels, 'SCR');
+EEG = set_channel_types_by_labels_impl( ...
+    EEG, labels, step_cfg.startle_channel_labels, 'Startle');
+EEG = set_channel_types_by_labels_impl( ...
+    EEG, labels, step_cfg.ekg_channel_labels, 'EKG');
 
 EEG = eeg_checkset(EEG);
+end
 
-    function set_type_by_labels_local(label_list, type_name)
-        for i = 1:numel(label_list)
-            idx = find(strcmpi(labels, label_list{i}));
-            for j = 1:numel(idx)
-                EEG.chanlocs(idx(j)).type = type_name;
-            end
-        end
+function EEG = set_channel_types_by_labels_impl( ...
+        EEG, labels, label_list, type_name)
+for i = 1:numel(label_list)
+    idx = find(strcmpi(labels, label_list{i}));
+    for j = 1:numel(idx)
+        EEG.chanlocs(idx(j)).type = type_name;
     end
+end
 end
 
 function [flat_indices, flat_labels, info] = find_flat_or_invalid_channels_impl(EEG, candidate_indices, detection_cfg)
@@ -6392,5 +6423,1497 @@ if strcmp(pattern, '*')
     tf = true;
 else
     tf = strcmp(value, pattern);
+end
+end
+
+% =========================================================================
+% ICA CONVERGENCE AND STEP-04 QC HELPERS
+% =========================================================================
+function qc = default_amica_qc_impl()
+qc = struct( ...
+    'passed', true, ...
+    'status', "not_applicable", ...
+    'failure_code', "", ...
+    'failure_reason', "", ...
+    'recommended_action', "", ...
+    'n_iterations', NaN, ...
+    'hit_max_iter', false, ...
+    'll_initial', NaN, ...
+    'll_final', NaN, ...
+    'll_best', NaN, ...
+    'tail_median_abs_dll', NaN, ...
+    'tail_relative_ll_change', NaN, ...
+    'final_update_norm_median', NaN, ...
+    'final_update_norm_max', NaN);
+end
+
+function validate_amica_config_impl(step_cfg)
+integer_fields = { ...
+    'amica_max_iter', 'amica_convergence_min_iterations', ...
+    'amica_convergence_tail_window'};
+for fi = 1:numel(integer_fields)
+    value = double(step_cfg.(integer_fields{fi}));
+    if ~isscalar(value) || ~isfinite(value) || value < 1 || value ~= round(value)
+        error('prep04_ica: cfg.prep_04.%s must be a positive integer.', ...
+            integer_fields{fi});
+    end
+end
+if step_cfg.amica_convergence_tail_window < 2
+    error(['prep04_ica: cfg.prep_04.amica_convergence_tail_window ' ...
+        'must be at least 2.']);
+end
+if step_cfg.amica_convergence_min_iterations >= step_cfg.amica_max_iter
+    error(['prep04_ica: amica_convergence_min_iterations must be smaller ' ...
+        'than amica_max_iter.']);
+end
+
+logical_fields = { ...
+    'amica_write_update_norm_history', 'amica_check_convergence', ...
+    'amica_fail_on_nonconvergence', 'amica_keep_tmp_on_qc_failure'};
+for fi = 1:numel(logical_fields)
+    value = step_cfg.(logical_fields{fi});
+    if ~isscalar(value) || ~(islogical(value) || isnumeric(value)) || ...
+            (isnumeric(value) && ~ismember(double(value), [0 1]))
+        error('prep04_ica: cfg.prep_04.%s must be scalar logical.', ...
+            logical_fields{fi});
+    end
+end
+end
+
+function qc = evaluate_amica_convergence_impl(mods, weights, sphere, expected_rank, n_channels, step_cfg)
+qc = default_amica_qc_impl();
+qc.status = "pass";
+failure_codes = strings(0, 1);
+failure_reasons = strings(0, 1);
+
+try
+    validate_ica_matrices_impl(weights, sphere, expected_rank, n_channels, "amica");
+catch me
+    failure_codes(end+1, 1) = "AMICA_OUTPUT_INVALID"; %#ok<AGROW>
+    failure_reasons(end+1, 1) = string(me.message); %#ok<AGROW>
+end
+
+if ~isstruct(mods) || ~isfield(mods, 'num_models') || mods.num_models ~= 1
+    failure_codes(end+1, 1) = "AMICA_MODEL_COUNT_INVALID"; %#ok<AGROW>
+    failure_reasons(end+1, 1) = ...
+        "AMICA did not return exactly one ICA model."; %#ok<AGROW>
+end
+
+ll = [];
+if isstruct(mods) && isfield(mods, 'LL') && isnumeric(mods.LL)
+    ll = double(mods.LL(:));
+end
+
+if isempty(ll) || (numel(ll) == 1 && ll(1) == 0)
+    failure_codes(end+1, 1) = "AMICA_LL_MISSING"; %#ok<AGROW>
+    failure_reasons(end+1, 1) = ...
+        "AMICA returned no usable log-likelihood history."; %#ok<AGROW>
+else
+    qc.n_iterations = numel(ll);
+    qc.ll_initial = ll(1);
+    qc.ll_final = ll(end);
+    qc.ll_best = max(ll);
+
+    if any(~isfinite(ll))
+        failure_codes(end+1, 1) = "AMICA_LL_NONFINITE"; %#ok<AGROW>
+        failure_reasons(end+1, 1) = ...
+            "AMICA log-likelihood history contains non-finite values."; %#ok<AGROW>
+    end
+
+    tail_window = max(2, round(double(step_cfg.amica_convergence_tail_window)));
+    tail_start = max(1, numel(ll) - tail_window);
+    tail_ll = ll(tail_start:end);
+    tail_dll = diff(tail_ll);
+    finite_dll = tail_dll(isfinite(tail_dll));
+    if ~isempty(finite_dll)
+        qc.tail_median_abs_dll = median(abs(finite_dll));
+    end
+    if isfinite(qc.ll_final) && isfinite(tail_ll(1))
+        qc.tail_relative_ll_change = ...
+            abs(qc.ll_final - tail_ll(1)) / max(1, abs(qc.ll_final));
+    end
+
+    min_iterations = max(1, round(double(step_cfg.amica_convergence_min_iterations)));
+    if qc.n_iterations < min_iterations
+        failure_codes(end+1, 1) = "AMICA_TOO_FEW_ITERATIONS"; %#ok<AGROW>
+        failure_reasons(end+1, 1) = sprintf( ...
+            'AMICA stopped after %d iterations; the configured minimum is %d.', ...
+            qc.n_iterations, min_iterations); %#ok<AGROW>
+    end
+
+    max_iter = max(1, round(double(step_cfg.amica_max_iter)));
+    qc.hit_max_iter = qc.n_iterations >= max_iter;
+    if qc.hit_max_iter
+        failure_codes(end+1, 1) = "AMICA_MAX_ITER_REACHED"; %#ok<AGROW>
+        failure_reasons(end+1, 1) = sprintf( ...
+            ['AMICA reached the configured iteration cap (%d) instead of ' ...
+             'stopping at an internal convergence criterion.'], max_iter); %#ok<AGROW>
+    end
+end
+
+if logical(step_cfg.amica_write_update_norm_history)
+    nd = [];
+    if isstruct(mods) && isfield(mods, 'nd') && isnumeric(mods.nd) && ...
+            ~(isscalar(mods.nd) && mods.nd == 0)
+        nd = double(mods.nd);
+    end
+
+    if isempty(nd)
+        failure_codes(end+1, 1) = "AMICA_UPDATE_HISTORY_MISSING"; %#ok<AGROW>
+        failure_reasons(end+1, 1) = ...
+            "AMICA returned no component update-norm history."; %#ok<AGROW>
+    else
+        final_nd = reshape(nd(end, :, :), 1, []);
+        if isempty(final_nd) || any(~isfinite(final_nd))
+            failure_codes(end+1, 1) = "AMICA_UPDATE_NORM_NONFINITE"; %#ok<AGROW>
+            failure_reasons(end+1, 1) = ...
+                "AMICA final component update norms contain non-finite values."; %#ok<AGROW>
+        else
+            qc.final_update_norm_median = median(final_nd);
+            qc.final_update_norm_max = max(final_nd);
+        end
+    end
+end
+
+failure_codes = unique(failure_codes, 'stable');
+failure_reasons = unique(failure_reasons, 'stable');
+qc.passed = isempty(failure_codes);
+
+if qc.passed
+    qc.status = "pass";
+else
+    qc.status = "fail";
+    qc.failure_code = strjoin(failure_codes, "+");
+    qc.failure_reason = strjoin(failure_reasons, " ");
+    qc.recommended_action = ...
+        ['Inspect and, if necessary, clean the Step-03 ICA-training data; ' ...
+         'verify sufficient samples and the estimated rank. Increase ' ...
+         'cfg.prep_04.amica_max_iter only when AMICA reached the iteration ' ...
+         'cap and the likelihood/update histories are otherwise finite. If ' ...
+         'failures recur, use runica consistently for the cohort. Changing ' ...
+         'ICLabel thresholds cannot repair ICA non-convergence.'];
+end
+end
+
+function validate_ica_matrices_impl(weights, sphere, expected_rank, n_channels, method_name)
+if isempty(weights) || isempty(sphere) || ~isnumeric(weights) || ~isnumeric(sphere)
+    error('%s returned empty or non-numeric ICA matrices.', char(method_name));
+end
+if any(~isfinite(weights(:))) || any(~isfinite(sphere(:)))
+    error('%s returned ICA matrices containing non-finite values.', char(method_name));
+end
+if size(weights, 1) ~= expected_rank
+    error('%s returned %d component rows in icaweights; expected %d.', ...
+        char(method_name), size(weights, 1), expected_rank);
+end
+if size(weights, 2) ~= size(sphere, 1)
+    error(['%s returned incompatible ICA matrices: icaweights is %s and ' ...
+        'icasphere is %s, so icaweights*icasphere is undefined.'], ...
+        char(method_name), mat2str(size(weights)), mat2str(size(sphere)));
+end
+if size(sphere, 2) ~= n_channels
+    error('%s returned icasphere size %s; expected %d channel columns.', ...
+        char(method_name), mat2str(size(sphere)), n_channels);
+end
+
+% EEGLAB runica and AMICA legitimately use different factorizations after
+% PCA reduction. runica returns [components x channels] weights with a
+% [channels x channels] sphere, whereas AMICA returns square component
+% weights with a [components x channels] sphere. The combined unmixing
+% matrix must have the same [components x channels] shape in both cases.
+unmixing = weights * sphere;
+if ~isequal(size(unmixing), [expected_rank n_channels]) || ...
+        any(~isfinite(unmixing(:)))
+    error(['%s returned an invalid combined unmixing matrix of size %s; ' ...
+        'expected [%d %d] with finite values.'], ...
+        char(method_name), mat2str(size(unmixing)), ...
+        expected_rank, n_channels);
+end
+end
+
+function row = build_step04_ica_qc_row_impl( ...
+    cfg, subj_label, run_base, ica_method, status, failure_code, ...
+    failure_reason, recommended_action, rank_forica, rank_used, ...
+    n_channels, n_samples, runtime_seconds, step_cfg, amica_qc, ...
+    amica_tmp_dir, output_set_path)
+
+qc_timestamp = "";
+if isfield(cfg, 'qc') && isstruct(cfg.qc) && isfield(cfg.qc, 'run_timestamp')
+    qc_timestamp = string(cfg.qc.run_timestamp);
+end
+
+row = table( ...
+    qc_timestamp, string(subj_label), string(run_base), string(ica_method), ...
+    string(status), string(failure_code), string(failure_reason), ...
+    string(recommended_action), double(rank_forica), double(rank_used), ...
+    double(n_channels), double(n_samples), double(runtime_seconds), ...
+    double(step_cfg.amica_max_iter), double(amica_qc.n_iterations), ...
+    logical(amica_qc.hit_max_iter), double(amica_qc.ll_initial), ...
+    double(amica_qc.ll_final), double(amica_qc.ll_best), ...
+    double(amica_qc.tail_median_abs_dll), ...
+    double(amica_qc.tail_relative_ll_change), ...
+    double(amica_qc.final_update_norm_median), ...
+    double(amica_qc.final_update_norm_max), ...
+    string(amica_tmp_dir), string(output_set_path), ...
+    'VariableNames', { ...
+        'qc_timestamp','subject_id','run_base','ica_method', ...
+        'ica_status','ica_failure_code','ica_failure_reason','recommended_action', ...
+        'rank_forica','rank_used','n_ica_channels','n_training_samples','ica_runtime_seconds', ...
+        'amica_max_iter','amica_n_iterations','amica_hit_max_iter', ...
+        'amica_ll_initial','amica_ll_final','amica_ll_best', ...
+        'amica_tail_median_abs_dll','amica_tail_relative_ll_change', ...
+        'amica_final_update_norm_median','amica_final_update_norm_max', ...
+        'amica_tmp_dir','output_set_path'});
+end
+
+function write_step04_run_qc_impl(row, qc_method_dir, subj_label, run_base, step_cfg)
+if ~logical(step_cfg.write_run_qc_table)
+    return;
+end
+out_path = fullfile(qc_method_dir, ...
+    sprintf('%s_%s_prep04_ica_qc.csv', subj_label, run_base));
+writetable(row, out_path, ...
+    'Delimiter', char(string(step_cfg.qc_table_delimiter)));
+end
+
+function rows = append_step04_qc_row_impl(rows, row)
+if isempty(rows)
+    rows = row;
+else
+    rows = [rows; row];
+end
+end
+
+function write_step04_subject_qc_impl(rows, qc_method_dir, subj_label, step_cfg)
+if ~logical(step_cfg.write_subject_qc_table) || isempty(rows)
+    return;
+end
+subject_qc_path = fullfile( ...
+    qc_method_dir, sprintf('%s_prep04_ica_summary.csv', subj_label));
+writetable(rows, subject_qc_path, ...
+    'Delimiter', char(string(step_cfg.qc_table_delimiter)));
+end
+
+% =========================================================================
+% ICLABEL, SIGNAL-CHANGE, AND STEP-05 QC HELPERS
+% =========================================================================
+function validate_prep05_config_impl(step_cfg)
+bool_fields = { ...
+    'iclabel_remove_eye', 'iclabel_remove_muscle', ...
+    'iclabel_remove_heart', 'iclabel_remove_linenoise', ...
+    'iclabel_remove_channoise', 'iclabel_remove_other', ...
+    'iclabel_remove_low_brain', 'signal_qc_enable', ...
+    'signal_qc_fail_on_violation', 'signal_qc_fail_on_nonfinite', ...
+    'signal_qc_fail_on_flat_channels', 'compute_decomposition_qc'};
+for bi = 1:numel(bool_fields)
+    value = step_cfg.(bool_fields{bi});
+    if ~isscalar(value) || ~(islogical(value) || isnumeric(value)) || ...
+            (isnumeric(value) && ~ismember(double(value), [0 1]))
+        error('prep05_after_ica: cfg.prep_05.%s must be scalar logical.', ...
+            bool_fields{bi});
+    end
+end
+
+prob_fields = { ...
+    'iclabel_eye_remove_thr', 'iclabel_muscle_remove_thr', ...
+    'iclabel_heart_remove_thr', 'iclabel_linenoise_remove_thr', ...
+    'iclabel_channoise_remove_thr', 'iclabel_other_remove_thr', ...
+    'iclabel_brain_min_keep_thr', 'iclabel_edge_margin'};
+for pi = 1:numel(prob_fields)
+    value = double(step_cfg.(prob_fields{pi}));
+    if ~isscalar(value) || ~isfinite(value) || value < 0 || value > 1
+        error('prep05_after_ica: cfg.prep_05.%s must be in [0, 1].', ...
+            prob_fields{pi});
+    end
+end
+
+bounded_fields = { ...
+    'signal_qc_max_relative_change_rms', ...
+    'signal_qc_min_rms_ratio', 'signal_qc_max_rms_ratio'};
+for qi = 1:numel(bounded_fields)
+    value = double(step_cfg.(bounded_fields{qi}));
+    if ~isscalar(value) || ~isfinite(value) || value < 0
+        error('prep05_after_ica: cfg.prep_05.%s must be finite and >= 0.', ...
+            bounded_fields{qi});
+    end
+end
+
+unit_interval_fields = { ...
+    'signal_qc_max_prop_ic_removed', ...
+    'signal_qc_min_median_channel_correlation'};
+for ui = 1:numel(unit_interval_fields)
+    value = double(step_cfg.(unit_interval_fields{ui}));
+    if ~isscalar(value) || ~isfinite(value) || value < 0 || value > 1
+        error('prep05_after_ica: cfg.prep_05.%s must be in [0, 1].', ...
+            unit_interval_fields{ui});
+    end
+end
+
+if double(step_cfg.signal_qc_min_rms_ratio) > ...
+        double(step_cfg.signal_qc_max_rms_ratio)
+    error(['prep05_after_ica: signal_qc_min_rms_ratio must not exceed ' ...
+        'signal_qc_max_rms_ratio.']);
+end
+
+positive_integer_fields = { ...
+    'signal_qc_min_remaining_components', ...
+    'decomposition_qc_max_samples', 'decomposition_qc_mi_bins'};
+for ii = 1:numel(positive_integer_fields)
+    value = double(step_cfg.(positive_integer_fields{ii}));
+    if ~isscalar(value) || ~isfinite(value) || value < 1 || value ~= round(value)
+        error('prep05_after_ica: cfg.prep_05.%s must be a positive integer.', ...
+            positive_integer_fields{ii});
+    end
+end
+
+scope = lower(string(step_cfg.signal_qc_channel_scope));
+if ~ismember(scope, ["eeg", "all"])
+    error(['prep05_after_ica: cfg.prep_05.signal_qc_channel_scope must ' ...
+        'be "eeg" or "all".']);
+end
+end
+
+function n_ic = infer_n_ic_impl(EEG)
+n_ic = 0;
+if isfield(EEG, 'icawinv') && ~isempty(EEG.icawinv)
+    n_ic = size(EEG.icawinv, 2);
+elseif isfield(EEG, 'icaweights') && ~isempty(EEG.icaweights)
+    n_ic = size(EEG.icaweights, 1);
+end
+end
+
+function classif = get_iclabel_classifications_impl(EEG, n_ic)
+if ~isfield(EEG, 'etc') || ...
+        ~isfield(EEG.etc, 'ic_classification') || ...
+        ~isfield(EEG.etc.ic_classification, 'ICLabel') || ...
+        ~isfield(EEG.etc.ic_classification.ICLabel, 'classifications')
+    error('prep05_after_ica:ICLabelOutputMissing', ...
+        'ICLabel classifications are missing after iclabel(EEG).');
+end
+
+classif = double(EEG.etc.ic_classification.ICLabel.classifications);
+if size(classif, 2) < 7
+    error('prep05_after_ica:ICLabelShapeInvalid', ...
+        'Unexpected ICLabel classification size: %s', mat2str(size(classif)));
+end
+if size(classif, 1) ~= n_ic
+    error('prep05_after_ica:ICLabelShapeInvalid', ...
+        'ICLabel returned %d rows, but the dataset has %d ICs.', ...
+        size(classif, 1), n_ic);
+end
+if any(~isfinite(classif(:)))
+    error('prep05_after_ica:ICLabelNonfinite', ...
+        'ICLabel classifications contain non-finite probabilities.');
+end
+end
+
+function flags = build_iclabel_flags_impl(classif, step_cfg)
+p_brain  = classif(:, 1);
+p_muscle = classif(:, 2);
+p_eye    = classif(:, 3);
+p_heart  = classif(:, 4);
+p_line   = classif(:, 5);
+p_ch     = classif(:, 6);
+p_other  = classif(:, 7);
+
+flags = struct();
+flags.eye = logical(step_cfg.iclabel_remove_eye) & ...
+    p_eye > step_cfg.iclabel_eye_remove_thr;
+flags.muscle = logical(step_cfg.iclabel_remove_muscle) & ...
+    p_muscle > step_cfg.iclabel_muscle_remove_thr;
+flags.heart = logical(step_cfg.iclabel_remove_heart) & ...
+    p_heart > step_cfg.iclabel_heart_remove_thr;
+flags.line_noise = logical(step_cfg.iclabel_remove_linenoise) & ...
+    p_line > step_cfg.iclabel_linenoise_remove_thr;
+flags.channel_noise = logical(step_cfg.iclabel_remove_channoise) & ...
+    p_ch > step_cfg.iclabel_channoise_remove_thr;
+flags.other = logical(step_cfg.iclabel_remove_other) & ...
+    p_other > step_cfg.iclabel_other_remove_thr;
+flags.low_brain = logical(step_cfg.iclabel_remove_low_brain) & ...
+    p_brain < step_cfg.iclabel_brain_min_keep_thr;
+
+flags.remove_any = flags.eye | flags.muscle | flags.heart | ...
+    flags.line_noise | flags.channel_noise | flags.other | flags.low_brain;
+
+m = double(step_cfg.iclabel_edge_margin);
+flags.edge_eye = iclabel_edge_high_impl( ...
+    p_eye, step_cfg.iclabel_eye_remove_thr, m, step_cfg.iclabel_remove_eye);
+flags.edge_muscle = iclabel_edge_high_impl( ...
+    p_muscle, step_cfg.iclabel_muscle_remove_thr, m, step_cfg.iclabel_remove_muscle);
+flags.edge_heart = iclabel_edge_high_impl( ...
+    p_heart, step_cfg.iclabel_heart_remove_thr, m, step_cfg.iclabel_remove_heart);
+flags.edge_line_noise = iclabel_edge_high_impl( ...
+    p_line, step_cfg.iclabel_linenoise_remove_thr, m, step_cfg.iclabel_remove_linenoise);
+flags.edge_channel_noise = iclabel_edge_high_impl( ...
+    p_ch, step_cfg.iclabel_channoise_remove_thr, m, step_cfg.iclabel_remove_channoise);
+flags.edge_other = iclabel_edge_high_impl( ...
+    p_other, step_cfg.iclabel_other_remove_thr, m, step_cfg.iclabel_remove_other);
+flags.edge_low_brain = logical(step_cfg.iclabel_remove_low_brain) & ...
+    p_brain >= step_cfg.iclabel_brain_min_keep_thr & ...
+    p_brain < (step_cfg.iclabel_brain_min_keep_thr + m);
+flags.edge_any = flags.edge_eye | flags.edge_muscle | flags.edge_heart | ...
+    flags.edge_line_noise | flags.edge_channel_noise | flags.edge_other | ...
+    flags.edge_low_brain;
+end
+
+function edge = iclabel_edge_high_impl(probability, threshold, margin, enabled)
+edge = logical(enabled) & probability <= threshold & ...
+    probability > max(0, threshold - margin);
+end
+
+function t = build_iclabel_component_table_impl( ...
+    subj_label, run_base, ica_method, classif, flags)
+n_ic = size(classif, 1);
+ic_index = (1:n_ic)';
+t = table( ...
+    repmat(string(subj_label), n_ic, 1), ...
+    repmat(string(run_base), n_ic, 1), ...
+    repmat(string(ica_method), n_ic, 1), ...
+    ic_index, classif(:, 1), classif(:, 2), classif(:, 3), ...
+    classif(:, 4), classif(:, 5), classif(:, 6), classif(:, 7), ...
+    flags.eye, flags.muscle, flags.heart, flags.line_noise, ...
+    flags.channel_noise, flags.other, flags.low_brain, flags.remove_any, ...
+    flags.edge_eye, flags.edge_muscle, flags.edge_heart, ...
+    flags.edge_line_noise, flags.edge_channel_noise, flags.edge_other, ...
+    flags.edge_low_brain, flags.edge_any & ~flags.remove_any, ...
+    'VariableNames', { ...
+        'subject_id', 'run_base', 'ica_method', 'ic_index', ...
+        'p_brain', 'p_muscle', 'p_eye', 'p_heart', 'p_line', ...
+        'p_channel_noise', 'p_other', ...
+        'flag_eye', 'flag_muscle', 'flag_heart', 'flag_line_noise', ...
+        'flag_channel_noise', 'flag_other', 'flag_low_brain', ...
+        'is_removed', 'edge_eye', 'edge_muscle', 'edge_heart', ...
+        'edge_line_noise', 'edge_channel_noise', 'edge_other', ...
+        'edge_low_brain', 'is_edge_not_removed'});
+end
+
+% =========================================================================
+% INTERNAL BEFORE/AFTER SIGNAL QC HELPERS
+% =========================================================================
+function qc = empty_ic_rejection_signal_qc_impl()
+qc = struct( ...
+    'status', "not_checked", ...
+    'failure_code', "", ...
+    'failure_reason', "", ...
+    'recommended_action', "", ...
+    'channel_scope', "", ...
+    'n_channels_checked', NaN, ...
+    'n_samples_per_channel', NaN, ...
+    'nonfinite_before', NaN, ...
+    'nonfinite_after', NaN, ...
+    'flat_channels_before', NaN, ...
+    'flat_channels_after', NaN, ...
+    'median_channel_correlation', NaN, ...
+    'min_channel_correlation', NaN, ...
+    'relative_change_rms', NaN, ...
+    'rms_ratio', NaN, ...
+    'centered_variance_ratio', NaN);
+end
+
+function qc = evaluate_ic_rejection_signal_change_impl( ...
+    before, after, EEG, step_cfg, n_ic, n_removed, n_remaining, flags)
+qc = empty_ic_rejection_signal_qc_impl();
+qc.channel_scope = lower(string(step_cfg.signal_qc_channel_scope));
+
+if ~logical(step_cfg.signal_qc_enable)
+    qc.status = "not_checked";
+    return;
+end
+
+if ~isequal(size(before), size(after))
+    qc.status = "fail";
+    qc.failure_code = "SIGNAL_DIMENSIONS_CHANGED";
+    qc.failure_reason = sprintf( ...
+        'Signal dimensions changed from %s to %s during IC removal.', ...
+        mat2str(size(before)), mat2str(size(after)));
+    qc.recommended_action = ...
+        "Inspect the component-removal call and EEGLAB version before continuing.";
+    return;
+end
+
+channel_idx = resolve_signal_qc_channels_impl(EEG, qc.channel_scope);
+qc.n_channels_checked = numel(channel_idx);
+sample_shape = size(before);
+qc.n_samples_per_channel = prod(sample_shape(2:end));
+
+corr_values = NaN(numel(channel_idx), 1);
+sum_before_sq = 0;
+sum_after_sq = 0;
+sum_diff_sq = 0;
+sum_before_centered_sq = 0;
+sum_after_centered_sq = 0;
+nonfinite_before = 0;
+nonfinite_after = 0;
+flat_before = false(numel(channel_idx), 1);
+flat_after = false(numel(channel_idx), 1);
+
+for ci = 1:numel(channel_idx)
+    b = double(reshape(before(channel_idx(ci), :, :), 1, []));
+    a = double(reshape(after(channel_idx(ci), :, :), 1, []));
+
+    finite_b = isfinite(b);
+    finite_a = isfinite(a);
+    nonfinite_before = nonfinite_before + sum(~finite_b);
+    nonfinite_after = nonfinite_after + sum(~finite_a);
+
+    paired = finite_b & finite_a;
+    if nnz(paired) >= 2
+        bp = b(paired);
+        ap = a(paired);
+        b_centered = bp - mean(bp);
+        a_centered = ap - mean(ap);
+        denom = sqrt(sum(b_centered .^ 2) * sum(a_centered .^ 2));
+        if denom > 0
+            corr_values(ci) = sum(b_centered .* a_centered) / denom;
+        end
+
+        flat_before(ci) = std(bp, 0) < step_cfg.signal_qc_flat_std_epsilon;
+        flat_after(ci) = std(ap, 0) < step_cfg.signal_qc_flat_std_epsilon;
+        sum_before_sq = sum_before_sq + sum(bp .^ 2);
+        sum_after_sq = sum_after_sq + sum(ap .^ 2);
+        sum_diff_sq = sum_diff_sq + sum((ap - bp) .^ 2);
+        sum_before_centered_sq = sum_before_centered_sq + sum(b_centered .^ 2);
+        sum_after_centered_sq = sum_after_centered_sq + sum(a_centered .^ 2);
+    else
+        flat_before(ci) = true;
+        flat_after(ci) = true;
+    end
+end
+
+qc.nonfinite_before = nonfinite_before;
+qc.nonfinite_after = nonfinite_after;
+qc.flat_channels_before = nnz(flat_before);
+qc.flat_channels_after = nnz(flat_after);
+finite_corr = corr_values(isfinite(corr_values));
+if ~isempty(finite_corr)
+    qc.median_channel_correlation = median(finite_corr);
+    qc.min_channel_correlation = min(finite_corr);
+end
+qc.relative_change_rms = sqrt(sum_diff_sq / max(sum_before_sq, eps));
+qc.rms_ratio = sqrt(sum_after_sq / max(sum_before_sq, eps));
+qc.centered_variance_ratio = ...
+    sum_after_centered_sq / max(sum_before_centered_sq, eps);
+
+failure_codes = strings(0, 1);
+failure_reasons = strings(0, 1);
+
+if logical(step_cfg.signal_qc_fail_on_nonfinite) && qc.nonfinite_before > 0
+    failure_codes(end+1, 1) = "NONFINITE_SIGNAL_BEFORE"; %#ok<AGROW>
+    failure_reasons(end+1, 1) = sprintf( ...
+        'The pre-rejection signal contains %d non-finite values.', ...
+        qc.nonfinite_before); %#ok<AGROW>
+end
+if logical(step_cfg.signal_qc_fail_on_nonfinite) && qc.nonfinite_after > 0
+    failure_codes(end+1, 1) = "NONFINITE_SIGNAL_AFTER"; %#ok<AGROW>
+    failure_reasons(end+1, 1) = sprintf( ...
+        'The post-rejection signal contains %d non-finite values.', ...
+        qc.nonfinite_after); %#ok<AGROW>
+end
+if logical(step_cfg.signal_qc_fail_on_flat_channels) && ...
+        qc.flat_channels_before > 0
+    failure_codes(end+1, 1) = "FLAT_CHANNELS_BEFORE"; %#ok<AGROW>
+    failure_reasons(end+1, 1) = sprintf( ...
+        'The pre-rejection signal has %d flat checked channel(s).', ...
+        qc.flat_channels_before); %#ok<AGROW>
+end
+if logical(step_cfg.signal_qc_fail_on_flat_channels) && ...
+        qc.flat_channels_after > 0
+    failure_codes(end+1, 1) = "FLAT_CHANNELS_AFTER"; %#ok<AGROW>
+    failure_reasons(end+1, 1) = sprintf( ...
+        'The post-rejection signal has %d flat checked channel(s).', ...
+        qc.flat_channels_after); %#ok<AGROW>
+end
+if n_removed / n_ic > step_cfg.signal_qc_max_prop_ic_removed
+    failure_codes(end+1, 1) = "TOO_MANY_ICS_REMOVED"; %#ok<AGROW>
+    failure_reasons(end+1, 1) = sprintf( ...
+        'Removed IC proportion %.3f exceeds the configured maximum %.3f.', ...
+        n_removed / n_ic, step_cfg.signal_qc_max_prop_ic_removed); %#ok<AGROW>
+end
+if n_remaining < step_cfg.signal_qc_min_remaining_components
+    failure_codes(end+1, 1) = "TOO_FEW_ICS_REMAIN"; %#ok<AGROW>
+    failure_reasons(end+1, 1) = sprintf( ...
+        '%d ICs remain; the configured minimum is %d.', ...
+        n_remaining, step_cfg.signal_qc_min_remaining_components); %#ok<AGROW>
+end
+if ~isfinite(qc.median_channel_correlation) || ...
+        qc.median_channel_correlation < ...
+        step_cfg.signal_qc_min_median_channel_correlation
+    failure_codes(end+1, 1) = "LOW_PRE_POST_CORRELATION"; %#ok<AGROW>
+    failure_reasons(end+1, 1) = sprintf( ...
+        ['Median channel correlation %.3f is below the configured ' ...
+         'minimum %.3f.'], qc.median_channel_correlation, ...
+        step_cfg.signal_qc_min_median_channel_correlation); %#ok<AGROW>
+end
+if qc.relative_change_rms > step_cfg.signal_qc_max_relative_change_rms
+    failure_codes(end+1, 1) = "EXCESSIVE_RELATIVE_SIGNAL_CHANGE"; %#ok<AGROW>
+    failure_reasons(end+1, 1) = sprintf( ...
+        ['Relative change RMS %.3f exceeds the configured maximum ' ...
+         '%.3f.'], qc.relative_change_rms, ...
+        step_cfg.signal_qc_max_relative_change_rms); %#ok<AGROW>
+end
+if qc.rms_ratio < step_cfg.signal_qc_min_rms_ratio || ...
+        qc.rms_ratio > step_cfg.signal_qc_max_rms_ratio
+    failure_codes(end+1, 1) = "RMS_RATIO_OUT_OF_RANGE"; %#ok<AGROW>
+    failure_reasons(end+1, 1) = sprintf( ...
+        ['Post/pre RMS ratio %.3f is outside the configured interval ' ...
+         '[%.3f, %.3f].'], qc.rms_ratio, ...
+        step_cfg.signal_qc_min_rms_ratio, ...
+        step_cfg.signal_qc_max_rms_ratio); %#ok<AGROW>
+end
+
+failure_codes = unique(failure_codes, 'stable');
+failure_reasons = unique(failure_reasons, 'stable');
+if isempty(failure_codes)
+    qc.status = "pass";
+    return;
+end
+
+qc.status = "fail";
+qc.failure_code = strjoin(failure_codes, "+");
+qc.failure_reason = strjoin(failure_reasons, " ");
+
+if any(contains(failure_codes, "NONFINITE")) || ...
+        any(failure_codes == "FLAT_CHANNELS_BEFORE")
+    qc.recommended_action = ...
+        ['Inspect the Step-03 input, channel interpolation, rank, and ICA ' ...
+         'application. ICLabel thresholds do not repair non-finite or ' ...
+         'already-flat input channels.'];
+else
+    dominant_class = dominant_removed_iclabel_class_impl(flags);
+    qc.recommended_action = sprintf( ...
+        ['Inspect the ICLabel component table and topographies, especially ' ...
+         'class "%s". If rejection is genuinely too aggressive, RAISE ' ...
+         'the relevant cfg.prep_05 ICLabel threshold or disable that class; ' ...
+         'a lower threshold removes more ICs. Do not relax signal-QC limits ' ...
+         'until the ICA and rejected components have been checked.'], ...
+        char(dominant_class));
+end
+end
+
+function channel_idx = resolve_signal_qc_channels_impl(EEG, scope)
+channel_idx = 1:EEG.nbchan;
+if lower(string(scope)) == "all"
+    return;
+end
+
+is_eeg = false(1, EEG.nbchan);
+for ci = 1:EEG.nbchan
+    channel_type = "";
+    channel_label = "";
+    if isfield(EEG.chanlocs, 'type')
+        candidate_type = string(EEG.chanlocs(ci).type);
+        if ~isempty(candidate_type)
+            channel_type = lower(strtrim(candidate_type(1)));
+        end
+    end
+    if isfield(EEG.chanlocs, 'labels')
+        candidate_label = string(EEG.chanlocs(ci).labels);
+        if ~isempty(candidate_label)
+            channel_label = upper(strtrim(candidate_label(1)));
+        end
+    end
+
+    if channel_type == "eeg"
+        is_eeg(ci) = true;
+    elseif strlength(channel_type) == 0
+        is_eeg(ci) = ~contains(channel_label, "EOG");
+    end
+end
+
+channel_idx = find(is_eeg);
+if isempty(channel_idx)
+    error('prep05_after_ica:SignalQCScopeEmpty', ...
+        ['No EEG channels could be selected for signal QC. Set ' ...
+         'cfg.prep_05.signal_qc_channel_scope="all" or correct chanloc types.']);
+end
+end
+
+function class_name = dominant_removed_iclabel_class_impl(flags)
+class_names = [ ...
+    "eye", "muscle", "heart", "line_noise", ...
+    "channel_noise", "other", "low_brain"];
+counts = [ ...
+    nnz(flags.eye), nnz(flags.muscle), nnz(flags.heart), ...
+    nnz(flags.line_noise), nnz(flags.channel_noise), ...
+    nnz(flags.other), nnz(flags.low_brain)];
+[~, idx] = max(counts);
+if isempty(idx) || all(counts == 0)
+    class_name = "none";
+else
+    class_name = class_names(idx);
+end
+end
+
+% =========================================================================
+% INTERNAL DECOMPOSITION COMPARISON HELPERS
+% =========================================================================
+function qc = empty_ica_decomposition_qc_impl()
+qc = struct( ...
+    'status', "not_computed", ...
+    'n_samples', NaN, ...
+    'n_components', NaN, ...
+    'n_component_pairs', NaN, ...
+    'mi_bins', NaN, ...
+    'mean_pairwise_mi_bits', NaN, ...
+    'median_pairwise_mi_bits', NaN, ...
+    'p95_pairwise_mi_bits', NaN, ...
+    'max_pairwise_mi_bits', NaN);
+end
+
+function qc = compute_ica_decomposition_qc_impl(EEG, step_cfg)
+qc = empty_ica_decomposition_qc_impl();
+
+if isempty(EEG.icaweights) || isempty(EEG.icasphere) || ...
+        isempty(EEG.icachansind)
+    error('prep05_after_ica:DecompositionQCMissingICA', ...
+        'ICA matrices or icachansind are missing for decomposition QC.');
+end
+
+x = reshape(EEG.data(EEG.icachansind, :, :), ...
+    numel(EEG.icachansind), []);
+n_total = size(x, 2);
+n_use = min(n_total, round(double(step_cfg.decomposition_qc_max_samples)));
+sample_idx = unique(round(linspace(1, n_total, n_use)));
+x = double(x(:, sample_idx));
+
+w = double(EEG.icaweights) * double(EEG.icasphere);
+y = w * x;
+if any(~isfinite(y(:)))
+    error('prep05_after_ica:DecompositionQCNonfinite', ...
+        'IC activations contain non-finite values.');
+end
+
+n_components = size(y, 1);
+n_samples = size(y, 2);
+n_bins = min(round(double(step_cfg.decomposition_qc_mi_bins)), n_samples);
+if n_components < 2 || n_samples < 4 || n_bins < 2
+    error('prep05_after_ica:DecompositionQCInsufficientData', ...
+        'Insufficient components or samples for pairwise-MI QC.');
+end
+
+rank_bins = uint16(min(n_bins, ceil((1:n_samples) * n_bins / n_samples)));
+bin_index = zeros(n_components, n_samples, 'uint16');
+for ci = 1:n_components
+    [~, order] = sort(y(ci, :), 'ascend');
+    bin_index(ci, order) = rank_bins;
+end
+
+n_pairs = n_components * (n_components - 1) / 2;
+mi_values = zeros(n_pairs, 1);
+pair_index = 0;
+for ai = 1:(n_components - 1)
+    for bi = (ai + 1):n_components
+        pair_index = pair_index + 1;
+        joint = accumarray( ...
+            [double(bin_index(ai, :))' double(bin_index(bi, :))'], ...
+            1, [n_bins n_bins]);
+        pxy = joint / n_samples;
+        px = sum(pxy, 2);
+        py = sum(pxy, 1);
+        independent = px * py;
+        valid = pxy > 0 & independent > 0;
+        mi_values(pair_index) = sum( ...
+            pxy(valid) .* log2(pxy(valid) ./ independent(valid)));
+    end
+end
+
+sorted_mi = sort(mi_values);
+p95_index = max(1, min(numel(sorted_mi), ceil(0.95 * numel(sorted_mi))));
+qc.status = "computed";
+qc.n_samples = n_samples;
+qc.n_components = n_components;
+qc.n_component_pairs = n_pairs;
+qc.mi_bins = n_bins;
+qc.mean_pairwise_mi_bits = mean(mi_values);
+qc.median_pairwise_mi_bits = median(mi_values);
+qc.p95_pairwise_mi_bits = sorted_mi(p95_index);
+qc.max_pairwise_mi_bits = max(mi_values);
+end
+
+% =========================================================================
+% INTERNAL SUMMARY HELPERS
+% =========================================================================
+function qc = extract_prep04_qc_from_eeg_impl(EEG)
+qc = struct( ...
+    'rank_forica', NaN, ...
+    'rank_used', NaN, ...
+    'ica_runtime_seconds', NaN, ...
+    'amica_status', "not_applicable", ...
+    'amica_n_iterations', NaN, ...
+    'amica_hit_max_iter', false, ...
+    'amica_ll_final', NaN, ...
+    'amica_tail_relative_ll_change', NaN, ...
+    'amica_final_update_norm_max', NaN);
+
+if ~isfield(EEG, 'etc') || ~isfield(EEG.etc, 'prep04_ica')
+    return;
+end
+p = EEG.etc.prep04_ica;
+qc.rank_forica = prep05_numeric_field_impl(p, 'rank_forica', NaN);
+qc.rank_used = prep05_numeric_field_impl(p, 'rank_used', NaN);
+qc.ica_runtime_seconds = prep05_numeric_field_impl(p, 'runtime_seconds', NaN);
+
+if ~isfield(p, 'amica_convergence') || ~isstruct(p.amica_convergence)
+    return;
+end
+a = p.amica_convergence;
+qc.amica_status = prep05_string_field_impl(a, 'status', "not_available");
+qc.amica_n_iterations = prep05_numeric_field_impl(a, 'n_iterations', NaN);
+qc.amica_hit_max_iter = logical(prep05_numeric_field_impl(a, 'hit_max_iter', false));
+qc.amica_ll_final = prep05_numeric_field_impl(a, 'll_final', NaN);
+qc.amica_tail_relative_ll_change = ...
+    prep05_numeric_field_impl(a, 'tail_relative_ll_change', NaN);
+qc.amica_final_update_norm_max = ...
+    prep05_numeric_field_impl(a, 'final_update_norm_max', NaN);
+end
+
+function row = build_prep05_summary_row_impl( ...
+    cfg, subj_label, run_base, ica_method, step_cfg, flags, signal_qc, ...
+    decomposition_qc, prep04_qc, n_ic, n_removed, n_remaining, ...
+    prop_removed, n_edge, component_table_path, out_path, output_written)
+s = struct();
+s.qc_timestamp = prep05_resolve_qc_timestamp_impl(cfg);
+s.subject_id = string(subj_label);
+s.run_base = string(run_base);
+s.ica_method = string(ica_method);
+s.cleaning_status = string(signal_qc.status);
+s.failure_code = string(signal_qc.failure_code);
+s.failure_reason = string(signal_qc.failure_reason);
+s.recommended_action = string(signal_qc.recommended_action);
+s.n_ic_total = double(n_ic);
+s.n_ic_removed_unique = double(n_removed);
+s.n_ic_remaining = double(n_remaining);
+s.prop_ic_removed = double(prop_removed);
+s.n_ic_edge_not_removed = double(n_edge);
+s.n_ic_flag_eye = nnz(flags.eye);
+s.n_ic_flag_muscle = nnz(flags.muscle);
+s.n_ic_flag_heart = nnz(flags.heart);
+s.n_ic_flag_line_noise = nnz(flags.line_noise);
+s.n_ic_flag_channel_noise = nnz(flags.channel_noise);
+s.n_ic_flag_other = nnz(flags.other);
+s.n_ic_flag_low_brain = nnz(flags.low_brain);
+s.remove_eye = logical(step_cfg.iclabel_remove_eye);
+s.remove_muscle = logical(step_cfg.iclabel_remove_muscle);
+s.remove_heart = logical(step_cfg.iclabel_remove_heart);
+s.remove_line_noise = logical(step_cfg.iclabel_remove_linenoise);
+s.remove_channel_noise = logical(step_cfg.iclabel_remove_channoise);
+s.remove_other = logical(step_cfg.iclabel_remove_other);
+s.remove_low_brain = logical(step_cfg.iclabel_remove_low_brain);
+s.thr_eye = double(step_cfg.iclabel_eye_remove_thr);
+s.thr_muscle = double(step_cfg.iclabel_muscle_remove_thr);
+s.thr_heart = double(step_cfg.iclabel_heart_remove_thr);
+s.thr_line_noise = double(step_cfg.iclabel_linenoise_remove_thr);
+s.thr_channel_noise = double(step_cfg.iclabel_channoise_remove_thr);
+s.thr_other = double(step_cfg.iclabel_other_remove_thr);
+s.thr_brain_min_keep = double(step_cfg.iclabel_brain_min_keep_thr);
+s.edge_margin = double(step_cfg.iclabel_edge_margin);
+s.signal_qc_channel_scope = string(signal_qc.channel_scope);
+s.signal_qc_n_channels = double(signal_qc.n_channels_checked);
+s.signal_qc_n_samples_per_channel = double(signal_qc.n_samples_per_channel);
+s.signal_nonfinite_before = double(signal_qc.nonfinite_before);
+s.signal_nonfinite_after = double(signal_qc.nonfinite_after);
+s.signal_flat_channels_before = double(signal_qc.flat_channels_before);
+s.signal_flat_channels_after = double(signal_qc.flat_channels_after);
+s.signal_median_channel_correlation = ...
+    double(signal_qc.median_channel_correlation);
+s.signal_min_channel_correlation = ...
+    double(signal_qc.min_channel_correlation);
+s.signal_relative_change_rms = double(signal_qc.relative_change_rms);
+s.signal_rms_ratio = double(signal_qc.rms_ratio);
+s.signal_centered_variance_ratio = ...
+    double(signal_qc.centered_variance_ratio);
+s.decomposition_qc_status = string(decomposition_qc.status);
+s.decomposition_qc_n_samples = double(decomposition_qc.n_samples);
+s.decomposition_qc_n_components = double(decomposition_qc.n_components);
+s.decomposition_qc_n_pairs = double(decomposition_qc.n_component_pairs);
+s.decomposition_qc_mi_bins = double(decomposition_qc.mi_bins);
+s.mean_pairwise_mi_bits = double(decomposition_qc.mean_pairwise_mi_bits);
+s.median_pairwise_mi_bits = double(decomposition_qc.median_pairwise_mi_bits);
+s.p95_pairwise_mi_bits = double(decomposition_qc.p95_pairwise_mi_bits);
+s.max_pairwise_mi_bits = double(decomposition_qc.max_pairwise_mi_bits);
+s.rank_forica = double(prep04_qc.rank_forica);
+s.rank_used = double(prep04_qc.rank_used);
+s.ica_runtime_seconds = double(prep04_qc.ica_runtime_seconds);
+s.amica_status = string(prep04_qc.amica_status);
+s.amica_n_iterations = double(prep04_qc.amica_n_iterations);
+s.amica_hit_max_iter = logical(prep04_qc.amica_hit_max_iter);
+s.amica_ll_final = double(prep04_qc.amica_ll_final);
+s.amica_tail_relative_ll_change = ...
+    double(prep04_qc.amica_tail_relative_ll_change);
+s.amica_final_update_norm_max = ...
+    double(prep04_qc.amica_final_update_norm_max);
+s.component_table_path = string(component_table_path);
+s.output_set_path = string(out_path);
+s.output_written = logical(output_written);
+row = struct2table(s, 'AsArray', true);
+end
+
+function value = prep05_numeric_field_impl(s, field_name, fallback)
+value = fallback;
+if isstruct(s) && isfield(s, field_name) && ~isempty(s.(field_name))
+    candidate = s.(field_name);
+    if (isnumeric(candidate) || islogical(candidate)) && isscalar(candidate)
+        value = candidate;
+    end
+end
+end
+
+function value = prep05_string_field_impl(s, field_name, fallback)
+value = string(fallback);
+if isstruct(s) && isfield(s, field_name) && ~isempty(s.(field_name))
+    value = string(s.(field_name));
+end
+end
+
+function timestamp = prep05_resolve_qc_timestamp_impl(cfg)
+timestamp = "";
+if isfield(cfg, 'qc') && isstruct(cfg.qc) && ...
+        isfield(cfg.qc, 'run_timestamp')
+    timestamp = string(cfg.qc.run_timestamp);
+end
+end
+
+function rows = append_prep05_summary_row_impl(rows, row)
+if isempty(rows)
+    rows = row;
+else
+    rows = [rows; row];
+end
+end
+
+function write_prep05_run_summary_impl( ...
+    row, qc_method_dir, subj_label, run_base, step_cfg)
+if ~logical(step_cfg.write_run_summary_table)
+    return;
+end
+out_path = fullfile(qc_method_dir, sprintf( ...
+    '%s_%s_prep05_run_summary.csv', subj_label, run_base));
+writetable(row, out_path, ...
+    'Delimiter', char(string(step_cfg.qc_table_delimiter)));
+end
+
+function write_prep05_subject_summary_impl( ...
+    rows, qc_method_dir, subj_label, step_cfg)
+if ~logical(step_cfg.write_subject_summary_table) || isempty(rows)
+    return;
+end
+out_path = fullfile(qc_method_dir, ...
+    sprintf('%s_prep05_summary.csv', subj_label));
+writetable(rows, out_path, ...
+    'Delimiter', char(string(step_cfg.qc_table_delimiter)));
+end
+
+% =========================================================================
+% STEP-05 QC COLLECTION HELPERS
+% =========================================================================
+function [t_all, t_by_method, t_pair] = collect_prep05_summary_impl(cfg_or_qc_root)
+% EEG_COLLECT_PREP05_SUMMARY
+% Copyright (C) 2025-2026 Saskia Wilken and contributors
+%
+% Collect Step-05 QC rows and create transparent runica-versus-AMICA pilot
+% comparisons. Negative AMICA-minus-runica residual pairwise-MI deltas favor
+% AMICA. Signal-change and rejection metrics must be inspected alongside MI;
+% this collector intentionally does not collapse the evidence into one score.
+
+if nargin < 1 || isempty(cfg_or_qc_root)
+    cfg = eeg_pipeline_config();
+    qc_root = fullfile(char(string(cfg.paths.derivatives_root)), 'qc');
+elseif isstruct(cfg_or_qc_root)
+    cfg = cfg_or_qc_root;
+    qc_root = fullfile(char(string(cfg.paths.derivatives_root)), 'qc');
+else
+    cfg = struct();
+    qc_root = char(string(cfg_or_qc_root));
+end
+
+if exist(qc_root, 'dir') ~= 7
+    error('collect_prep05_summary_impl:QCRootMissing', ...
+        'QC root not found: %s', qc_root);
+end
+
+delimiter = resolve_prep05_delimiter_impl(cfg);
+timestamp = resolve_prep05_timestamp_impl(cfg);
+subject_filter = resolve_prep05_subject_filter_impl(cfg);
+is_pilot = isfield(cfg, 'ica_pilot') && isstruct(cfg.ica_pilot) && ...
+    (prep05_collector_logical_field_impl(cfg.ica_pilot, 'enable', false) || ...
+     prep05_collector_logical_field_impl(cfg.ica_pilot, 'internal_run', false));
+
+if is_pilot
+    output_dir = fullfile(qc_root, 'ica_pilot');
+    output_stem = char(timestamp + "_ica_pilot");
+else
+    output_dir = qc_root;
+    if strlength(timestamp) > 0
+        output_stem = char(timestamp + "_prep05");
+    else
+        output_stem = 'prep05';
+    end
+end
+if exist(output_dir, 'dir') ~= 7
+    mkdir(output_dir);
+end
+
+t_all = collect_prep05_tables_impl( ...
+    qc_root, '*_prep05_summary.csv', delimiter, timestamp, subject_filter, ...
+    {'subject_id', 'run_base', 'ica_method'});
+t_step04 = collect_prep05_tables_impl( ...
+    qc_root, '*_prep04_ica_qc.csv', delimiter, timestamp, subject_filter, ...
+    {'subject_id', 'run_base', 'ica_method'});
+
+if isempty(t_all) && isempty(t_step04)
+    error('collect_prep05_summary_impl:NoCurrentQC', ...
+        'No matching current Step-04 or Step-05 QC rows found below: %s', ...
+        qc_root);
+end
+
+t_by_method = table();
+t_pair = table();
+
+if ~isempty(t_all)
+    t_all.subject_id = normalize_qc_subject_ids_impl(t_all.subject_id);
+    t_all.run_base = string(t_all.run_base);
+    t_all.ica_method = lower(string(t_all.ica_method));
+    t_all = keep_last_per_qc_key_impl(t_all, ...
+        {'subject_id', 'run_base', 'ica_method'});
+    t_all = sortrows(t_all, {'ica_method', 'subject_id', 'run_base'});
+
+    all_out = fullfile(output_dir, [output_stem '_all_methods.csv']);
+    writetable(t_all, all_out, 'Delimiter', delimiter);
+
+    numeric_vars = { ...
+        'n_ic_total', 'n_ic_removed_unique', 'n_ic_remaining', ...
+        'prop_ic_removed', 'n_ic_edge_not_removed', ...
+        'n_ic_flag_eye', 'n_ic_flag_muscle', 'n_ic_flag_heart', ...
+        'n_ic_flag_line_noise', 'n_ic_flag_channel_noise', ...
+        'n_ic_flag_other', 'n_ic_flag_low_brain', ...
+        'signal_median_channel_correlation', ...
+        'signal_relative_change_rms', 'signal_rms_ratio', ...
+        'mean_pairwise_mi_bits', 'median_pairwise_mi_bits', ...
+        'p95_pairwise_mi_bits', 'max_pairwise_mi_bits', ...
+        'ica_runtime_seconds'};
+    numeric_vars = numeric_vars( ...
+        ismember(numeric_vars, t_all.Properties.VariableNames));
+    if ~isempty(numeric_vars)
+        t_by_method = groupsummary( ...
+            t_all, 'ica_method', {'mean', 'std', 'median'}, numeric_vars);
+        by_method_out = fullfile( ...
+            output_dir, [output_stem '_by_method.csv']);
+        writetable(t_by_method, by_method_out, 'Delimiter', delimiter);
+    end
+
+    t_pair = build_prep05_pair_table_impl(t_all);
+    if ~isempty(t_pair)
+        pair_out = fullfile( ...
+            output_dir, [output_stem '_runica_vs_amica.csv']);
+        writetable(t_pair, pair_out, 'Delimiter', delimiter);
+    end
+end
+
+if ~isempty(t_step04)
+    t_step04.subject_id = normalize_qc_subject_ids_impl(t_step04.subject_id);
+    t_step04.run_base = string(t_step04.run_base);
+    t_step04.ica_method = lower(string(t_step04.ica_method));
+    t_step04 = keep_last_per_qc_key_impl(t_step04, ...
+        {'subject_id', 'run_base', 'ica_method'});
+    t_step04 = sortrows(t_step04, {'ica_method', 'subject_id', 'run_base'});
+    step04_out = fullfile(output_dir, [output_stem '_step04_ica_qc.csv']);
+    writetable(t_step04, step04_out, 'Delimiter', delimiter);
+end
+
+fprintf('\nStep-05 ICA QC collection complete: %s\n', output_dir);
+if is_pilot
+    fprintf(['Interpretation: lower residual pairwise MI favors the more ' ...
+        'independent decomposition; inspect signal-QC and rejection metrics ' ...
+        'before selecting a method.\n']);
+end
+end
+
+% =========================================================================
+% INTERNAL COLLECTION HELPERS
+% =========================================================================
+function t_all = collect_prep05_tables_impl( ...
+    qc_root, pattern, delimiter, timestamp, subject_filter, required_vars)
+files = dir(fullfile(qc_root, '**', pattern));
+t_all = table();
+
+for fi = 1:numel(files)
+    this_path = fullfile(files(fi).folder, files(fi).name);
+    try
+        t = readtable(this_path, 'Delimiter', delimiter);
+    catch
+        continue;
+    end
+
+    if ~all(ismember(required_vars, t.Properties.VariableNames))
+        continue;
+    end
+
+    t.subject_id = normalize_qc_subject_ids_impl(t.subject_id);
+    t.run_base = string(t.run_base);
+    t.ica_method = lower(string(t.ica_method));
+
+    if strlength(timestamp) > 0
+        if ~ismember('qc_timestamp', t.Properties.VariableNames)
+            continue;
+        end
+        t.qc_timestamp = string(t.qc_timestamp);
+        t = t(t.qc_timestamp == timestamp, :);
+    end
+
+    if ~isempty(subject_filter)
+        t = t(ismember(t.subject_id, subject_filter), :);
+    end
+    if isempty(t)
+        continue;
+    end
+
+    if isempty(t_all)
+        t_all = t;
+    elseif isequal(t_all.Properties.VariableNames, t.Properties.VariableNames)
+        t_all = [t_all; t]; %#ok<AGROW>
+    else
+        warning('collect_prep05_summary_impl:SchemaMismatch', ...
+            'Skipping QC file with incompatible columns: %s', this_path);
+    end
+end
+end
+
+function t = keep_last_per_qc_key_impl(t, key_vars)
+if isempty(t)
+    return;
+end
+key = strings(height(t), 1);
+for ki = 1:numel(key_vars)
+    key = key + "__" + string(t.(key_vars{ki}));
+end
+[~, last_idx] = unique(flipud(key), 'stable');
+last_idx = height(t) - last_idx + 1;
+t = t(sort(last_idx), :);
+end
+
+function t_pair = build_prep05_pair_table_impl(t_all)
+t_pair = table();
+pair_key = t_all.subject_id + "__" + t_all.run_base;
+unique_keys = unique(pair_key, 'stable');
+
+numeric_metrics = { ...
+    'n_ic_total', 'n_ic_removed_unique', 'n_ic_remaining', ...
+    'prop_ic_removed', 'n_ic_edge_not_removed', ...
+    'n_ic_flag_eye', 'n_ic_flag_muscle', 'n_ic_flag_heart', ...
+    'n_ic_flag_line_noise', 'n_ic_flag_channel_noise', ...
+    'n_ic_flag_other', 'n_ic_flag_low_brain', ...
+    'signal_nonfinite_after', 'signal_flat_channels_after', ...
+    'signal_median_channel_correlation', ...
+    'signal_min_channel_correlation', ...
+    'signal_relative_change_rms', 'signal_rms_ratio', ...
+    'signal_centered_variance_ratio', ...
+    'mean_pairwise_mi_bits', 'median_pairwise_mi_bits', ...
+    'p95_pairwise_mi_bits', 'max_pairwise_mi_bits', ...
+    'rank_forica', 'rank_used', 'ica_runtime_seconds'};
+text_metrics = { ...
+    'cleaning_status', 'failure_code', 'failure_reason', ...
+    'recommended_action', 'decomposition_qc_status', 'amica_status'};
+logical_metrics = {'output_written', 'amica_hit_max_iter'};
+
+for ki = 1:numel(unique_keys)
+    row_runica = t_all( ...
+        pair_key == unique_keys(ki) & t_all.ica_method == "runica", :);
+    row_amica = t_all( ...
+        pair_key == unique_keys(ki) & t_all.ica_method == "amica", :);
+    if height(row_runica) ~= 1 || height(row_amica) ~= 1
+        continue;
+    end
+
+    s = struct();
+    s.subject_id = string(row_runica.subject_id(1));
+    s.run_base = string(row_runica.run_base(1));
+
+    for mi = 1:numel(text_metrics)
+        name = text_metrics{mi};
+        if ismember(name, t_all.Properties.VariableNames)
+            s.([name '_runica']) = qc_scalar_string_impl(row_runica.(name));
+            s.([name '_amica']) = qc_scalar_string_impl(row_amica.(name));
+        end
+    end
+
+    for mi = 1:numel(logical_metrics)
+        name = logical_metrics{mi};
+        if ismember(name, t_all.Properties.VariableNames)
+            s.([name '_runica']) = qc_scalar_logical_impl(row_runica.(name));
+            s.([name '_amica']) = qc_scalar_logical_impl(row_amica.(name));
+        end
+    end
+
+    for mi = 1:numel(numeric_metrics)
+        name = numeric_metrics{mi};
+        if ismember(name, t_all.Properties.VariableNames)
+            value_runica = qc_scalar_numeric_impl(row_runica.(name));
+            value_amica = qc_scalar_numeric_impl(row_amica.(name));
+            s.([name '_runica']) = value_runica;
+            s.([name '_amica']) = value_amica;
+            s.(['delta_' name '_amica_minus_runica']) = ...
+                value_amica - value_runica;
+        end
+    end
+
+    pair_row = struct2table(s, 'AsArray', true);
+    if isempty(t_pair)
+        t_pair = pair_row;
+    else
+        t_pair = [t_pair; pair_row]; %#ok<AGROW>
+    end
+end
+end
+
+function subjects = resolve_prep05_subject_filter_impl(cfg)
+subjects = strings(0, 1);
+candidate = [];
+if isfield(cfg, 'ica_pilot') && isstruct(cfg.ica_pilot) && ...
+        isfield(cfg.ica_pilot, 'subjects') && ~isempty(cfg.ica_pilot.subjects)
+    candidate = cfg.ica_pilot.subjects;
+elseif isfield(cfg, 'subjects') && isstruct(cfg.subjects) && ...
+        isfield(cfg.subjects, 'list') && ~isempty(cfg.subjects.list)
+    candidate = cfg.subjects.list;
+end
+if isempty(candidate)
+    return;
+end
+subjects = normalize_qc_subject_ids_impl(candidate);
+subjects = unique(subjects(:), 'stable');
+end
+
+function ids = normalize_qc_subject_ids_impl(values)
+ids = string(values);
+ids = ids(:);
+for ii = 1:numel(ids)
+    if ~startsWith(lower(ids(ii)), "sub-")
+        ids(ii) = "sub-" + ids(ii);
+    end
+end
+end
+
+function value = resolve_prep05_timestamp_impl(cfg)
+value = "";
+if isfield(cfg, 'qc') && isstruct(cfg.qc) && ...
+        isfield(cfg.qc, 'run_timestamp')
+    value = string(cfg.qc.run_timestamp);
+end
+end
+
+function value = resolve_prep05_delimiter_impl(cfg)
+value = ';';
+if isfield(cfg, 'qc') && isstruct(cfg.qc) && ...
+        isfield(cfg.qc, 'table_delimiter')
+    value = char(string(cfg.qc.table_delimiter));
+elseif isfield(cfg, 'prep_05') && isstruct(cfg.prep_05) && ...
+        isfield(cfg.prep_05, 'qc_table_delimiter')
+    value = char(string(cfg.prep_05.qc_table_delimiter));
+end
+end
+
+function value = prep05_collector_logical_field_impl(s, field_name, fallback)
+value = fallback;
+if isstruct(s) && isfield(s, field_name) && ~isempty(s.(field_name))
+    value = logical(s.(field_name));
+end
+end
+
+function value = qc_scalar_numeric_impl(values)
+value = NaN;
+if isnumeric(values) || islogical(values)
+    if ~isempty(values)
+        value = double(values(1));
+    end
+elseif iscell(values) && ~isempty(values)
+    value = str2double(string(values{1}));
+else
+    candidate = str2double(string(values(1)));
+    if isfinite(candidate)
+        value = candidate;
+    end
+end
+end
+
+function value = qc_scalar_string_impl(values)
+if iscell(values)
+    value = string(values{1});
+else
+    value = string(values(1));
+end
+end
+
+function value = qc_scalar_logical_impl(values)
+if islogical(values) || isnumeric(values)
+    value = logical(values(1));
+else
+    value = ismember(lower(qc_scalar_string_impl(values)), ["true", "1", "yes"]);
+end
+end
+
+% =========================================================================
+% RUNICA-VERSUS-AMICA PILOT HELPERS
+% =========================================================================
+function run_ica_pilot_impl(cfg)
+if ~isfield(cfg, 'paths') || ...
+        ~isfield(cfg.paths, 'branch_by_ica_method') || ...
+        ~logical(cfg.paths.branch_by_ica_method)
+    error('run_eeg_pipeline:ICAPilotRequiresMethodBranches', ...
+        ['The ICA pilot requires cfg.paths.branch_by_ica_method=true so ' ...
+         'runica and AMICA outputs cannot overwrite each other.']);
+end
+
+if ~isfield(cfg.ica_pilot, 'subjects') || isempty(cfg.ica_pilot.subjects)
+    error('run_eeg_pipeline:ICAPilotSubjectsMissing', ...
+        ['Set cfg.ica_pilot.subjects to a small representative sample, ' ...
+         'for example {''211'',''212'',''213''}.']);
+end
+
+pilot_subjects = normalize_pilot_subjects_impl(cfg.ica_pilot.subjects);
+if isempty(pilot_subjects)
+    error('run_eeg_pipeline:ICAPilotSubjectsMissing', ...
+        'No valid subject IDs remain in cfg.ica_pilot.subjects.');
+end
+if numel(pilot_subjects) ~= 3
+    warning('run_eeg_pipeline:ICAPilotSampleSize', ...
+        ['The pilot is configured for %d subject(s). About three ' ...
+         'representative subjects are recommended.'], numel(pilot_subjects));
+end
+
+overwrite_mode = pilot_string_field_impl( ...
+    cfg.ica_pilot, 'overwrite_mode', "delete");
+if ~ismember(lower(overwrite_mode), ["delete", "overwrite"])
+    error('run_eeg_pipeline:ICAPilotOverwriteMode', ...
+        ['cfg.ica_pilot.overwrite_mode must be "delete" or "overwrite" ' ...
+         'so both methods are actually recomputed.']);
+end
+
+mi_max_samples = pilot_numeric_field_impl( ...
+    cfg.ica_pilot, 'mi_max_samples', 20000);
+mi_bins = pilot_numeric_field_impl(cfg.ica_pilot, 'mi_bins', 20);
+if mi_max_samples < 1 || mi_max_samples ~= round(mi_max_samples) || ...
+        mi_bins < 2 || mi_bins ~= round(mi_bins)
+    error('run_eeg_pipeline:ICAPilotMIConfig', ...
+        'Pilot MI sample count must be positive and mi_bins must be >= 2.');
+end
+
+run_step06 = pilot_logical_field_impl(cfg.ica_pilot, 'run_step06', false);
+methods = ["runica", "amica"];
+method_errors = strings(numel(methods), 1);
+
+fprintf('\n=== ICA PILOT START: %s ===\n', ...
+    char(strjoin(string(pilot_subjects), ', ')));
+fprintf(['Both methods reuse the same Step-03 inputs. AMICA is fixed to ' ...
+    'one model. Execution is serial.\n']);
+
+for mi = 1:numel(methods)
+    method = methods(mi);
+    cfg_method = cfg;
+
+    cfg_method.ica_pilot.enable = false;
+    cfg_method.ica_pilot.internal_run = true;
+    cfg_method.ica_pilot.subjects = pilot_subjects;
+    cfg_method.ica_pilot.active_method = method;
+    cfg_method.subjects.list = pilot_subjects;
+    cfg_method.subjects.min_id = [];
+    cfg_method.parallel.enable = false;
+    cfg_method.parallel.force_workers = [];
+    cfg_method.paths.branch_by_ica_method = true;
+
+    cfg_method.steps.enable_downstream_rerun = false;
+    cfg_method.steps.prep_01_bids_formatting.run = false;
+    cfg_method.steps.prep_02_triggerfix.run = false;
+    cfg_method.steps.prep_03_until_ica.run = false;
+    cfg_method.steps.prep_04_ica.run = true;
+    cfg_method.steps.prep_05_after_ica.run = true;
+    cfg_method.steps.prep_06_epoching.run = run_step06;
+    cfg_method.steps.prep_04_ica.overwrite_mode = overwrite_mode;
+    cfg_method.steps.prep_05_after_ica.overwrite_mode = overwrite_mode;
+    if run_step06
+        cfg_method.steps.prep_06_epoching.overwrite_mode = overwrite_mode;
+    end
+
+    cfg_method.prep_04.ica_method = method;
+    cfg_method.prep_05.compute_decomposition_qc = true;
+    cfg_method.prep_05.decomposition_qc_max_samples = mi_max_samples;
+    cfg_method.prep_05.decomposition_qc_mi_bins = mi_bins;
+    cfg_method.pipeline.name = string(cfg.pipeline.name) + ...
+        "_ica_pilot_" + method;
+    cfg_method.constants.log_prefix_master = ...
+        string(cfg.constants.log_prefix_master) + "_ica_pilot_" + method;
+    cfg_method.constants.log_prefix_subject = char( ...
+        string(cfg.constants.log_prefix_subject) + "_ica_pilot_" + method);
+
+    fprintf('\n--- ICA pilot method: %s ---\n', upper(char(method)));
+    try
+        run_eeg_pipeline(cfg_method);
+    catch method_me
+        method_errors(mi) = string(method_me.message);
+        warning('run_eeg_pipeline:ICAPilotMethodFailed', ...
+            'Pilot method %s reported failures: %s', ...
+            upper(char(method)), method_me.message);
+    end
+end
+
+collection_error = "";
+try
+    [t_all, ~, t_pair] = collect_prep05_summary_impl(cfg); %#ok<ASGLU>
+    if isempty(t_pair)
+        collection_error = ...
+            "No complete runica-AMICA subject/run pair was available.";
+    end
+catch collect_me
+    collection_error = string(collect_me.message);
+end
+
+failed_methods = methods(strlength(method_errors) > 0);
+if ~isempty(failed_methods) || strlength(collection_error) > 0
+    details = strings(0, 1);
+    for mi = 1:numel(methods)
+        if strlength(method_errors(mi)) > 0
+            details(end+1, 1) = upper(methods(mi)) + ": " + ...
+                method_errors(mi); %#ok<AGROW>
+        end
+    end
+    if strlength(collection_error) > 0
+        details(end+1, 1) = "COLLECTION: " + collection_error; %#ok<AGROW>
+    end
+    error('run_eeg_pipeline:ICAPilotIncomplete', ...
+        ['ICA pilot finished incompletely. Available QC tables were still ' ...
+         'written. %s'], char(strjoin(details, ' | ')));
+end
+
+fprintf('\n=== ICA PILOT COMPLETE ===\n');
+fprintf(['Use residual pairwise MI together with convergence, runtime, ' ...
+    'ICLabel, and signal-change columns to choose the cohort method.\n']);
+end
+
+function subjects = normalize_pilot_subjects_impl(values)
+subjects = string(values);
+subjects = subjects(:)';
+subjects = strip(subjects);
+subjects = regexprep(subjects, '^sub-', '', 'ignorecase');
+subjects = subjects(strlength(subjects) > 0);
+subjects = unique(subjects, 'stable');
+subjects = cellstr(subjects);
+end
+
+function value = pilot_logical_field_impl(s, field_name, fallback)
+value = fallback;
+if isstruct(s) && isfield(s, field_name) && ~isempty(s.(field_name))
+    value = logical(s.(field_name));
+end
+end
+
+function value = pilot_numeric_field_impl(s, field_name, fallback)
+value = fallback;
+if isstruct(s) && isfield(s, field_name) && ~isempty(s.(field_name))
+    value = double(s.(field_name));
+end
+end
+
+function value = pilot_string_field_impl(s, field_name, fallback)
+value = string(fallback);
+if isstruct(s) && isfield(s, field_name) && ~isempty(s.(field_name))
+    value = string(s.(field_name));
 end
 end

@@ -14,7 +14,12 @@ function step_out = eeg_prep04_ica(subj_id, cfg, paths, helpers)
 %
 % Design note:
 %   This step is intended to be configurable from cfg.prep_04.
-%   Reusable logic lives in eeg_pipeline_helpers.m only.
+%   AMICA is deliberately restricted to one ICA model because the standard
+%   EEGLAB/ICLabel cleaning path consumes one unmixing matrix.
+%
+% Separation-quality reference:
+%   Delorme et al. (2012), Independent EEG Sources Are Dipolar.
+%   https://doi.org/10.1371/journal.pone.0030135
 %
 % Saskia Wilken Dez 2025
 
@@ -52,6 +57,20 @@ step_cfg.amica_tmp_root          = "";
 step_cfg.amica_delete_tmp        = true;
 step_cfg.amica_keep_tmp_on_error = true;
 
+% AMICA convergence and QC. AMICA's own stopping rules are enabled inside
+% runamica15. A run that reaches amica_max_iter has stopped at the cap rather
+% than at an internal convergence criterion and therefore fails by default.
+step_cfg.amica_max_iter                         = 2000;
+step_cfg.amica_write_update_norm_history        = true;
+step_cfg.amica_check_convergence                = true;
+step_cfg.amica_fail_on_nonconvergence           = true;
+step_cfg.amica_convergence_min_iterations       = 50;
+step_cfg.amica_convergence_tail_window          = 20;
+step_cfg.amica_keep_tmp_on_qc_failure           = true;
+step_cfg.write_run_qc_table                     = true;
+step_cfg.write_subject_qc_table                 = true;
+step_cfg.qc_table_delimiter                     = ';';
+
 % Overwrite override
 step_cfg.overwrite_mode = "";
 
@@ -81,6 +100,10 @@ if ~ismember(ica_method, ["runica","amica"])
     error('prep04_ica: unsupported cfg.prep_04.ica_method: %s', char(ica_method));
 end
 
+if ica_method == "amica"
+    helpers.validate_amica_config(step_cfg);
+end
+
 %% ========================================================================
 %  PATHS
 % ========================================================================
@@ -103,7 +126,15 @@ in_dir_forica = paths.prep_03_out_dir_for_ica;
 in_dir_preica = paths.prep_03_out_dir_until_ica;
 out_dir_after = paths.prep_04_out_dir;
 
+if ~isfield(paths, 'qc_dir') || strlength(string(paths.qc_dir)) == 0
+    error('prep04_ica: paths.qc_dir is missing or empty.');
+end
+
+ica_method_tag = lower(regexprep(char(ica_method), '[^\w\-]', '_'));
+qc_method_dir  = fullfile(paths.qc_dir, ica_method_tag);
+
 helpers.ensure_dir(out_dir_after);
+helpers.ensure_dir(qc_method_dir);
 
 %% ========================================================================
 %  FIND INPUTS
@@ -146,6 +177,7 @@ end
 %  MAIN LOOP
 % ========================================================================
 outputs_written = {};
+qc_rows = table();
 
 for fi = 1:numel(forica_sets)
 
@@ -312,6 +344,10 @@ for fi = 1:numel(forica_sets)
     %% --------------------------------------------------------------------
     %  RUN ICA
     % ---------------------------------------------------------------------
+    ica_runtime_timer = tic;
+    amica_tmp_dir = "";
+    amica_qc = helpers.default_amica_qc();
+
     switch ica_method
 
         case "amica"
@@ -325,19 +361,64 @@ for fi = 1:numel(forica_sets)
                 pcakeep = max(rank_forica, 1);
             end
 
-            amica_tmp_dir = helpers.make_unique_amica_tmpdir(step_cfg, subj_label, run_base_c);
+            amica_tmp_dir = string(helpers.make_unique_amica_tmpdir(step_cfg, subj_label, run_base_c));
             helpers.log_msg_default( ...
                 'prep04_ica: %s | %s | AMICA tmp dir: %s', ...
-                subj_label, run_base_c, amica_tmp_dir);
+                subj_label, run_base_c, char(amica_tmp_dir));
 
             keep_tmp_on_error = isfield(step_cfg, 'amica_keep_tmp_on_error') && step_cfg.amica_keep_tmp_on_error;
             delete_tmp_after  = isfield(step_cfg, 'amica_delete_tmp') && step_cfg.amica_delete_tmp;
+            keep_tmp_on_qc_failure = logical(step_cfg.amica_keep_tmp_on_qc_failure);
+            amica_qc_failed = false;
+            amica_failure_qc_written = false;
 
             try
-                [ica_train_eeg.icaweights, ica_train_eeg.icasphere, ~] = runamica15( ...
+                % num_models is intentionally fixed at one. Increasing it
+                % would produce several unmixing matrices that the current
+                % ICLabel/component-subtraction path cannot use correctly.
+                [ica_train_eeg.icaweights, ica_train_eeg.icasphere, mods] = runamica15( ...
                     x, ...
+                    'num_models', 1, ...
                     'pcakeep', pcakeep, ...
-                    'outdir', amica_tmp_dir);
+                    'max_iter', round(double(step_cfg.amica_max_iter)), ...
+                    'write_nd', double(logical(step_cfg.amica_write_update_norm_history)), ...
+                    'outdir', char(amica_tmp_dir));
+
+                amica_qc = helpers.evaluate_amica_convergence( ...
+                    mods, ica_train_eeg.icaweights, ica_train_eeg.icasphere, ...
+                    pcakeep, ica_train_eeg.nbchan, step_cfg);
+
+                helpers.log_msg_default( ...
+                    ['prep04_ica: %s | %s | AMICA convergence=%s | iter=%d/%d | ' ...
+                     'hit_cap=%d | final_LL=%.12g | final_update_max=%.12g'], ...
+                    subj_label, run_base_c, char(amica_qc.status), ...
+                    amica_qc.n_iterations, round(double(step_cfg.amica_max_iter)), ...
+                    amica_qc.hit_max_iter, amica_qc.ll_final, ...
+                    amica_qc.final_update_norm_max);
+
+                if logical(step_cfg.amica_check_convergence) && ~amica_qc.passed
+                    amica_qc_failed = true;
+                    ica_runtime_seconds = toc(ica_runtime_timer);
+                    failure_row = helpers.build_step04_ica_qc_row( ...
+                        cfg, subj_label, run_base, ica_method, "fail", ...
+                        amica_qc.failure_code, amica_qc.failure_reason, ...
+                        amica_qc.recommended_action, rank_forica, pcakeep, ...
+                        ica_train_eeg.nbchan, size(x, 2), ica_runtime_seconds, ...
+                        step_cfg, amica_qc, amica_tmp_dir, out_path);
+                    helpers.write_step04_run_qc( ...
+                        failure_row, qc_method_dir, subj_label, run_base_c, step_cfg);
+                    qc_rows = helpers.append_step04_qc_row(qc_rows, failure_row);
+                    helpers.write_step04_subject_qc( ...
+                        qc_rows, qc_method_dir, subj_label, step_cfg);
+                    amica_failure_qc_written = true;
+
+                    if logical(step_cfg.amica_fail_on_nonconvergence)
+                        error('prep04_ica:AMICANonConvergence', ...
+                            ['AMICA QC failed for %s | %s. %s Recommended action: %s'], ...
+                            subj_label, run_base_c, char(amica_qc.failure_reason), ...
+                            char(amica_qc.recommended_action));
+                    end
+                end
 
                 ica_train_eeg.icawinv     = pinv(ica_train_eeg.icaweights * ica_train_eeg.icasphere);
                 ica_train_eeg.icachansind = 1:ica_train_eeg.nbchan;
@@ -347,25 +428,48 @@ for fi = 1:numel(forica_sets)
                 ica_train_eeg = eeg_checkset(ica_train_eeg);
                 ica_train_eeg = helpers.append_eeg_comment(ica_train_eeg, sprintf( ...
                     'prep04_ica: AMICA done. rank_used=%d | tmpdir=%s', ...
-                    ica_rank_used, amica_tmp_dir));
+                    ica_rank_used, char(amica_tmp_dir)));
 
                 if delete_tmp_after
-                    helpers.safe_rmdir(amica_tmp_dir);
+                    helpers.safe_rmdir(char(amica_tmp_dir));
                     helpers.log_msg_default( ...
                         'prep04_ica: %s | %s | deleted AMICA tmp dir: %s', ...
-                        subj_label, run_base_c, amica_tmp_dir);
+                        subj_label, run_base_c, char(amica_tmp_dir));
                 end
 
             catch ME
-                if keep_tmp_on_error
+                if ~amica_failure_qc_written
+                    ica_runtime_seconds = toc(ica_runtime_timer);
+                    runtime_failure_row = helpers.build_step04_ica_qc_row( ...
+                        cfg, subj_label, run_base, ica_method, "fail", ...
+                        "AMICA_RUNTIME_ERROR", string(ME.message), ...
+                        ['Inspect the retained AMICA output and the Step-03 ' ...
+                         'ICA-training data; verify sufficient samples, data ' ...
+                         'rank, and the AMICA installation. ICLabel thresholds ' ...
+                         'cannot repair an ICA runtime failure.'], ...
+                        rank_forica, pcakeep, ica_train_eeg.nbchan, size(x, 2), ...
+                        ica_runtime_seconds, step_cfg, amica_qc, ...
+                        amica_tmp_dir, out_path);
+                    helpers.write_step04_run_qc( ...
+                        runtime_failure_row, qc_method_dir, subj_label, ...
+                        run_base_c, step_cfg);
+                    qc_rows = helpers.append_step04_qc_row( ...
+                        qc_rows, runtime_failure_row);
+                    helpers.write_step04_subject_qc( ...
+                        qc_rows, qc_method_dir, subj_label, step_cfg);
+                end
+
+                keep_this_tmp = keep_tmp_on_error || ...
+                    (amica_qc_failed && keep_tmp_on_qc_failure);
+                if keep_this_tmp
                     helpers.log_msg_default( ...
                         ['prep04_ica: %s | %s | AMICA failed; keeping tmp dir for debugging: %s | %s'], ...
-                        subj_label, run_base_c, amica_tmp_dir, ME.message);
+                        subj_label, run_base_c, char(amica_tmp_dir), ME.message);
                 else
-                    helpers.safe_rmdir(amica_tmp_dir);
+                    helpers.safe_rmdir(char(amica_tmp_dir));
                     helpers.log_msg_default( ...
                         ['prep04_ica: %s | %s | AMICA failed; tmp dir deleted: %s | %s'], ...
-                        subj_label, run_base_c, amica_tmp_dir, ME.message);
+                        subj_label, run_base_c, char(amica_tmp_dir), ME.message);
                 end
                 rethrow(ME);
             end
@@ -376,40 +480,64 @@ for fi = 1:numel(forica_sets)
                 interrupt_ica = step_cfg.interrupt_ica;
             end
 
-            if use_pca
-                if isfield(step_cfg, 'use_extended_infomax') && step_cfg.use_extended_infomax
-                    ica_train_eeg  = pop_runica(ica_train_eeg , ...
-                        'extended', 1, ...
-                        'pca', pca_rank, ...
-                        'interrupt', interrupt_ica);
+            try
+                if use_pca
+                    if isfield(step_cfg, 'use_extended_infomax') && step_cfg.use_extended_infomax
+                        ica_train_eeg  = pop_runica(ica_train_eeg , ...
+                            'extended', 1, ...
+                            'pca', pca_rank, ...
+                            'interrupt', interrupt_ica);
+                    else
+                        ica_train_eeg  = pop_runica(ica_train_eeg , ...
+                            'pca', pca_rank, ...
+                            'interrupt', interrupt_ica);
+                    end
+                    ica_rank_used = pca_rank;
                 else
-                    ica_train_eeg  = pop_runica(ica_train_eeg , ...
-                        'pca', pca_rank, ...
-                        'interrupt', interrupt_ica);
-                end
-                ica_rank_used = pca_rank;
-            else
-                use_extended = true;
-                if isfield(step_cfg, 'use_extended_infomax')
-                    use_extended = step_cfg.use_extended_infomax;
+                    use_extended = true;
+                    if isfield(step_cfg, 'use_extended_infomax')
+                        use_extended = step_cfg.use_extended_infomax;
+                    end
+
+                    if use_extended
+                        ica_train_eeg  = pop_runica(ica_train_eeg , ...
+                            'extended', 1, ...
+                            'interrupt', interrupt_ica);
+                    else
+                        ica_train_eeg  = pop_runica(ica_train_eeg , ...
+                            'interrupt', interrupt_ica);
+                    end
+
+                    ica_rank_used = ica_train_eeg.nbchan;
                 end
 
-                if use_extended
-                    ica_train_eeg  = pop_runica(ica_train_eeg , ...
-                        'extended', 1, ...
-                        'interrupt', interrupt_ica);
-                else
-                    ica_train_eeg  = pop_runica(ica_train_eeg , ...
-                        'interrupt', interrupt_ica);
-                end
+                helpers.validate_ica_matrices( ...
+                    ica_train_eeg.icaweights, ica_train_eeg.icasphere, ...
+                    ica_rank_used, ica_train_eeg.nbchan, "runica");
 
-                ica_rank_used = ica_prep_eeg.nbchan;
+                ica_train_eeg  = eeg_checkset(ica_train_eeg );
+                ica_train_eeg  = helpers.append_eeg_comment(ica_train_eeg , sprintf( ...
+                    'prep04_ica: runica done. rank_used=%d', ica_rank_used));
+            catch ME
+                ica_runtime_seconds = toc(ica_runtime_timer);
+                failure_row = helpers.build_step04_ica_qc_row( ...
+                    cfg, subj_label, run_base, ica_method, "fail", ...
+                    "RUNICA_ERROR", string(ME.message), ...
+                    ['Inspect the Step-03 ICA-training data, data rank, and sample count. ' ...
+                     'ICLabel thresholds cannot repair an ICA failure.'], ...
+                    rank_forica, max(rank_forica, 1), ica_train_eeg.nbchan, ...
+                    size(X, 2), ica_runtime_seconds, step_cfg, amica_qc, ...
+                    "", out_path);
+                helpers.write_step04_run_qc( ...
+                    failure_row, qc_method_dir, subj_label, run_base_c, step_cfg);
+                qc_rows = helpers.append_step04_qc_row(qc_rows, failure_row);
+                helpers.write_step04_subject_qc( ...
+                    qc_rows, qc_method_dir, subj_label, step_cfg);
+                rethrow(ME);
             end
-
-            ica_train_eeg  = eeg_checkset(ica_train_eeg );
-            ica_train_eeg  = helpers.append_eeg_comment(ica_train_eeg , sprintf( ...
-                'prep04_ica: runica done. rank_used=%d', ica_rank_used));
     end
+
+    ica_runtime_seconds = toc(ica_runtime_timer);
 
     %% --------------------------------------------------------------------
     %  TRANSFER ICA TO PREICA
@@ -428,9 +556,11 @@ for fi = 1:numel(forica_sets)
     preica_eeg.etc.prep04_ica.interpolated_count = interpolated_count;
     preica_eeg.etc.prep04_ica.rank_forica        = rank_forica;
     preica_eeg.etc.prep04_ica.rank_used          = ica_rank_used;
-        preica_eeg.etc.prep04_ica.ica_channel_scope   = char(ica_channel_scope);
+    preica_eeg.etc.prep04_ica.ica_channel_scope   = char(ica_channel_scope);
     preica_eeg.etc.prep04_ica.ica_channel_indices = ica_chan_idx;
     preica_eeg.etc.prep04_ica.ica_channel_labels  = {preica_eeg.chanlocs(ica_chan_idx).labels};
+    preica_eeg.etc.prep04_ica.runtime_seconds     = ica_runtime_seconds;
+    preica_eeg.etc.prep04_ica.amica_convergence  = amica_qc;
 
     preica_eeg = eeg_checkset(preica_eeg);
 
@@ -446,6 +576,28 @@ for fi = 1:numel(forica_sets)
     % ---------------------------------------------------------------------
     preica_eeg = helpers.safe_save_set(preica_eeg, out_dir_after, out_name, helpers, cfg);
     helpers.log_msg_default('prep04_ica: saved: %s', out_path);
+
+    final_ica_status = "pass";
+    final_failure_code = "";
+    final_failure_reason = "";
+    final_recommended_action = "";
+    if ica_method == "amica" && logical(step_cfg.amica_check_convergence) && ...
+            ~amica_qc.passed
+        final_ica_status = "warning";
+        final_failure_code = amica_qc.failure_code;
+        final_failure_reason = amica_qc.failure_reason;
+        final_recommended_action = amica_qc.recommended_action;
+    end
+
+    success_row = helpers.build_step04_ica_qc_row( ...
+        cfg, subj_label, run_base, ica_method, final_ica_status, ...
+        final_failure_code, final_failure_reason, final_recommended_action, ...
+        rank_forica, ica_rank_used, ica_train_eeg.nbchan, size(X, 2), ...
+        ica_runtime_seconds, step_cfg, amica_qc, amica_tmp_dir, out_path);
+    helpers.write_step04_run_qc( ...
+        success_row, qc_method_dir, subj_label, run_base_c, step_cfg);
+
+    qc_rows = helpers.append_step04_qc_row(qc_rows, success_row);
 
     outputs_written{end+1} = out_path; %#ok<AGROW>
 end
@@ -465,5 +617,7 @@ step_out.ok = true;
 step_out.skipped = false;
 step_out.message = sprintf('prep04_ica: OK (%d output file(s)).', numel(outputs_written));
 step_out.outputs = outputs_written;
+
+helpers.write_step04_subject_qc(qc_rows, qc_method_dir, subj_label, step_cfg);
 
 end
