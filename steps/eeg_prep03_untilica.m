@@ -1,7 +1,5 @@
 function step_out = eeg_prep03_untilica(subj_id, cfg, paths, helpers)
 % EEG_PREP03_UNTILICA
-% Copyright (C) 2025–2026 Saskia Wilken and contributors
-%
 %
 % Preprocess continuous EEG until ICA preparation.
 %
@@ -29,13 +27,12 @@ step_out = struct( ...
     'run_base_name', '', ...
     'in_triggersfixed_set', '', ...
     'out_preica_set', '', ...
-    'out_forica_set', '', ...
-    'qc_files', {{}} );
+    'out_forica_set', '' );
 
 %% ========================================================================
 %  STEP CFG DEFAULTS
 % ========================================================================
-step_cfg = helpers.default_prep03_cfg();
+step_cfg = local_default_prep03_cfg_impl();
 
 %% ========================================================================
 %  MERGE OVERRIDES FROM CFG
@@ -80,13 +77,6 @@ end
 
 helpers.ensure_dir(prep03_out_dir_untilica);
 helpers.ensure_dir(prep03_out_dir_forica);
-
-if isfield(paths, 'qc_bad_chans_root') && strlength(string(paths.qc_bad_chans_root)) > 0
-    bad_chan_qc_dir = paths.qc_bad_chans_root;
-else
-    bad_chan_qc_dir = fullfile(paths.derivatives_root, 'qc', 'bad_chans');
-end
-helpers.ensure_dir(bad_chan_qc_dir);
 
 %% ========================================================================
 %  FIND INPUT
@@ -188,6 +178,86 @@ EEG = helpers.append_eeg_comment(EEG, sprintf( ...
     numel(eeg_idx), numel(eog_idx), numel(aux_idx)));
 
 %% ========================================================================
+%  FIND DEAD / INVALID CHANNELS
+%  - dead EEG channels are kept for later interpolation
+%  - dead AUX channels are removed permanently
+% ========================================================================
+dead_idx_all    = [];
+dead_labels_all = {};
+
+dead_eeg_idx    = [];
+dead_eeg_labels = {};
+
+dead_aux_idx    = [];
+dead_aux_labels = {};
+
+if step_cfg.flag_flat_channels_as_bad
+
+    all_idx = 1:EEG.nbchan;
+
+    [dead_idx_all, dead_labels_all] = helpers.find_flat_or_invalid_channels( ...
+        EEG, all_idx, step_cfg.flat_channel_variance_epsilon);
+
+    if ~isempty(dead_idx_all)
+
+        [eeg_idx_now, eog_idx_now, aux_idx_now] = helpers.get_channel_indices_by_type(EEG); %#ok<ASGLU>
+
+        dead_eeg_idx = intersect(dead_idx_all, eeg_idx_now);
+        dead_aux_idx = intersect(dead_idx_all, aux_idx_now);
+
+        if ~isempty(dead_eeg_idx)
+            dead_eeg_labels = {EEG.chanlocs(dead_eeg_idx).labels};
+            helpers.log_msg_default( ...
+                'prep03_untilica: sub-%s | dead/invalid EEG channels flagged for later interpolation: %s', ...
+                subj_id, strjoin(string(dead_eeg_labels), ', '));
+
+            EEG = helpers.append_eeg_comment(EEG, sprintf( ...
+                'prep03_untilica: dead/invalid EEG flagged for interpolation: %s', ...
+                strjoin(dead_eeg_labels, ', ')));
+        end
+
+        if ~isempty(dead_aux_idx)
+            dead_aux_labels = {EEG.chanlocs(dead_aux_idx).labels};
+            helpers.log_msg_default( ...
+                'prep03_untilica: sub-%s | removing dead/invalid AUX channels permanently: %s', ...
+                subj_id, strjoin(string(dead_aux_labels), ', '));
+
+            EEG = helpers.append_eeg_comment(EEG, sprintf( ...
+                'prep03_untilica: removing dead/invalid AUX channels permanently: %s', ...
+                strjoin(dead_aux_labels, ', ')));
+
+            EEG = pop_select(EEG, 'nochannel', dead_aux_idx);
+            EEG = eeg_checkset(EEG);
+
+            if ~isempty(dead_eeg_labels)
+                all_labels_after_aux_delete = {EEG.chanlocs.labels};
+                dead_eeg_idx = find(ismember(all_labels_after_aux_delete, dead_eeg_labels));
+            else
+                dead_eeg_idx = [];
+            end
+        end
+    end
+end
+
+if ~isfield(EEG, 'etc') || isempty(EEG.etc)
+    EEG.etc = struct();
+end
+
+EEG.etc.dead_channels_detected = struct();
+EEG.etc.dead_channels_detected.all_indices     = dead_idx_all;
+EEG.etc.dead_channels_detected.all_labels      = dead_labels_all;
+EEG.etc.dead_channels_detected.dead_eeg_idx    = dead_eeg_idx;
+EEG.etc.dead_channels_detected.dead_eeg_labels = dead_eeg_labels;
+EEG.etc.dead_channels_detected.dead_aux_idx    = dead_aux_idx;
+EEG.etc.dead_channels_detected.dead_aux_labels = dead_aux_labels;
+
+[eeg_idx, eog_idx, aux_idx] = helpers.get_channel_indices_by_type(EEG);
+
+EEG = helpers.append_eeg_comment(EEG, sprintf( ...
+    'prep03_untilica: channel counts AFTER dead-channel handling EEG=%d | EOG=%d | AUX=%d', ...
+    numel(eeg_idx), numel(eog_idx), numel(aux_idx)));
+
+%% ========================================================================
 %  CROP TO TASK WINDOW
 % ========================================================================
 if step_cfg.crop_to_task_markers
@@ -230,109 +300,6 @@ if step_cfg.crop_to_task_markers
 end
 
 %% ========================================================================
-%  DETECT FLAT / INVALID CHANNELS ONCE, ALWAYS AFTER CROPPING
-%  - the 10% denominator is the complete retained post-crop recording
-%  - flat/invalid EEG channels are kept for later interpolation
-%  - non-finite/completely constant AUX channels are removed permanently
-% ========================================================================
-dead_idx_all    = [];
-dead_labels_all = {};
-flat_detection_info = struct();
-
-dead_eeg_idx    = [];
-dead_eeg_labels = {};
-
-dead_aux_idx    = [];
-dead_aux_labels = {};
-
-if step_cfg.flat_channel_detection.enable
-
-    [eeg_idx_now, ~, aux_idx_now] = helpers.get_channel_indices_by_type(EEG);
-
-    % Apply the configurable cumulative/continuous flatness criterion only
-    % to EEG channels. Slow, quantized AUX signals such as SCR must not be
-    % rejected merely because they contain many repeated adjacent values.
-    if ~isempty(eeg_idx_now)
-        [dead_eeg_idx, dead_eeg_labels, flat_detection_info] = ...
-            helpers.find_flat_or_invalid_channels( ...
-            EEG, eeg_idx_now, step_cfg.flat_channel_detection);
-
-        helpers.log_msg_default( ...
-            ['prep03_untilica: sub-%s | post-crop flat-channel detection ' ...
-            'mode=%s | duration=%.3f s | threshold=%.6g | step_tolerance=%.6g uV'], ...
-            subj_id, char(flat_detection_info.mode), ...
-            flat_detection_info.recording_duration_sec, ...
-            flat_detection_info.criterion_threshold, ...
-            flat_detection_info.step_tolerance_uV);
-    end
-
-    % AUX cleanup is deliberately narrower: only non-finite or completely
-    % constant AUX channels are removed.
-    if ~isempty(aux_idx_now)
-        aux_data = double(reshape( ...
-            EEG.data(aux_idx_now, :, :), numel(aux_idx_now), []));
-        aux_invalid = any(~isfinite(aux_data), 2);
-        aux_fully_constant = var(aux_data, 0, 2) == 0;
-        dead_aux_idx = aux_idx_now(aux_invalid | aux_fully_constant);
-        dead_aux_labels = {EEG.chanlocs(dead_aux_idx).labels};
-    end
-
-    dead_idx_all = sort(unique([dead_eeg_idx(:); dead_aux_idx(:)]));
-    if ~isempty(dead_idx_all)
-        dead_labels_all = {EEG.chanlocs(dead_idx_all).labels};
-    end
-
-    if ~isempty(dead_eeg_idx)
-        helpers.log_msg_default( ...
-            'prep03_untilica: sub-%s | post-crop flat/invalid EEG channels flagged for later interpolation: %s', ...
-            subj_id, strjoin(string(dead_eeg_labels), ', '));
-
-        EEG = helpers.append_eeg_comment(EEG, sprintf( ...
-            'prep03_untilica: post-crop flat/invalid EEG flagged for interpolation: %s', ...
-            strjoin(dead_eeg_labels, ', ')));
-    end
-
-    if ~isempty(dead_aux_idx)
-        helpers.log_msg_default( ...
-            'prep03_untilica: sub-%s | removing post-crop non-finite/constant AUX channels permanently: %s', ...
-            subj_id, strjoin(string(dead_aux_labels), ', '));
-
-        EEG = helpers.append_eeg_comment(EEG, sprintf( ...
-            'prep03_untilica: removing post-crop non-finite/constant AUX channels permanently: %s', ...
-            strjoin(dead_aux_labels, ', ')));
-
-        EEG = pop_select(EEG, 'nochannel', dead_aux_idx);
-        EEG = eeg_checkset(EEG);
-
-        if ~isempty(dead_eeg_labels)
-            all_labels_after_aux_delete = {EEG.chanlocs.labels};
-            dead_eeg_idx = find(ismember(all_labels_after_aux_delete, dead_eeg_labels));
-        else
-            dead_eeg_idx = [];
-        end
-    end
-end
-
-if ~isfield(EEG, 'etc') || isempty(EEG.etc)
-    EEG.etc = struct();
-end
-
-EEG.etc.dead_channels_detected = struct();
-EEG.etc.dead_channels_detected.all_indices     = dead_idx_all;
-EEG.etc.dead_channels_detected.all_labels      = dead_labels_all;
-EEG.etc.dead_channels_detected.dead_eeg_idx    = dead_eeg_idx;
-EEG.etc.dead_channels_detected.dead_eeg_labels = dead_eeg_labels;
-EEG.etc.dead_channels_detected.dead_aux_idx    = dead_aux_idx;
-EEG.etc.dead_channels_detected.dead_aux_labels = dead_aux_labels;
-EEG.etc.dead_channels_detected.detection_info  = flat_detection_info;
-
-[eeg_idx, eog_idx, aux_idx] = helpers.get_channel_indices_by_type(EEG);
-
-EEG = helpers.append_eeg_comment(EEG, sprintf( ...
-    'prep03_untilica: channel counts AFTER post-crop flat/invalid handling EEG=%d | EOG=%d | AUX=%d', ...
-    numel(eeg_idx), numel(eog_idx), numel(aux_idx)));
-
-%% ========================================================================
 %  DOWNSAMPLE
 % ========================================================================
 if isempty(step_cfg.downsample_hz) || double(step_cfg.downsample_hz) == 0
@@ -360,7 +327,8 @@ end
 % High-Pass Filter before bad-channel detection (EEG + EOG ONLY)
 % =========================================================================
 [eeg_idx, eog_idx, ~] = helpers.get_channel_indices_by_type(EEG);
-filter_idx = sort(unique([eeg_idx(:); eog_idx(:)]));
+%filter_idx = sort(unique([eeg_idx(:); eog_idx(:)]));
+filter_idx = sort(eeg_idx(:));
 
 EEG = helpers.apply_filter_to_subset_only(EEG, filter_idx, ...
     step_cfg.highpass_hz, [], 'prep03_untilica high-pass');
@@ -379,32 +347,82 @@ if step_cfg.save_intermediate_steps && step_cfg.save_intermediate_after_highpass
         helpers);
 end
 
+
+%% ========================================================================
+%  LINE NOISE (EEG + EOG ONLY)
+% ========================================================================
+[eeg_idx, eog_idx, ~] = helpers.get_channel_indices_by_type(EEG);
+filter_idx = sort(unique([eeg_idx(:); eog_idx(:)]));
+
+
+line_noise_applied = false;
+if string(step_cfg.line_noise_method) == "pop_cleanline"
+label_for_log = 'prep03_untilica line noise (cleanline)';
+[EEG, line_noise_applied] = helpers.apply_pop_cleanline_to_subset(EEG, filter_idx, step_cfg, helpers, label_for_log);
+    %[EEG, line_noise_applied] = helpers.apply_pop_cleanline_to_subset(EEG, filter_idx, step_cfg);
+    if ~line_noise_applied
+        helpers.log_msg_default('prep03_untilica: WARNING pop_cleanline did not apply successfully.');
+    end
+end
+
+EEG = helpers.append_eeg_comment(EEG, sprintf( ...
+    'prep03_untilica: line noise method=%s applied=%d freqs=%s', ...
+    string(step_cfg.line_noise_method), line_noise_applied, ...
+    mat2str(step_cfg.line_noise_frequencies_hz)));
+
+EEG = helpers.apply_filter_to_subset_only(EEG, filter_idx, ...
+    [], step_cfg.lowpass_hz, 'prep03_untilica low-pass');
+
+%% ========================================================================
+%  OPTIONAL DEBUG SAVE: AFTER LOW-PASS
+% ========================================================================
+if step_cfg.save_intermediate_steps && step_cfg.save_intermediate_after_lowpass
+    helpers.save_intermediate_set( ...
+        EEG, ...
+        prep03_out_dir_untilica, ...
+        string(run_base_name) + "_stage-prep03_after-lowpass", ...
+        "delete", ...
+        cfg, ...
+        step_cfg.intermediate_savemode, ...
+        helpers);
+end
+
+%% ========================================================================
+%  FLAT / INVALID EEG CHANNELS
+% ========================================================================
+flat_idx = [];
+flat_labels = {};
+
+if step_cfg.flag_flat_channels_as_bad && ~isempty(eeg_idx)
+    [flat_idx, flat_labels] = helpers.find_flat_or_invalid_channels( ...
+        EEG, eeg_idx, step_cfg.flat_channel_variance_epsilon);
+
+    if ~isempty(flat_idx)
+        EEG = helpers.append_eeg_comment(EEG, sprintf( ...
+            'prep03_untilica: flat/invalid EEG flagged: %s', ...
+            strjoin(flat_labels, ', ')));
+    end
+end
+
 %% ========================================================================
 %  BAD CHANNEL DETECTION (EEG ONLY)
 % ========================================================================
 bad_idx = [];
 bad_labels = {};
-clean_rawdata_bad_idx = [];
-idx_prob = [];
-idx_kurt = [];
-idx_spec = [];
-badchan_backend_status = "ok";
 
 badchan_method = lower(strtrim(string(step_cfg.bad_channel_detection_method)));
 
 switch char(badchan_method)
 
     case 'clean_rawdata'
-        if exist('clean_rawdata', 'file') ~= 2
-            badchan_backend_status = "clean_rawdata_unavailable_flat_only";
-        end
         if ~isempty(eeg_idx)
             try
-                [clean_rawdata_bad_idx, ~] = helpers.detect_bad_channels_clean_rawdata( ...
-                    EEG, eeg_idx, step_cfg.clean_rawdata_channel_corr_threshold);
+                [emu_bad_idx, ~] = helpers.detect_bad_channels_emulation_style( ...
+                    EEG, eeg_idx, step_cfg.clean_rawdata_flatline_sec, step_cfg.clean_rawdata_channel_corr_threshold);
 
                 bad_idx = sort(unique([ ...
-                    clean_rawdata_bad_idx(:); ...
+                    emu_bad_idx(:); ...
+                    flat_idx(:); ...
                     dead_eeg_idx(:) ...
                     ]));
 
@@ -412,19 +430,18 @@ switch char(badchan_method)
                 bad_idx = setdiff(bad_idx, eog_idx);
 
             catch me
-                badchan_backend_status = "clean_rawdata_failed_flat_only";
                 helpers.log_msg_default( ...
-                    'prep03_untilica: clean_rawdata bad-channel detection FAILED -> fallback flat/invalid EEG only. %s', ...
+                    'prep03_untilica: badchan auto FAILED -> fallback flat/dead EEG only. %s', ...
                     me.message);
 
-                bad_idx = sort(unique(dead_eeg_idx(:)));
+                bad_idx = sort(unique([flat_idx(:); dead_eeg_idx(:)]));
                 bad_idx = intersect(bad_idx, eeg_idx);
             end
         end
 
     case 'pop_rejchan'
         if isempty(eeg_idx)
-            bad_idx = sort(unique(dead_eeg_idx(:)));
+            bad_idx = sort(unique([flat_idx(:); dead_eeg_idx(:)]));
         else
             try
                 [~, idx_prob] = pop_rejchan(EEG, 'elec', eeg_idx, ...
@@ -444,6 +461,7 @@ switch char(badchan_method)
                     idx_prob(:); ...
                     idx_kurt(:); ...
                     idx_spec(:); ...
+                    flat_idx(:); ...
                     dead_eeg_idx(:) ...
                     ]));
 
@@ -451,18 +469,17 @@ switch char(badchan_method)
                 bad_idx = setdiff(bad_idx, eog_idx);
 
             catch me
-                badchan_backend_status = "pop_rejchan_failed_flat_only";
                 helpers.log_msg_default( ...
-                    'prep03_untilica: pop_rejchan bad-channel detection FAILED -> fallback flat/invalid EEG only. %s', ...
+                    'prep03_untilica: badchan auto_rejchan FAILED -> fallback flat/dead EEG only. %s', ...
                     me.message);
 
-                bad_idx = sort(unique(dead_eeg_idx(:)));
+                bad_idx = sort(unique([flat_idx(:); dead_eeg_idx(:)]));
                 bad_idx = intersect(bad_idx, eeg_idx);
             end
         end
 
     case 'off'
-        bad_idx = sort(unique(dead_eeg_idx(:)));
+        bad_idx = sort(unique([flat_idx(:); dead_eeg_idx(:)]));
         bad_idx = intersect(bad_idx, eeg_idx);
 
     otherwise
@@ -496,42 +513,6 @@ if ~isfield(EEG, 'chaninfo') || isempty(EEG.chaninfo)
     EEG.chaninfo = struct();
 end
 EEG.chaninfo.bad = bad_labels;
-
-%% ========================================================================
-%  BAD-CHANNEL QC TABLE
-% ========================================================================
-badchan_reason_indices = struct();
-badchan_reason_indices.clean_rawdata_low_correlation = clean_rawdata_bad_idx;
-badchan_reason_indices.pop_rejchan_probability = idx_prob;
-badchan_reason_indices.pop_rejchan_kurtosis = idx_kurt;
-badchan_reason_indices.pop_rejchan_spectrum = idx_spec;
-
-badchan_qc_table = helpers.build_bad_channel_qc_table( ...
-    EEG, sprintf('sub-%s', subj_id), run_base_name, bad_idx, step_cfg, ...
-    flat_detection_info, badchan_reason_indices, cfg, badchan_backend_status);
-
-qc_timestamp = helpers.resolve_qc_timestamp(cfg);
-qc_delimiter = ';';
-if isfield(cfg, 'qc') && isstruct(cfg.qc) && isfield(cfg.qc, 'table_delimiter')
-    qc_delimiter = cfg.qc.table_delimiter;
-end
-badchan_qc_path = fullfile(bad_chan_qc_dir, sprintf( ...
-    '%s_sub-%s_%s_bad_chans.csv', char(qc_timestamp), subj_id, run_base_name));
-helpers.write_qc_table(badchan_qc_table, badchan_qc_path, qc_delimiter);
-step_out.qc_files{end+1} = badchan_qc_path;
-
-helpers.log_msg_default( ...
-    'prep03_untilica: bad-channel QC table written: %s', badchan_qc_path);
-
-try
-    [~, ~, group_badchan_qc_paths] = helpers.collect_bad_channel_qc(cfg);
-    for q = 1:numel(group_badchan_qc_paths)
-        step_out.qc_files{end+1} = group_badchan_qc_paths{q}; %#ok<AGROW>
-    end
-catch qc_me
-    helpers.log_msg_default( ...
-        'prep03_untilica: WARNING bad-channel group QC collection failed: %s', qc_me.message);
-end
 
 %% ========================================================================
 %  INTERPOLATE BAD CHANNELS BEFORE ICA
@@ -580,6 +561,40 @@ if step_cfg.save_intermediate_steps && step_cfg.save_intermediate_after_bad_chan
         step_cfg.intermediate_savemode, ...
         helpers);
 end
+% ========================================================================
+%  2nd LINE NOISE (EEG + EOG ONLY): after interpolation (before rereference)
+% ========================================================================
+line_noise_applied_2 = false;
+
+if string(step_cfg.line_noise_method) == "pop_cleanline"
+
+    label_for_log = 'prep03_untilica line noise (cleanline AFTER interp BEFORE reref)';
+
+    [eeg_idx2, eog_idx2, ~] = helpers.get_channel_indices_by_type(EEG);
+    filter_idx2 = sort(unique([eeg_idx2(:); eog_idx2(:)]));
+
+    [EEG, line_noise_applied_2] = helpers.apply_pop_cleanline_to_subset( ...
+        EEG, filter_idx2, step_cfg, helpers, label_for_log);
+
+    if ~line_noise_applied_2
+        helpers.log_msg_default('prep03_untilica: WARNING 2nd pop_cleanline did not apply successfully.');
+    end
+
+else
+    helpers.log_msg_default('prep03_untilica: 2nd line noise skipped (line_noise_method=%s)', ...
+        string(step_cfg.line_noise_method));
+end
+
+EEG = helpers.append_eeg_comment(EEG, sprintf( ...
+    'prep03_untilica: 2nd line noise method=%s applied=%d freqs=%s', ...
+    string(step_cfg.line_noise_method), line_noise_applied_2, ...
+    mat2str(step_cfg.line_noise_frequencies_hz)));
+
+% Lowpass wie im ersten Cleanline-Pass danach
+if string(step_cfg.line_noise_method) == "pop_cleanline"
+    EEG = helpers.apply_filter_to_subset_only(EEG, filter_idx2, ...
+        [], step_cfg.lowpass_hz, 'prep03_untilica low-pass AFTER 2nd cleanline');
+end
 
 %% ========================================================================
 %  REREFERENCE
@@ -592,6 +607,8 @@ end
 
 EEG.etc.prep03_reference_mode = char(string(step_cfg.reference_mode));
 
+
+
 %% ========================================================================
 %  OPTIONAL DEBUG SAVE: AFTER REREFERENCE
 % ========================================================================
@@ -600,44 +617,6 @@ if step_cfg.save_intermediate_steps && step_cfg.save_intermediate_after_rerefere
         EEG, ...
         prep03_out_dir_untilica, ...
         string(run_base_name) + "_stage-prep03_after-reref", ...
-        "delete", ...
-        cfg, ...
-        step_cfg.intermediate_savemode, ...
-        helpers);
-end
-
-
-%% ========================================================================
-%  LINE NOISE (EEG + EOG ONLY)
-% ========================================================================
-[eeg_idx, eog_idx, ~] = helpers.get_channel_indices_by_type(EEG);
-filter_idx = sort(unique([eeg_idx(:); eog_idx(:)]));
-
-
-line_noise_applied = false;
-if string(step_cfg.line_noise_method) == "pop_cleanline"
-    [EEG, line_noise_applied] = helpers.apply_pop_cleanline_to_subset(EEG, filter_idx, step_cfg);
-    if ~line_noise_applied
-        helpers.log_msg_default('prep03_untilica: WARNING pop_cleanline did not apply successfully.');
-    end
-end
-
-EEG = helpers.append_eeg_comment(EEG, sprintf( ...
-    'prep03_untilica: line noise method=%s applied=%d freqs=%s', ...
-    string(step_cfg.line_noise_method), line_noise_applied, ...
-    mat2str(step_cfg.line_noise_frequencies_hz)));
-
-EEG = helpers.apply_filter_to_subset_only(EEG, filter_idx, ...
-    [], step_cfg.lowpass_hz, 'prep03_untilica low-pass');
-
-%% ========================================================================
-%  OPTIONAL DEBUG SAVE: AFTER LOW-PASS
-% ========================================================================
-if step_cfg.save_intermediate_steps && step_cfg.save_intermediate_after_lowpass
-    helpers.save_intermediate_set( ...
-        EEG, ...
-        prep03_out_dir_untilica, ...
-        string(run_base_name) + "_stage-prep03_after-lowpass", ...
         "delete", ...
         cfg, ...
         step_cfg.intermediate_savemode, ...
@@ -961,3 +940,153 @@ step_out.message = 'ok';
 
 end
 
+function step_cfg = local_default_prep03_cfg_impl()
+step_cfg = struct();
+
+% Crop
+step_cfg.crop_to_task_markers = true;
+step_cfg.crop_start_marker    = 'S 91';
+step_cfg.crop_end_marker      = 'S 97';
+step_cfg.crop_padding_sec     = [0 0];
+
+% Channel typing labels
+step_cfg.eog_channel_labels     = {'IO1','IO2','LO1','LO2'};
+step_cfg.scr_channel_labels     = {'SCR'};
+step_cfg.startle_channel_labels = {'Startle'};
+step_cfg.ekg_channel_labels     = {'EKG'};
+
+% Downsample
+step_cfg.downsample_hz = 250;
+
+% Bad channel detection
+step_cfg.bad_channel_detection_method = "clean_rawdata"; % "clean_rawdata" | "pop_rejchan" | "off"
+
+% Used when bad_channel_detection_method = "clean_rawdata"
+step_cfg.clean_rawdata_flatline_sec           = 5;
+step_cfg.clean_rawdata_channel_corr_threshold = 0.80;
+
+% Used when bad_channel_detection_method = "pop_rejchan"
+step_cfg.pop_rejchan_z_threshold  = 3.29;
+step_cfg.pop_rejchan_freqrange_hz = [1 125];
+
+% Interpolation timing
+step_cfg.interpolate_bad_channels_before_ica = true;
+step_cfg.interp_method = 'spherical';
+
+% Step 03 debug/intermediate exports.
+% Master switch. Default false = no Step 03 intermediate debug files.
+% If true, the individual switches below decide which stages are written.
+step_cfg.save_intermediate_steps = false;
+
+% Save after final bad EEG channel list has been applied.
+% In this pipeline, bad EEG channels are usually interpolated rather than
+% permanently removed.
+step_cfg.save_intermediate_after_bad_channel_rejection = true;
+
+% Save after rereferencing.
+step_cfg.save_intermediate_after_rereference = true;
+
+% Save after high-pass filtering.
+step_cfg.save_intermediate_after_highpass = true;
+
+% Save after low-pass filtering.
+step_cfg.save_intermediate_after_lowpass = true;
+
+step_cfg.intermediate_savemode = 'twofiles';
+
+% Referencing
+step_cfg.reference_mode            = "avg";  % "keep" | "avg" | "mastoid"
+step_cfg.reference_exclude_non_eeg = true;
+step_cfg.mastoid_channel_labels    = {'T9','T10'};
+
+% Filters
+step_cfg.highpass_hz          = 0.01;
+step_cfg.lowpass_hz           = 40;
+step_cfg.ica_prep_highpass_hz = 1;
+
+% Line noise
+step_cfg.line_noise_method          = "pop_cleanline"; % "pop_cleanline" | "off"
+step_cfg.line_noise_frequencies_hz  = [50 100];
+step_cfg.pop_cleanline_bandwidth_hz = 2;
+step_cfg.pop_cleanline_p_value      = 0.01;
+step_cfg.pop_cleanline_scanforlines      = true;
+step_cfg.pop_cleanline_winsize_sec       = 2;
+step_cfg.pop_cleanline_winstep_sec       = 1;
+step_cfg.pop_cleanline_tau               = 50;
+step_cfg.pop_cleanline_pad               = 4;
+step_cfg.pop_cleanline_taperbandwidth_hz = 4;
+step_cfg.pop_cleanline_norm_spectrum     = 0;
+step_cfg.pop_cleanline_computepower      = 0;
+step_cfg.pop_cleanline_verbose           = false;
+
+% ICA-prep: regepochs + rejection
+step_cfg.ica_prep_use_regepochs       = true;
+step_cfg.ica_prep_regepoch_length_sec = 1;
+
+% Main ICA-prep epoch-rejection method.
+% Select exactly one:
+%   "erplab"     = ERPLAB pop_artextval/pop_artdiff/pop_artflatline
+%   "faster_ptp" = FASTER epoch_properties + peak-to-peak threshold
+%   "mad_variance" = robust MAD rejection on epoch variance
+%   "none"       = no ICA-prep epoch rejection
+step_cfg.ica_prep_epoch_rejection_method = "erplab";
+
+% Legacy jointprob settings.
+% Currently retained for backward compatibility with older configs.
+step_cfg.ica_prep_use_jointprob_rejection = true;
+step_cfg.ica_prep_jointprob_local         = 3;
+step_cfg.ica_prep_jointprob_global        = 3;
+
+% MAD ICA-prep rejection settings.
+% Only used when ica_prep_epoch_rejection_method="mad_variance".
+% These are the original scalar settings used by
+% reject_ica_prep_epochs_by_mad_variance_impl.
+step_cfg.ica_prep_use_mad_epoch_rejection = true;
+step_cfg.ica_prep_mad_z_threshold         = 4;
+step_cfg.ica_prep_mad_use_logvar          = true;
+step_cfg.ica_prep_max_reject_prop         = 1.00;
+
+% ERPLAB ICA-prep rejection.
+% Same logic as final Step 06 rejection, but more lenient.
+step_cfg.ica_prep_erplab_epoch_rejection = struct();
+step_cfg.ica_prep_erplab_epoch_rejection.enable = true;
+step_cfg.ica_prep_erplab_epoch_rejection.channel_scope = "eeg";
+step_cfg.ica_prep_erplab_epoch_rejection.twindow_ms = [];
+step_cfg.ica_prep_erplab_epoch_rejection.clear_existing_flags = true;
+
+step_cfg.ica_prep_erplab_epoch_rejection.use_extreme_voltage = true;
+step_cfg.ica_prep_erplab_epoch_rejection.extreme_voltage_uV  = 300;
+step_cfg.ica_prep_erplab_epoch_rejection.flag_extreme_voltage = 1;
+
+step_cfg.ica_prep_erplab_epoch_rejection.use_sample_diff = true;
+step_cfg.ica_prep_erplab_epoch_rejection.sample_diff_uV  = 75;
+step_cfg.ica_prep_erplab_epoch_rejection.flag_sample_diff = 2;
+
+step_cfg.ica_prep_erplab_epoch_rejection.use_flatline = true;
+step_cfg.ica_prep_erplab_epoch_rejection.flatline_tolerance_uV = 0.5;
+step_cfg.ica_prep_erplab_epoch_rejection.flatline_duration_ms  = 200;
+step_cfg.ica_prep_erplab_epoch_rejection.flag_flatline = 3;
+
+step_cfg.ica_prep_erplab_epoch_rejection.review = "off";
+step_cfg.ica_prep_erplab_epoch_rejection.history = "off";
+step_cfg.ica_prep_erplab_epoch_rejection.lowpass_hz = -1;
+
+% FASTER/PTP ICA-prep rejection.
+% Only used when ica_prep_epoch_rejection_method="faster_ptp".
+step_cfg.ica_prep_faster_ptp_epoch_rejection = struct();
+
+step_cfg.ica_prep_faster_ptp_epoch_rejection.enable       = true;
+step_cfg.ica_prep_faster_ptp_epoch_rejection.use_faster   = true;
+step_cfg.ica_prep_faster_ptp_epoch_rejection.faster_z     = 4;
+step_cfg.ica_prep_faster_ptp_epoch_rejection.use_robust_z = true;
+
+step_cfg.ica_prep_faster_ptp_epoch_rejection.use_ptp       = true;
+step_cfg.ica_prep_faster_ptp_epoch_rejection.ptp_uV_thresh = 800;
+
+% 1.00 means disabled. Example: 0.50 stops Step 03 if >50% of ICA-prep
+% epochs are removed.
+step_cfg.ica_prep_faster_ptp_epoch_rejection.max_reject_prop = 1.00;
+
+% Overwrite override
+step_cfg.overwrite_mode = "";
+end

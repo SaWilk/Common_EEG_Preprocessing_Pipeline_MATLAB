@@ -1,8 +1,10 @@
+%addpath(genpath('Z:\pb\KPN\KPN-Allgemein\Mitarbeiter_Studierende\Laura Langemeyer\Feedback Projekt\EEG Pipeline'));
+%rootDir = '/beegfs/u/bav0577';
+%addpath(genpath(rootDir));
+
 % =========================================================================
 % FILE: eeg_pipeline_config.m
 % =========================================================================
-% Copyright (C) 2025–2026 Saskia Wilken and contributors
-%
 function cfg = eeg_pipeline_config()
 % EEG_PIPELINE_CONFIG
 %
@@ -41,27 +43,20 @@ helpers = eeg_pipeline_helpers(bootstrap_log);
 
 cfg = struct();
 
-% One shared timestamp for all QC files produced by this pipeline run.
-% Filenames start with yyyy-mm-dd-hh-mm so runs can be compared directly.
-cfg.qc = struct();
-cfg.qc.filename_timestamp_format = 'yyyy-mm-dd-HH-MM';
-cfg.qc.run_timestamp = string(datestr(now, cfg.qc.filename_timestamp_format));
-cfg.qc.table_delimiter = ';';
-
 % -------------------------------------------------------------------------
 % Project identity
 % -------------------------------------------------------------------------
 cfg.pipeline = struct();
-cfg.pipeline.name        = "aperiodic_pipeline"; % set recognizable name: project name used in cfg and logsheader
+cfg.pipeline.name        = "p300_pipeline"; % set recognizable name: project name used in cfg and logsheader
 cfg.pipeline.step_prefix = "eeg";                % step 02-06 function prefix, needed to find step-functions. Keep as "eeg" unless you have a good reason to change it.
 
 cfg.constants = struct();
-cfg.constants.log_prefix_master = "run_eeg_pipeline_aperiodic"; % master log filename prefix
+cfg.constants.log_prefix_master = "run_eeg_pipeline_p300"; % master log filename prefix
 
 cfg.bids = struct();
-cfg.bids.dataset_folder_name = "baseline";   % BIDS dataset folder name (if you have multiple datasets in the same raw folder)
-cfg.bids.task_label          = "baseline";   % BIDS task label of EEG dataset
-cfg.bids.session_label       = "01";         % BIDS session label
+cfg.bids.dataset_folder_name = "eeg";   % BIDS dataset folder name (if you have multiple datasets in the same raw folder)
+cfg.bids.task_label          = "task-sf";   % BIDS task label of EEG dataset
+cfg.bids.session_label       = "ses-02";         % BIDS session label
 
 % -------------------------------------------------------------------------
 % Profile / paths
@@ -81,45 +76,49 @@ cfg.paths.profile_override = ""; % leave empty for automatic profile selection; 
 cfg.paths.profile_paths = struct();
 
 cfg.paths.profile_paths.pc = struct( ...
-    'source_eeg_root',  'Z:\pb\KLPSY1\KLPSY1-RTG\PROOF - Data\Real\EEG\Baseline', ...
+  'source_eeg_root',  fullfile("Z:\pb\KPP_KPN_joined\DynBU\data"), ...
     'source_beh_root',  '', ...
-    'bids_root',        'Z:\pb\KPP_KPN_joined\Aperiodic\Saskia\sourcedata', ...
-    'derivatives_root', 'Z:\pb\KPP_KPN_joined\Aperiodic\Saskia\derivatives');
+    'bids_root',        fullfile('Z:/pb/KPN/KPN-Allgemein/Mitarbeiter_Studierende/Laura Langemeyer/Feedback Projekt/EEG Pipeline/bids_root'), ...
+    'derivatives_root', fullfile('Z:/pb/KPN/KPN-Allgemein/Mitarbeiter_Studierende/Laura Langemeyer/Feedback Projekt/EEG Pipeline/derivatives_root'));
 
 cfg.paths.profile_paths.server_windows = struct( ...
-    'source_eeg_root',  'Z:\pb\KLPSY1\KLPSY1-RTG\PROOF - Data\Real\EEG\Baseline', ...
+    'source_eeg_root', "Z:\pb\KPP_KPN_joined\DynBU\data", ...
     'source_beh_root',  '', ...
-    'bids_root',         'Z:\pb\KPP_KPN_joined\Aperiodic\Saskia\sourcedata', ...
-    'derivatives_root', 'Z:\pb\KPP_KPN_joined\Aperiodic\Saskia\derivatives');
+    'bids_root',         'Z:/pb/KPN/KPN-Allgemein/Mitarbeiter_Studierende/Laura Langemeyer/Feedback Projekt/EEG Pipeline/bids_root', ..., ...
+    'derivatives_root', 'Z:/pb/KPN/KPN-Allgemein/Mitarbeiter_Studierende/Laura Langemeyer/Feedback Projekt/EEG Pipeline/derivatives_root');
 
 cfg.paths.profile_paths.hpc_hummel = struct( ...
     'source_eeg_root',  '', ...
     'source_beh_root',  '', ...
-    'bids_root',        fullfile('/beegfs/u/bbf7366/sourcedata', char(cfg.bids.dataset_folder_name)), ...
-    'derivatives_root', '/beegfs/u/bbf7366/derivatives/preprocessed_eeg_baseline');
+    'bids_root',        fullfile('/beegfs/u/bav0577/sourcedata/bids_root'), ...
+    'derivatives_root', '/beegfs/u/bav0577/derivatives/preprocessed_eeg_p300');
 
 % only set these if paths deviate but you do not want to change the profile
-cfg.paths.bids_root_override        = "";
-cfg.paths.derivatives_root_override = "";
-cfg.paths.source_eeg_root_override  = "";
+cfg.paths.bids_root_override        = '';
+cfg.paths.derivatives_root_override = '';
+cfg.paths.source_eeg_root_override  = '';
 cfg.paths.source_beh_root_override  = "";
-
 % =========================================================================
 % TOOLBOX PATHS
 % =========================================================================
 cfg.toolboxes = struct();
 
-cfg.toolboxes.path_eeglab_pc     = "K:\Wilken_Arbeitsordner\MATLAB\eeglab_current\eeglab2025.1.0"; % EEGLAB path on PC
-cfg.toolboxes.path_eeglab_server = "K:\Wilken_Arbeitsordner\MATLAB\eeglab_current\eeglab2025.1.0"; % EEGLAB path on server
-cfg.toolboxes.path_eeglab_hpc    = "/beegfs/u/bbf7366/toolboxes/eeglab2025.1.0";                   % EEGLAB path on HPC
+cfg.toolboxes.path_eeglab_pc     = "Z:\pb\KPP_KPN_joined\DynBU\analyses\toolboxes\eeglab2026.0.0"; % EEGLAB path on PC
+cfg.toolboxes.path_eeglab_server = "Z:\pb\KPP_KPN_joined\DynBU\analyses\toolboxes\eeglab2026.0.0"; % EEGLAB path on server
+cfg.toolboxes.path_eeglab_hpc    =  "/beegfs/u/bav0577/toolboxes/eeglab2026.0.0";                 % EEGLAB path on HPC
 
-cfg.toolboxes.path_faster_pc     = "K:\Wilken_Arbeitsordner\MATLAB\FASTER"; % FASTER path on PC
-cfg.toolboxes.path_faster_server = "K:\Wilken_Arbeitsordner\MATLAB\FASTER"; % FASTER path on server
-cfg.toolboxes.path_faster_hpc    = "/beegfs/u/bbf7366/toolboxes/FASTER";    % FASTER path on HPC
+cfg.toolboxes.path_faster_pc     = "Z:\pb\KPP_KPN_joined\DynBU\analyses\toolboxes\FASTER"; % FASTER path on PC
+cfg.toolboxes.path_faster_server = "Z:\pb\KPP_KPN_joined\DynBU\analyses\toolboxes\FASTER"; % FASTER path on server
+cfg.toolboxes.path_faster_hpc    = "/beegfs/u/bav0577/toolboxes/FASTER";    % FASTER path on HPC
 
-cfg.toolboxes.path_erplab_pc     = "K:\Wilken_Arbeitsordner\MATLAB\erplab13.00";
-cfg.toolboxes.path_erplab_server = "K:\Wilken_Arbeitsordner\MATLAB\erplab13.00";
-cfg.toolboxes.path_erplab_hpc    = "/beegfs/u/bbf7366/toolboxes/eeglab2025.1.0/plugins/erplab";
+cfg.toolboxes.path_erplab_pc     = "Z:\pb\KPP_KPN_joined\DynBU\analyses\toolboxes\eeglab2026.0.0\plugins\ERPLAB12.20";
+cfg.toolboxes.path_erplab_server = "Z:\pb\KPP_KPN_joined\DynBU\analyses\toolboxes\eeglab2026.0.0\plugins\ERPLAB12.20";
+cfg.toolboxes.path_erplab_hpc    = "/beegfs/u/bav0577/toolboxes/eeglab2026.0.0/plugins/ERPLAB12.20";
+
+cfg.toolboxes.path_cleanline_pc     = "Z:\pb\KPP_KPN_joined\DynBU\analyses\toolboxes\eeglab2026.0.0\plugins\Cleanline2.1";
+cfg.toolboxes.path_cleanline_server = "Z:\pb\KPP_KPN_joined\DynBU\analyses\toolboxes\eeglab2026.0.0\plugins\Cleanline2.1";
+cfg.toolboxes.path_cleanline_hpc    = "/beegfs/u/bav0577/toolboxes/eeglab2026.0.0/plugins/Cleanline2.1";
+
 
 cfg.toolboxes.erplab = struct();
 cfg.toolboxes.erplab.use_genpath = true;
@@ -134,7 +133,7 @@ cfg.toolboxes.eeglab.nogui = true;                  % start EEGLAB without GUI
 % Overwrite behavior
 % -------------------------------------------------------------------------
 cfg.io = struct();
-cfg.io.overwrite_mode          = "delete"; % "skip" | "delete" | "if_older_than"
+cfg.io.overwrite_mode          = "skip"; % "skip" | "delete" | "if_older_than"
 cfg.io.overwrite_if_older_than = "";       % cutoff date for "if_older_than", 
 % either "DD.MM.YYYY" or "YYYY-MM-DD", optionally with time in 24h format: HH:MM or HH:MM:SS 
 
@@ -150,7 +149,7 @@ cfg.root_dir  = root_dir;
 % =========================================================================
 % CONSTANTS
 % =========================================================================
-cfg.constants.valid_sub_id_regex = '^\d{3}$';          % valid subject IDs, default: three digits like "001"
+cfg.constants.valid_sub_id_regex = '\d{5}$';          %LL: valid subject IDs for P7
 cfg.constants.log_prefix_subject = 'sub';              % subject log prefix
 cfg.constants.datestr_master     = 'yyyymmdd_HHMMSS';  % master log timestamp format
 cfg.constants.datestr_subject    = 'yyyymmdd_HHMMSS_FFF'; % subject log timestamp format
@@ -274,8 +273,8 @@ cfg.steps.enable_downstream_rerun = true; % if true, sets all downstream steps
 % automatically also be set to run
 
 cfg.steps.prep_01_bids_formatting = struct( ...
-    'run', true, ...                % Step 01 creates/updates cfg.paths.bids_root from source_*_root
-    'overwrite_mode', "delete", ...
+    'run', false, ...                % Step 01 creates/updates cfg.paths.bids_root from source_*_root
+    'overwrite_mode', "skip", ...
     'overwrite_if_older_than', "");
 
 cfg.steps.prep_02_triggerfix = struct( ...
@@ -299,10 +298,9 @@ cfg.steps.prep_05_after_ica = struct( ...
     'overwrite_if_older_than', "");
 
 cfg.steps.prep_06_epoching = struct( ...
-    'run', true, ...
+     'run', true, ...
     'overwrite_mode', "delete", ...
     'overwrite_if_older_than', "");
-
 % =========================================================================
 % STEP FUNCTION HANDLES -- do not edit, will be resolved at runtime
 % =========================================================================
@@ -328,7 +326,7 @@ cfg.prep_01.write_readme_if_exporter_did_not = true; % write README if exporter 
 
 cfg.prep_01.copy_eeg_sidecar_log_to_events = false; % copy project-specific CF log as *_events.log
 
-cfg.prep_01.raw_eeg_regex = '^B_(\d{3})(?:_(\d{3}))?\.vhdr$'; % raw EEG 
+cfg.prep_01.raw_eeg_regex = '^sub-(\d{5})_ses-2_task-[Ss][Ff]\.vhdr$'; %LL  raw EEG for P7 accounting for small differences in naming
 % filename pattern: Example: 
 % ^              start of the filename
 % B_             literal text: B_
@@ -353,7 +351,7 @@ cfg.prep_01.task_label    = cfg.bids.task_label;    % get task label defined in 
 % =========================================================================
 cfg.prep_02 = struct();
 
-cfg.prep_02.run_raw_order_qc = true; % compare behavior-log event order to raw EEG triggers
+cfg.prep_02.run_raw_order_qc = false; % compare behavior-log event order to raw EEG triggers
 
 cfg.prep_02.allow_multiple_runs  = false;         % allow multiple matching BIDS EEG runs
 cfg.prep_02.multiple_vhdr_policy = "most_recent"; % "most_recent" | "first" | "error"
@@ -485,9 +483,9 @@ cfg.prep_03.crop_end_marker      = 'S 97'; % end of cropping area
 cfg.prep_03.crop_padding_sec     = [0 0];
 
 % IMPORTANT make sure these include your channel labels for AUX/EOG, otherwise channels will be included as EEG in ICA
-cfg.prep_03.eog_channel_labels     = {'IO1','IO2','LO1','LO2'}; % ocular channels (detecting eye movements/blinks)
-cfg.prep_03.scr_channel_labels     = {'EDA', 'SCR', 'GSR_MR_100_xx'}; % skin conductance response channels
-cfg.prep_03.startle_channel_labels = {'Startle'}; % Startle response channels
+cfg.prep_03.eog_channel_labels     = {'IO1'}; % ocular channels (detecting eye movements/blinks)
+cfg.prep_03.scr_channel_labels     = {}; % skin conductance response channels
+cfg.prep_03.startle_channel_labels = {'Startle', 'IO2'}; % Startle response channels
 cfg.prep_03.ekg_channel_labels     = {'ECG', 'EKG'}; % Heart rate channels
 
 cfg.prep_03.downsample_hz = 250; % downsample frequency
@@ -505,23 +503,17 @@ cfg.prep_03.ica_prep_highpass_hz = 1; % only for the ica training set; leave if 
 cfg.prep_03.bad_channel_detection_method = "clean_rawdata"; % "clean_rawdata" | "pop_rejchan" | "off"
 % Note: clean_rawdata used to be called "auto"
 
-% Flat/invalid EEG-channel detection is applied exactly once, independently
-% of the selected bad-channel backend and always after cropping. AUX channels
-% are only removed if they are non-finite or completely constant.
-cfg.prep_03.flat_channel_detection = struct();
-cfg.prep_03.flat_channel_detection.enable = true;
-cfg.prep_03.flat_channel_detection.mode = "cumulative_fraction"; % "cumulative_fraction" | "continuous_seconds"
-cfg.prep_03.flat_channel_detection.max_flat_fraction = 0.10; % >=10% of complete post-crop recording, not necessarily continuously
-cfg.prep_03.flat_channel_detection.continuous_flat_sec = 5; % only used for mode="continuous_seconds"
-cfg.prep_03.flat_channel_detection.step_tolerance_uV = 0;
-
-% Only used for bad_channel_detection_method = "clean_rawdata". Its own
-% flatline criterion is disabled because flatness is already checked above.
+% Only used for bad_channel_detection_method = "clean_rawdata"
+cfg.prep_03.clean_rawdata_flatline_sec           = 5;
 cfg.prep_03.clean_rawdata_channel_corr_threshold = 0.80;
 
 % Only used for bad_channel_detection_method = "pop_rejchan"
 cfg.prep_03.pop_rejchan_z_threshold  = 2.5;
 cfg.prep_03.pop_rejchan_freqrange_hz = [1, cfg.prep_03.lowpass_hz + 10];
+
+% Always used if enabled
+cfg.prep_03.flag_flat_channels_as_bad     = true;
+cfg.prep_03.flat_channel_variance_epsilon = 0;
 
 % Applied to final bad EEG channel list
 cfg.prep_03.interpolate_bad_channels_before_ica = true;
@@ -530,23 +522,23 @@ cfg.prep_03.interp_method = 'spherical';
 % Step 03 debug/intermediate exports.
 % Master switch. Default false = no Step 03 intermediate debug files.
 % If true, the individual switches below decide which stages are written.
-cfg.prep_03.save_intermediate_steps = false;
+step_cfg.save_intermediate_steps = false;
 
 % Save after final bad EEG channel list has been applied.
 % In this pipeline, bad EEG channels are usually interpolated rather than
 % permanently removed.
-cfg.prep_03.save_intermediate_after_bad_channel_rejection = true;
+step_cfg.save_intermediate_after_bad_channel_rejection = true;
 
 % Save after rereferencing.
-cfg.prep_03.save_intermediate_after_rereference = true;
+step_cfg.save_intermediate_after_rereference = true;
 
 % Save after high-pass filtering.
-cfg.prep_03.save_intermediate_after_highpass = true;
+step_cfg.save_intermediate_after_highpass = true;
 
 % Save after low-pass filtering.
-cfg.prep_03.save_intermediate_after_lowpass = true;
+step_cfg.save_intermediate_after_lowpass = true;
 
-cfg.prep_03.intermediate_savemode = 'twofiles';
+step_cfg.intermediate_savemode = 'twofiles';
 
 % -------------------------------------------------------------------------
 % Re-Referencing
@@ -563,7 +555,7 @@ cfg.prep_03.reference_exclude_non_eeg = true;   % do not rereference EOG/SCR/Sta
 cfg.prep_03.mastoid_channel_labels    = {'T9','T10'};
 
 % -------------------------------------------------------------------------
-% Line Noise Filtering
+% Filtering
 % -------------------------------------------------------------------------
 
 cfg.prep_03.line_noise_method         = "pop_cleanline"; % "pop_cleanline" | "off"
@@ -607,15 +599,14 @@ cfg.prep_03.ica_prep_erplab_epoch_rejection.use_sample_diff = true;
 cfg.prep_03.ica_prep_erplab_epoch_rejection.sample_diff_uV  = 75;
 cfg.prep_03.ica_prep_erplab_epoch_rejection.flag_sample_diff = 2;
 
-% 3) Optional flatline/blocking rejection. This may reject unexpectedly
-% many epochs, so it is off by default and should be enabled deliberately.
-cfg.prep_03.ica_prep_erplab_epoch_rejection.use_flatline = false;
+% 3) Exclude flatline/blocking, but more lenient than final rejection.
+cfg.prep_03.ica_prep_erplab_epoch_rejection.use_flatline = true;
 cfg.prep_03.ica_prep_erplab_epoch_rejection.flatline_tolerance_uV = 0.5;
 cfg.prep_03.ica_prep_erplab_epoch_rejection.flatline_duration_ms  = 200;
 cfg.prep_03.ica_prep_erplab_epoch_rejection.flag_flatline = 3;
 
 cfg.prep_03.ica_prep_erplab_epoch_rejection.review = "off";
-cfg.prep_03.ica_prep_erplab_epoch_rejection.history = "off";
+cfg.prep_03.ica_prep_erplab_epoch_rejection.history = "on";
 cfg.prep_03.ica_prep_erplab_epoch_rejection.lowpass_hz = -1;
 
 % MAD ICA-prep rejection settings.
@@ -623,6 +614,11 @@ cfg.prep_03.ica_prep_erplab_epoch_rejection.lowpass_hz = -1;
 cfg.prep_03.ica_prep_mad_z_threshold = 3;
 cfg.prep_03.ica_prep_mad_use_logvar  = true;
 cfg.prep_03.ica_prep_max_reject_prop = 1.00;
+
+% MAD variance rejection settings.
+% Only used when cfg.prep_06.epoch_rejection_method == "mad_variance".
+cfg.prep_06.mad_z_threshold = 3;
+cfg.prep_06.mad_use_logvar  = true;
 
 % -------------------------------------------------------------------------
 % FASTER/PTP ICA-prep epoch rejection
@@ -642,7 +638,7 @@ cfg.prep_03.ica_prep_faster_ptp_epoch_rejection.faster_z     = 4;
 cfg.prep_03.ica_prep_faster_ptp_epoch_rejection.use_robust_z = true;
 
 cfg.prep_03.ica_prep_faster_ptp_epoch_rejection.use_ptp       = true;
-cfg.prep_03.ica_prep_faster_ptp_epoch_rejection.ptp_uV_thresh = 100;
+cfg.prep_03.ica_prep_faster_ptp_epoch_rejection.ptp_uV_thresh = 800;
 
 % 1.00 means disabled. Example: 0.50 would stop Step 03 if >50% of
 % ICA-training epochs are removed.
@@ -673,7 +669,7 @@ cfg.prep_05.clear_subject_ica_comps_dir = true; % delete existing ICA components
 % rejection. However, why not use it for removing other artifacts as well?
 % It is a well-validated algorithm and if thresholds are set
 % conservatively, no harm is done
-cfg.prep_05.iclabel_eye_remove_thr       = 0.85;
+cfg.prep_05.iclabel_eye_remove_thr       = 0.85; 
 cfg.prep_05.iclabel_muscle_remove_thr    = 0.85;
 cfg.prep_05.iclabel_heart_remove_thr     = 0.85;
 cfg.prep_05.iclabel_linenoise_remove_thr = 0.85;
@@ -682,7 +678,7 @@ cfg.prep_05.iclabel_other_remove_thr     = 1.01;
 cfg.prep_05.iclabel_brain_min_keep_thr   = 0.00;
 
 cfg.prep_05.save_ic_topos_png   = true;
-cfg.prep_05.iclabel_edge_margin = 0.10;
+cfg.prep_05.iclabel_edge_margin = 0.10;%0.10
 
 cfg.prep_05.ic_topo_dpi        = 300;
 cfg.prep_05.ic_topo_fig_cm     = [0 0 18 18];
@@ -705,7 +701,7 @@ cfg.prep_06 = struct();
 % -------------------------------------------------------------------------
 % General mode selection
 % -------------------------------------------------------------------------
-cfg.prep_06.epoching_mode  = "baseline";   % "baseline" | "event_locked"
+cfg.prep_06.epoching_mode  = "event_locked";   % "baseline" | "event_locked"
 cfg.prep_06.overwrite_mode = "";
 
 % -------------------------------------------------------------------------
@@ -729,15 +725,16 @@ cfg.prep_06.mastoid_channel_labels = {'T9','T10'};
 % Mainly relevant for event_locked ERP-style epochs.
 % Usually keep false for continuous/resting-state baseline regepochs.
 % -------------------------------------------------------------------------
-cfg.prep_06.do_baseline_correction = false;
-cfg.prep_06.base_start_ms          = -200;
+cfg.prep_06.do_baseline_correction = true;
+cfg.prep_06.base_start_ms          = -200; %LL as in P7 
 cfg.prep_06.base_end_ms            = 0;
 
 % -------------------------------------------------------------------------
 % EVENT-LOCKED mode settings
 % Used only when cfg.prep_06.epoching_mode == "event_locked"
 % -------------------------------------------------------------------------
-cfg.prep_06.events_phase = {}; % enter here triggers that mark where your epochs shoudl start
+%cfg.prep_06.events_phase = {'S60', 'S61', 'S62', 'S63'}; 
+cfg.prep_06.events_phase = {'S60','S61','S62','S63','S 60','S 61','S 62','S 63'};%LL P7 social feedback condition
 % example entries: { ...
     % 'S 201','S 241', ...
     % 'S 2021','S 2421','S 2022','S 2422', ...
@@ -745,11 +742,11 @@ cfg.prep_06.events_phase = {}; % enter here triggers that mark where your epochs
     % 'S 2041','S 2441','S 2042','S 2442','S 2043','S 2443', ...
     % 'S 205','S 245' ...
     % }
-% To propagate freely chosen event-locked condition names into the QC tables,
-% group these event codes in min_trials_per_condition_codes below.
+ % note: currently as a design choices you should label these epoch types
+ % in your analysis scripts as it is not really part of preprocessing
 
-cfg.prep_06.epoch_start_s = -0.4; % start of epoch relative to event in seconds
-cfg.prep_06.epoch_end_s   =  2.6; % end of epoch relative to event in seconds
+cfg.prep_06.epoch_start_s = -0.5; %LL P7 start of epoch relative to event in seconds
+cfg.prep_06.epoch_end_s   =  1; %LL P7 end of epoch relative to event in seconds
 
 % -------------------------------------------------------------------------
 % BASELINE mode settings
@@ -759,19 +756,15 @@ cfg.prep_06.regepoch_length_sec = 10; % length of epochs to be created
 cfg.prep_06.regepoch_step_sec = 10; % seconds between starts of consecutive 
 % regepochs; same as length = non-overlapping epochs without gaps
 
-cfg.prep_06.baseline_has_conditions = false;
-
-% Ignored while baseline_has_conditions=false. If enabled, define arbitrary
-% names as rows of {condition_name, marker prefixes starting that condition}.
-% These names are propagated to output filenames and QC tables, for example:
-% cfg.prep_06.baseline_condition_definitions = { ...
-%     'condition_a', {'S 11','S 12'}; ...
-%     'condition_b', {'S 21','S 22'} ...
-%     };
-cfg.prep_06.baseline_condition_definitions = {};
-cfg.prep_06.baseline_start_condition = "";
-cfg.prep_06.baseline_end_markers = {};
-cfg.prep_06.baseline_end_condition = "";
+% for inconsistency's sake, in the baseline condition you already label your
+% epochs here. For now, the pipeline assumes there was an eyes "open" and
+% an eyes "closed" condition; will be made more customizable in a future update
+cfg.prep_06.baseline_start_condition        = "open"; % assumes that data contains 
+% data from before first phase, in which participants had their eyes open
+cfg.prep_06.baseline_open_marker_prefixes   = {}; % triggers marking 
+% the start of open-eye baseline segments, e.g. "S 1", "S 11", "S 12"
+cfg.prep_06.baseline_closed_marker_prefixes = {}; % triggers marking the start of closed-eye baseline segments, e.g. "S 2", "S 21", "S 22"
+cfg.prep_06.baseline_end_markers            = {};
 
 % -------------------------------------------------------------------------
 % Artifact rejection
@@ -798,10 +791,6 @@ cfg.prep_06.epoch_rejection_method = "erplab";  % "erplab" | "faster_ptp" | "mad
 % 1 means disabled. Example: 0.50 would exclude subjects with >50% rejected epochs.
 cfg.prep_06.max_reject_prop = 1;
 
-% Warning only (no exclusion): report all subjects with >25% rejected epochs
-% once more at the very end of the console output and in the master run log.
-cfg.prep_06.warn_if_reject_prop_gt = 0.25;
-
 % -------------------------------------------------------------------------
 % ERPLAB epoch rejection
 % Only used when cfg.prep_06.epoch_rejection_method == "erplab".
@@ -812,16 +801,14 @@ cfg.prep_06.erplab_epoch_rejection.channel_scope = "eeg";
 cfg.prep_06.erplab_epoch_rejection.twindow_ms = [];
 cfg.prep_06.erplab_epoch_rejection.clear_existing_flags = true;
 
-cfg.prep_06.erplab_epoch_rejection.use_extreme_voltage = true;
-cfg.prep_06.erplab_epoch_rejection.extreme_voltage_uV  = 200;
+cfg.prep_06.erplab_epoch_rejection.use_extreme_voltage = false;
+cfg.prep_06.erplab_epoch_rejection.extreme_voltage_uV  = 200;%200
 cfg.prep_06.erplab_epoch_rejection.flag_extreme_voltage = 1;
 
-cfg.prep_06.erplab_epoch_rejection.use_sample_diff = true;
-cfg.prep_06.erplab_epoch_rejection.sample_diff_uV  = 50;
+cfg.prep_06.erplab_epoch_rejection.use_sample_diff = false;
+cfg.prep_06.erplab_epoch_rejection.sample_diff_uV  = 50; %50
 cfg.prep_06.erplab_epoch_rejection.flag_sample_diff = 2;
 
-% Optional only: flatline rejection may reject unexpectedly many epochs.
-% Keep false unless its effect has been inspected for the current dataset.
 cfg.prep_06.erplab_epoch_rejection.use_flatline = false;
 cfg.prep_06.erplab_epoch_rejection.flatline_tolerance_uV = 0.5;
 cfg.prep_06.erplab_epoch_rejection.flatline_duration_ms  = 100;
@@ -841,12 +828,12 @@ cfg.prep_06.erplab_epoch_rejection.lowpass_hz = -1;
 % -------------------------------------------------------------------------
 cfg.prep_06.faster_ptp_epoch_rejection = struct();
 
-cfg.prep_06.faster_ptp_epoch_rejection.use_faster    = true;
+cfg.prep_06.faster_ptp_epoch_rejection.use_faster    = false;
 cfg.prep_06.faster_ptp_epoch_rejection.faster_z      = 3;
 cfg.prep_06.faster_ptp_epoch_rejection.use_robust_z  = false;
 
-cfg.prep_06.faster_ptp_epoch_rejection.use_ptp       = true;
-cfg.prep_06.faster_ptp_epoch_rejection.ptp_uV_thresh = 100;
+cfg.prep_06.faster_ptp_epoch_rejection.use_ptp       = false;
+cfg.prep_06.faster_ptp_epoch_rejection.ptp_uV_thresh = 300;
 
 % -------------------------------------------------------------------------
 % MAD variance epoch rejection
@@ -862,16 +849,15 @@ cfg.prep_06.mad_use_logvar  = true;
 %   checks minimum trial counts for the event-code groups listed below.
 %
 % baseline:
-%   checks minimum valid regepochs separately for every configured condition.
-%   Without conditions, the check applies once to the complete recording.
+%   checks minimum number of valid regepochs separately for open and closed.
 %   The code list below is ignored in baseline mode.
 % -------------------------------------------------------------------------
 cfg.prep_06.min_trials_per_condition_enable      = true; 
-cfg.prep_06.min_trials_per_condition_min_n       = 3; % min num of trials in 
+cfg.prep_06.min_trials_per_condition_min_n       = 2; % min num of trials in 
 % each condition so participant is not excluded. Suggestion: at least 10,
 % but you might need to be pragmatic. 
 cfg.prep_06.min_trials_per_condition_zero_tol_ms = 2; % jitter allowed around trigger
-cfg.prep_06.min_trials_per_condition_codes = {}; % adjust this to conditions 
+cfg.prep_06.min_trials_per_condition_codes = {'S62', 'S 62'}; %LL CP in social feedback condition; adjust this to conditions; S63 would be hit with CP 
 % in your setup that should have at least min_trials_per_condition
 % enter like this: { ...
 %    'condition_name', {'S XXX','S XXY'}; ...
@@ -880,9 +866,8 @@ cfg.prep_06.min_trials_per_condition_codes = {}; % adjust this to conditions
 % -------------------------------------------------------------------------
 % Summary tables
 % -------------------------------------------------------------------------
-% These are fixed QC outputs. Step 06 also refreshes all-subject summaries.
-cfg.prep_06.write_run_summary_table     = true;
-cfg.prep_06.write_subject_summary_table = true;
+cfg.prep_06.write_run_summary_table     = false;
+cfg.prep_06.write_subject_summary_table = false;
 cfg.prep_06.qc_table_delimiter          = ';';
 
 end
