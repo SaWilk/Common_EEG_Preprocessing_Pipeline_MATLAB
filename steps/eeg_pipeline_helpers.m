@@ -3755,10 +3755,14 @@ if isempty(bad_epochs)
     return;
 end
 
-EEG_work = pop_rejepoch(EEG_work, bad_epochs, 0);
-EEG_work = eeg_checkset(EEG_work);
-
-info.n_kept = EEG_work.trials;
+if numel(bad_epochs) == EEG_work.trials
+    info.n_kept = 0;
+    EEG_work.trials = 0;
+else
+    EEG_work = pop_rejepoch(EEG_work, bad_epochs, 0);
+    EEG_work = eeg_checkset(EEG_work);
+    info.n_kept = EEG_work.trials;
+end
 
 if ~isfield(EEG_work, 'etc') || isempty(EEG_work.etc)
     EEG_work.etc = struct();
