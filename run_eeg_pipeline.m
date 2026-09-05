@@ -384,6 +384,7 @@ if use_parallel
     parfor i = 1:n_sub
         status(i) = helpers.run_one_subject(subject_plans(i), cfg); %#ok<PFOUS>
     end
+    % we should close the pool here if we started it, but I don't know if this is the right place to do it.
 else
     for i = 1:n_sub
         status(i) = helpers.run_one_subject(subject_plans(i), cfg);
