@@ -2338,11 +2338,18 @@ for s = 1:numel(seg_t1)
 
     EEG_seg = pop_select(EEG, 'time', [t1, t2 - sample_eps]);
     EEG_seg = eeg_checkset(EEG_seg);
-    EEG_ep = eeg_regepochs( ...
-        EEG_seg, ...
-        'recurrence', epoch_step, ...
-        'limits', [0 epoch_len], ...
-        'eventtype', 'regepoch');
+    try
+        EEG_ep = eeg_regepochs( ...
+            EEG_seg, ...
+            'recurrence', epoch_step, ...
+            'limits', [0 epoch_len], ...
+            'eventtype', 'regepoch');
+    catch ME
+        EEG_ep = append_eeg_comment_impl(EEG_ep, sprintf( ...
+        'prep_06_epoching: regepoch failed for segment %d | chunk=[%.3f %.3f] s | regepoch_length=%.1f s | regepoch_step=%.1f s', ...
+        s, t1, t2, epoch_len, epoch_step));
+        continue
+    end
     EEG_ep = eeg_checkset(EEG_ep);
     EEG_ep.etc.baseline_condition = char(condition_names(condition_ix));
     EEG_ep = append_eeg_comment_impl(EEG_ep, sprintf( ...
@@ -2884,19 +2891,27 @@ for k = 1:n
 end
 end
 
-function latency = find_first_event_latency_impl(EEG, event_type)
+function [marker, latency] = find_first_event_latency_impl(EEG, event_type)
 latency = [];
+marker = [];
 
 if ~isfield(EEG, 'event') || isempty(EEG.event)
     return;
 end
 
-target = normalize_trigger_type_impl(event_type);
+if ischar(event_type) || isstring(event_type)
+    event_type = cellstr(string(event_type));
+end
+
+target_types = cellfun(@normalize_trigger_type_impl, ...
+    event_type, 'UniformOutput', false);
 
 for k = 1:numel(EEG.event)
     current_type = normalize_trigger_type_impl(EEG.event(k).type);
-    if strcmp(current_type, target)
+
+    if any(strcmp(current_type, target_types))
         latency = EEG.event(k).latency;
+        marker = current_type;
         return;
     end
 end
