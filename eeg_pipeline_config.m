@@ -260,7 +260,7 @@ cfg.subjects.min_id = []; % process all subjects with a higher ID than...
 % =========================================================================
 cfg.parallel = struct();
 cfg.parallel.enable         = true;   % allow parallel execution
-cfg.parallel.force_workers  = [];     % explicit worker count, leave empty 
+cfg.parallel.force_workers  = [20];     % explicit worker count, leave empty 
 % for automatic determination (recommended)
 
 % =========================================================================
