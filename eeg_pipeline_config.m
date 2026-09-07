@@ -566,7 +566,8 @@ cfg.prep_03.mastoid_channel_labels    = {'T9','T10'};
 % Line Noise Filtering
 % -------------------------------------------------------------------------
 
-cfg.prep_03.line_noise_method         = "pop_cleanline"; % "pop_cleanline" | "off"
+% https://eeglab.org/plugins/zapline-plus/ 
+cfg.prep_03.line_noise_method         = "pop_cleanline"; % "zapline" | "pop_cleanline" | "off"
 cfg.prep_03.line_noise_frequencies_hz = [50 100]; % in europe, set to [60 120] in US
 
 cfg.prep_03.ica_prep_epoch_rejection_method = "erplab"; % "erplab" | "faster_ptp" | "mad_variance" | "none"

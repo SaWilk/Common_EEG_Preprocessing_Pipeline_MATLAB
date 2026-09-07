@@ -3123,6 +3123,8 @@ end
 function [EEG, did_apply] = apply_pop_cleanline_to_subset_impl(EEG, subset_indices, step_cfg)
 did_apply = false;
 
+% adjust this function to do line noise cleaning with any plugin
+
 if isempty(subset_indices)
     helpers.log_msg_default('prep03_untilica: WARNING no channel indices available for pop_cleanline.');
     return;

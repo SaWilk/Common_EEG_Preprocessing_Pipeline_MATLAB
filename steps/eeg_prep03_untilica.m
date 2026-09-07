@@ -615,6 +615,8 @@ filter_idx = sort(unique([eeg_idx(:); eog_idx(:)]));
 
 
 line_noise_applied = false;
+% https://eeglab.org/plugins/zapline-plus/
+
 if string(step_cfg.line_noise_method) == "pop_cleanline"
     [EEG, line_noise_applied] = helpers.apply_pop_cleanline_to_subset(EEG, filter_idx, step_cfg);
     if ~line_noise_applied
