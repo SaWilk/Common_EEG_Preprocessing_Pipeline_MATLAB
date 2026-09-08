@@ -613,12 +613,15 @@ end
 [eeg_idx, eog_idx, ~] = helpers.get_channel_indices_by_type(EEG);
 filter_idx = sort(unique([eeg_idx(:); eog_idx(:)]));
 
+if isempty(filter_idx) % messages might need to be passed to prep03 script, not written here
+    filter_idx = EEG.chanlocs;
+    helpers.log_msg_default('prep03_untilica: WARNING channel indices not available, continuing with all channels.');
+end
 
 line_noise_applied = false;
-% https://eeglab.org/plugins/zapline-plus/
 
-if string(step_cfg.line_noise_method) == "pop_cleanline"
-    [EEG, line_noise_applied] = helpers.apply_pop_cleanline_to_subset(EEG, filter_idx, step_cfg);
+if string(step_cfg.line_noise_method) ~= "none"
+    [EEG, line_noise_applied] = helpers.remove_line_noise_from_subset(EEG, filter_idx, step_cfg);
     if ~line_noise_applied
         helpers.log_msg_default('prep03_untilica: WARNING pop_cleanline did not apply successfully.');
     end

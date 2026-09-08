@@ -87,48 +87,48 @@ helpers.normalize_trigger_type = @normalize_trigger_type_impl;
 % -------------------------------------------------------------------------
 % EEG utility helpers used by step files
 % -------------------------------------------------------------------------
-helpers.normalize_event_types                 = @normalize_event_types_impl;
-helpers.normalize_epoching_mode_value         = @normalize_epoching_mode_value_impl;
-helpers.get_channel_indices_by_type           = @get_channel_indices_by_type_impl;
-helpers.apply_reference_mode                  = @apply_reference_mode_impl;
-helpers.build_epoching_output_paths           = @build_epoching_output_paths_impl;
-helpers.normalize_event_list                  = @normalize_event_list_impl;
-helpers.get_present_events                    = @get_present_events_impl;
-helpers.preview_event_types                   = @preview_event_types_impl;
-helpers.evaluate_min_trials_per_condition     = @evaluate_min_trials_per_condition_impl;
-helpers.build_step06_summary_row              = @build_step06_summary_row_impl;
-helpers.build_step06_summary_rows             = @build_step06_summary_rows_impl;
-helpers.build_bad_channel_qc_table            = @build_bad_channel_qc_table_impl;
-helpers.build_epoch_rejection_qc_table        = @build_epoch_rejection_qc_table_impl;
-helpers.write_qc_table                        = @write_qc_table_impl;
-helpers.resolve_qc_timestamp                  = @resolve_qc_timestamp_impl;
-helpers.collect_bad_channel_qc                = @collect_bad_channel_qc_impl;
-helpers.collect_prep06_summary                = @collect_prep06_summary_impl;
-helpers.build_high_epoch_rejection_warning    = @build_high_epoch_rejection_warning_impl;
-helpers.save_intermediate_set                 = @save_intermediate_set_impl;
-helpers.apply_hard_epoch_threshold_rejection  = @apply_hard_epoch_threshold_rejection_impl;
-helpers.apply_fallback_epoch_rejection        = @apply_fallback_epoch_rejection_impl;
-helpers.create_baseline_condition_datasets    = @create_baseline_condition_datasets_impl;
+helpers.normalize_event_types                  = @normalize_event_types_impl;
+helpers.normalize_epoching_mode_value          = @normalize_epoching_mode_value_impl;
+helpers.get_channel_indices_by_type            = @get_channel_indices_by_type_impl;
+helpers.apply_reference_mode                   = @apply_reference_mode_impl;
+helpers.build_epoching_output_paths            = @build_epoching_output_paths_impl;
+helpers.normalize_event_list                   = @normalize_event_list_impl;
+helpers.get_present_events                     = @get_present_events_impl;
+helpers.preview_event_types                    = @preview_event_types_impl;
+helpers.evaluate_min_trials_per_condition      = @evaluate_min_trials_per_condition_impl;
+helpers.build_step06_summary_row               = @build_step06_summary_row_impl;
+helpers.build_step06_summary_rows              = @build_step06_summary_rows_impl;
+helpers.build_bad_channel_qc_table             = @build_bad_channel_qc_table_impl;
+helpers.build_epoch_rejection_qc_table         = @build_epoch_rejection_qc_table_impl;
+helpers.write_qc_table                         = @write_qc_table_impl;
+helpers.resolve_qc_timestamp                   = @resolve_qc_timestamp_impl;
+helpers.collect_bad_channel_qc                 = @collect_bad_channel_qc_impl;
+helpers.collect_prep06_summary                 = @collect_prep06_summary_impl;
+helpers.build_high_epoch_rejection_warning     = @build_high_epoch_rejection_warning_impl;
+helpers.save_intermediate_set                  = @save_intermediate_set_impl;
+helpers.apply_hard_epoch_threshold_rejection   = @apply_hard_epoch_threshold_rejection_impl;
+helpers.apply_fallback_epoch_rejection         = @apply_fallback_epoch_rejection_impl;
+helpers.create_baseline_condition_datasets     = @create_baseline_condition_datasets_impl;
 helpers.resolve_baseline_condition_definitions = @resolve_baseline_condition_definitions_impl;
 helpers.build_epoching_output_stem             = @build_epoching_output_stem_impl;
-helpers.finalize_epoched_dataset              = @finalize_epoched_dataset_impl;
-helpers.save_final_epoched_outputs            = @save_final_epoched_outputs_impl;
-helpers.build_eeg_key_token_stream_with_time  = @build_eeg_key_token_stream_with_time_impl;
-helpers.find_first_event_latency              = @find_first_event_latency_impl;
-helpers.ensure_channel_types                  = @ensure_channel_types_impl;
-helpers.find_flat_or_invalid_channels         = @find_flat_or_invalid_channels_impl;
-helpers.detect_bad_channels_clean_rawdata     = @detect_bad_channels_clean_rawdata_impl;
-helpers.apply_filter_to_subset_only           = @apply_filter_to_subset_only_impl;
-helpers.apply_pop_cleanline_to_subset         = @apply_pop_cleanline_to_subset_impl;
-helpers.apply_jointprob_safely                = @apply_jointprob_safely_impl;
-helpers.apply_shared_epoch_rejection          = @apply_shared_epoch_rejection_impl;
-helpers.apply_erplab_epoch_rejection          = @apply_erplab_epoch_rejection_impl;
+helpers.finalize_epoched_dataset               = @finalize_epoched_dataset_impl;
+helpers.save_final_epoched_outputs             = @save_final_epoched_outputs_impl;
+helpers.build_eeg_key_token_stream_with_time   = @build_eeg_key_token_stream_with_time_impl;
+helpers.find_first_event_latency               = @find_first_event_latency_impl;
+helpers.ensure_channel_types                   = @ensure_channel_types_impl;
+helpers.find_flat_or_invalid_channels          = @find_flat_or_invalid_channels_impl;
+helpers.detect_bad_channels_clean_rawdata      = @detect_bad_channels_clean_rawdata_impl;
+helpers.apply_filter_to_subset_only            = @apply_filter_to_subset_only_impl;
+helpers.remove_line_noise_from_subset          = @remove_line_noise_from_subset_impl;
+helpers.apply_jointprob_safely                 = @apply_jointprob_safely_impl;
+helpers.apply_shared_epoch_rejection           = @apply_shared_epoch_rejection_impl;
+helpers.apply_erplab_epoch_rejection           = @apply_erplab_epoch_rejection_impl;
 helpers.reject_ica_prep_epochs_by_mad_variance = @reject_ica_prep_epochs_by_mad_variance_impl;
-helpers.compute_data_rank_svd                 = @compute_data_rank_svd_impl;
-helpers.make_unique_amica_tmpdir              = @make_unique_amica_tmpdir_impl;
-helpers.safe_rmdir                            = @safe_rmdir_impl;
-helpers.write_ic_topography_pngs              = @write_ic_topography_pngs_impl;
-helpers.merge_structs_recursive               = @merge_structs_recursive_impl;
+helpers.compute_data_rank_svd                  = @compute_data_rank_svd_impl;
+helpers.make_unique_amica_tmpdir               = @make_unique_amica_tmpdir_impl;
+helpers.safe_rmdir                             = @safe_rmdir_impl;
+helpers.write_ic_topography_pngs               = @write_ic_topography_pngs_impl;
+helpers.merge_structs_recursive                = @merge_structs_recursive_impl;
 
 
 % -------------------------------------------------------------------------
@@ -3120,22 +3120,40 @@ if nargin >= 5 && ~isempty(label_for_log)
 end
 end
 
-function [EEG, did_apply] = apply_pop_cleanline_to_subset_impl(EEG, subset_indices, step_cfg)
+function [EEG, did_apply] = remove_line_noise_from_subset_impl(EEG, subset_indices, step_cfg)
 did_apply = false;
 
-% adjust this function to do line noise cleaning with any plugin
-
-if isempty(subset_indices)
-    helpers.log_msg_default('prep03_untilica: WARNING no channel indices available for pop_cleanline.');
-    return;
+if contains(lower(step_cfg.line_noise_method), 'zap')
+    method = 'zapline';
+elseif contains(lower(step_cfg.line_noise_method), 'clean')
+    method = 'cleanline';
+elseif contains(lower(step_cfg.line_noise_method), 'notch')
+    method = 'notch';
+else
+    helpers.log_msg_default(sprintf('\tLine Noise Removal: ERROR removal method - %s - not recognized.', step_cfg.line_noise_method));
+    return
 end
 
-if exist('pop_cleanline', 'file') ~= 2
+if exist('pop_cleanline', 'file') ~= 2 % needs to be conditional #TODO
     helpers.log_msg_default('prep03_untilica: WARNING pop_cleanline was not found on path.');
     return;
 end
 
 original_data = EEG.data;
+
+% Backward-compatible fallbacks in case older configs are used
+
+bandwidth_hz      = getfield_safe_impl(step_cfg, 'pop_cleanline_bandwidth_hz', 2);
+p_value           = getfield_safe_impl(step_cfg, 'pop_cleanline_p_value', 0.01);
+scanforlines      = getfield_safe_impl(step_cfg, 'pop_cleanline_scanforlines', false);
+winsize_sec       = getfield_safe_impl(step_cfg, 'pop_cleanline_winsize_sec', 4);
+winstep_sec       = getfield_safe_impl(step_cfg, 'pop_cleanline_winstep_sec', 1);
+tau_val           = getfield_safe_impl(step_cfg, 'pop_cleanline_tau', 100);
+pad_val           = getfield_safe_impl(step_cfg, 'pop_cleanline_pad', 2);
+taperbandwidth_hz = getfield_safe_impl(step_cfg, 'pop_cleanline_taperbandwidth_hz', 2);
+norm_spectrum     = getfield_safe_impl(step_cfg, 'pop_cleanline_norm_spectrum', 0);
+compute_power     = getfield_safe_impl(step_cfg, 'pop_cleanline_computepower', 0);
+verbose_flag      = getfield_safe_impl(step_cfg, 'pop_cleanline_verbose', false);
 
 try
     EEG_tmp = pop_select(EEG, 'channel', subset_indices);
@@ -3143,50 +3161,65 @@ try
 
     fs = EEG_tmp.srate;
     freqs = step_cfg.line_noise_frequencies_hz;
-    freqs = freqs(freqs < fs / 2);
+    freqs = freqs(freqs < fs / 2); % only keep frequencies below Nyquist
 
-    if isempty(freqs)
+    if isempty(freqs) % why? shouldn't there be a warning, or some info? perhaps already from prep03
         did_apply = true;
+        helpers.log_msg_default('\tLine Noise Removal: WARNING Specified frequencies below nyquist.');
         return;
     end
 
-    % Backward-compatible fallbacks in case older configs are used
-    bandwidth_hz      = getfield_safe_impl(step_cfg, 'pop_cleanline_bandwidth_hz', 2);
-    p_value           = getfield_safe_impl(step_cfg, 'pop_cleanline_p_value', 0.01);
-    scanforlines      = getfield_safe_impl(step_cfg, 'pop_cleanline_scanforlines', false);
-    winsize_sec       = getfield_safe_impl(step_cfg, 'pop_cleanline_winsize_sec', 4);
-    winstep_sec       = getfield_safe_impl(step_cfg, 'pop_cleanline_winstep_sec', 1);
-    tau_val           = getfield_safe_impl(step_cfg, 'pop_cleanline_tau', 100);
-    pad_val           = getfield_safe_impl(step_cfg, 'pop_cleanline_pad', 2);
-    taperbandwidth_hz = getfield_safe_impl(step_cfg, 'pop_cleanline_taperbandwidth_hz', 2);
-    norm_spectrum     = getfield_safe_impl(step_cfg, 'pop_cleanline_norm_spectrum', 0);
-    compute_power     = getfield_safe_impl(step_cfg, 'pop_cleanline_computepower', 0);
-    verbose_flag      = getfield_safe_impl(step_cfg, 'pop_cleanline_verbose', false);
+    if strcmp(method, "zapline")       
+        zapline = struct();
+        [EEG_tmp.data, zapline.config, zapline.analytics] = clean_data_with_zapline_plus(EEG_tmp.data, fs, struct('noisefreqs', freqs,'plotResults', false));
+        
+        if EEG.zapline.analytics.ratioNoiseClean > step_cfg.line_noise_ratio 
+            if step_cfg.line_noise_fallback_cleanline
+                % add to QC tables? #TODO:
+                method = 'cleanline';
+                helpers.log_msg_default('\tLine Noise Removal: Zapline did not work optimally, using cleanline in next step.');
+            else
+                helpers.log_msg_default(sprintf('\tLine Noise Removal: WARNING Zapline applied, remaining noise ratio %s.', EEG.zapline.analytics.ratioNoiseClean));
+            end
+        else
+            helpers.log_msg_default('\tLine Noise Removal: Zapline applied succesfully.');
+        end
+    end
+   
+    if strcmp(method, "cleanline")
+        EEG_tmp = pop_cleanline(EEG_tmp, ...
+            'bandwidth',        bandwidth_hz, ...
+            'chanlist',         1:size(EEG_tmp.data, 1), ...
+            'computepower',     compute_power, ...
+            'linefreqs',        freqs, ...
+            'normSpectrum',     norm_spectrum, ...
+            'p',                p_value, ...
+            'pad',              pad_val, ...
+            'plotfigures',      0, ...
+            'scanforlines',     double(scanforlines), ...
+            'sigtype',          'Channels', ...
+            'taperbandwidth',   taperbandwidth_hz, ...
+            'tau',              tau_val, ...
+            'verb',             double(verbose_flag), ...
+            'winsize',          winsize_sec, ...
+            'winstep',          winstep_sec);
+        
+        % check data quality/noise ratio again and maybe do notch?
 
-    EEG_tmp = pop_cleanline(EEG_tmp, ...
-        'bandwidth',        bandwidth_hz, ...
-        'chanlist',         1:size(EEG_tmp.data, 1), ...
-        'computepower',     compute_power, ...
-        'linefreqs',        freqs, ...
-        'normSpectrum',     norm_spectrum, ...
-        'p',                p_value, ...
-        'pad',              pad_val, ...
-        'plotfigures',      0, ...
-        'scanforlines',     double(scanforlines), ...
-        'sigtype',          'Channels', ...
-        'taperbandwidth',   taperbandwidth_hz, ...
-        'tau',              tau_val, ...
-        'verb',             double(verbose_flag), ...
-        'winsize',          winsize_sec, ...
-        'winstep',          winstep_sec);
+    end
+
+    if strcmp(method, "notch")
+        % use EEGLab notch filter?
+    end
 
     EEG.data(subset_indices, :) = EEG_tmp.data;
     did_apply = true;
 
-catch me
+catch ME
     EEG.data = original_data;
     did_apply = false;
-    warning('apply_pop_cleanline_to_subset failed: %s', me.message);
+    warning('remove_line_noise_from_subset failed: %s', ME.message);
+    return
 end
 
 EEG = eeg_checkset(EEG);
