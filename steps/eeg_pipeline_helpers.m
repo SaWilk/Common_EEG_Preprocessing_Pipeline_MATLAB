@@ -3134,11 +3134,6 @@ else
     return
 end
 
-if exist('pop_cleanline', 'file') ~= 2 % needs to be conditional #TODO
-    helpers.log_msg_default('prep03_untilica: WARNING pop_cleanline was not found on path.');
-    return;
-end
-
 original_data = EEG.data;
 
 % Backward-compatible fallbacks in case older configs are used
@@ -3169,43 +3164,58 @@ try
         return;
     end
 
-    if strcmp(method, "zapline")       
-        zapline = struct();
-        [EEG_tmp.data, zapline.config, zapline.analytics] = clean_data_with_zapline_plus(EEG_tmp.data, fs, struct('noisefreqs', freqs,'plotResults', false, 'noiseCompDetectSigma', 5)); %remove noiseCompDetectSigma after testing!!! #TODO
-        
-        if zapline.analytics.ratioNoiseClean > step_cfg.line_noise_ratio 
-            if step_cfg.line_noise_fallback_cleanline
-                % add to QC tables? #TODO:
-                method = 'cleanline';
-                helpers.log_msg_default('\tLine Noise Removal: Zapline did not work optimally, using cleanline in next step.');
-            else
-                helpers.log_msg_default(sprintf('\tLine Noise Removal: WARNING Zapline applied, remaining noise ratio %s.', zapline.analytics.ratioNoiseClean));
-            end
+    if strcmp(method, "zapline")   
+        if exist('zapline-plus-main', 'dir') ~= 2 % needs to be conditional #TODO
+            helpers.log_msg_default('prep03_untilica: WARNING zapline-plus was not found on path, continuing with cleanline.');
+            method = 'cleanline';
         else
-            helpers.log_msg_default(sprintf('\tLine Noise Removal: Zapline applied succesfully. Noise ratio %s.', zapline.analytics.ratioNoiseClean));
+            zapline = struct();
+            [EEG_tmp.data, zapline.config, zapline.analytics] = clean_data_with_zapline_plus(EEG_tmp.data, fs, struct('noisefreqs', freqs,'plotResults', false));
+            
+            if zapline.analytics.ratioNoiseClean > step_cfg.line_noise_ratio 
+                if step_cfg.line_noise_fb_cleanline
+                    % add to QC tables? #TODO:
+                    method = 'cleanline';
+                    helpers.log_msg_default('\tLine Noise Removal: Zapline did not work optimally, using cleanline in next step.');
+                else
+                    helpers.log_msg_default(sprintf('\tLine Noise Removal: WARNING Zapline applied, remaining noise ratio %s.', zapline.analytics.ratioNoiseClean));
+                end
+            else
+                helpers.log_msg_default(sprintf('\tLine Noise Removal: Zapline applied succesfully. Noise ratio %s.', zapline.analytics.ratioNoiseClean));
+            end
         end
     end
    
     if strcmp(method, "cleanline")
-        EEG_tmp = pop_cleanline(EEG_tmp, ...
-            'bandwidth',        bandwidth_hz, ...
-            'chanlist',         1:size(EEG_tmp.data, 1), ...
-            'computepower',     compute_power, ...
-            'linefreqs',        freqs, ...
-            'normSpectrum',     norm_spectrum, ...
-            'p',                p_value, ...
-            'pad',              pad_val, ...
-            'plotfigures',      0, ...
-            'scanforlines',     double(scanforlines), ...
-            'sigtype',          'Channels', ...
-            'taperbandwidth',   taperbandwidth_hz, ...
-            'tau',              tau_val, ...
-            'verb',             double(verbose_flag), ...
-            'winsize',          winsize_sec, ...
-            'winstep',          winstep_sec);
-        
-        % check data quality/noise ratio again and maybe do notch?
-
+        if exist('cleanline.m', 'file') ~= 2 % needs to be conditional #TODO
+            
+            if step_cfg.line_noise_fb_notch
+                helpers.log_msg_default('\tLine Noise Removal: WARNING cleanline was not found on path. Using Notch filter as fallback.');
+                method = 'notch';
+            else
+                helpers.log_msg_default('\tLine Noise Removal: WARNING cleanline was not found on path. Continuing without removing line noise.');
+                return
+            end
+        else
+            EEG_tmp = pop_cleanline(EEG_tmp, ...
+                'bandwidth',        bandwidth_hz, ...
+                'chanlist',         1:size(EEG_tmp.data, 1), ...
+                'computepower',     compute_power, ...
+                'linefreqs',        freqs, ...
+                'normSpectrum',     norm_spectrum, ...
+                'p',                p_value, ...
+                'pad',              pad_val, ...
+                'plotfigures',      0, ...
+                'scanforlines',     double(scanforlines), ...
+                'sigtype',          'Channels', ...
+                'taperbandwidth',   taperbandwidth_hz, ...
+                'tau',              tau_val, ...
+                'verb',             double(verbose_flag), ...
+                'winsize',          winsize_sec, ...
+                'winstep',          winstep_sec);
+            
+            % check data quality/noise ratio again and maybe do notch?
+        end
     end
 
     if strcmp(method, "notch")

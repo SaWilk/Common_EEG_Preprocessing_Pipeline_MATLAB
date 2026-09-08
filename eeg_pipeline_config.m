@@ -569,9 +569,9 @@ cfg.prep_03.mastoid_channel_labels    = {'T9','T10'};
 
 cfg.prep_03.line_noise_method         = "zapline"; % "zapline" | "pop_cleanline" | "notch" | "off"
 cfg.prep_03.line_noise_frequencies_hz = [50 100]; % in europe, set to [60 120] in US
-cfg.prep_03.line_noise_ratio           = 2;
-cfg.prep_03.line_noise_fallback_cleanline = true; % use cleanline, if zapline fails to remove line noise (# TODO: criterion to be determined)
-cfg.prep_03.line_noise_fb_notch = true; % if fallback is used, apply notch filter to line noise frequencies if both zapline and cleanline fail
+cfg.prep_03.line_noise_ratio          = 1;
+cfg.prep_03.line_noise_fb_cleanline   = true; % use cleanline if zapline fails to remove line noise (# TODO: criterion to be determined)
+cfg.prep_03.line_noise_fb_notch       = false; % if fallback is used, apply notch filter to line noise frequencies if both zapline and cleanline fail
 
 cfg.prep_03.pop_cleanline_bandwidth_hz      = 4;
 cfg.prep_03.pop_cleanline_p_value           = 0.01;
