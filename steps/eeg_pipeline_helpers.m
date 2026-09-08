@@ -3120,7 +3120,7 @@ if nargin >= 5 && ~isempty(label_for_log)
 end
 end
 
-function [EEG, did_apply] = remove_line_noise_from_subset_impl(EEG, subset_indices, step_cfg)
+function [EEG, did_apply] = remove_line_noise_from_subset_impl(EEG, subset_indices, step_cfg, helpers)
 did_apply = false;
 
 if contains(lower(step_cfg.line_noise_method), 'zap')
@@ -3165,24 +3165,24 @@ try
 
     if isempty(freqs) % why? shouldn't there be a warning, or some info? perhaps already from prep03
         did_apply = true;
-        helpers.log_msg_default('\tLine Noise Removal: WARNING Specified frequencies below nyquist.');
+        log_msg_default_impl('\tLine Noise Removal: WARNING Specified frequencies below nyquist.');
         return;
     end
 
     if strcmp(method, "zapline")       
         zapline = struct();
-        [EEG_tmp.data, zapline.config, zapline.analytics] = clean_data_with_zapline_plus(EEG_tmp.data, fs, struct('noisefreqs', freqs,'plotResults', false));
+        [EEG_tmp.data, zapline.config, zapline.analytics] = clean_data_with_zapline_plus(EEG_tmp.data, fs, struct('noisefreqs', freqs,'plotResults', false, 'noiseCompDetectSigma', 5)); %remove noiseCompDetectSigma after testing!!! #TODO
         
-        if EEG.zapline.analytics.ratioNoiseClean > step_cfg.line_noise_ratio 
+        if zapline.analytics.ratioNoiseClean > step_cfg.line_noise_ratio 
             if step_cfg.line_noise_fallback_cleanline
                 % add to QC tables? #TODO:
                 method = 'cleanline';
                 helpers.log_msg_default('\tLine Noise Removal: Zapline did not work optimally, using cleanline in next step.');
             else
-                helpers.log_msg_default(sprintf('\tLine Noise Removal: WARNING Zapline applied, remaining noise ratio %s.', EEG.zapline.analytics.ratioNoiseClean));
+                helpers.log_msg_default(sprintf('\tLine Noise Removal: WARNING Zapline applied, remaining noise ratio %s.', zapline.analytics.ratioNoiseClean));
             end
         else
-            helpers.log_msg_default('\tLine Noise Removal: Zapline applied succesfully.');
+            helpers.log_msg_default(sprintf('\tLine Noise Removal: Zapline applied succesfully. Noise ratio %s.', zapline.analytics.ratioNoiseClean));
         end
     end
    
@@ -3219,6 +3219,7 @@ catch ME
     EEG.data = original_data;
     did_apply = false;
     warning('remove_line_noise_from_subset failed: %s', ME.message);
+    helpers.log_msg_default(sprintf('remove_line_noise_from_subset failed: %s', ME.message));
     return
 end
 
