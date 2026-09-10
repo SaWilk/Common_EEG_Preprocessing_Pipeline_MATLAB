@@ -261,7 +261,7 @@ cfg.subjects.min_id = []; % process all subjects with a higher ID than...
 % =========================================================================
 cfg.parallel = struct();
 cfg.parallel.enable         = true;   % allow parallel execution
-cfg.parallel.force_workers  = [];     % explicit worker count, leave empty 
+cfg.parallel.force_workers  = 20;     % explicit worker count, to keep peace with IT admins. If left empty, will use all available cores.
 % for automatic determination (recommended)
 
 % =========================================================================
@@ -481,7 +481,8 @@ cfg.prep_03 = struct();
 % crop dataset around specifically defined triggers, e.g. exp start and exp
 % end
 cfg.prep_03.crop_to_task_markers = false; %if this is set to false, the following lines are irrelevant
-cfg.prep_03.crop_start_marker    = 'S 91'; % beginning of cropping area
+cfg.prep_03.substitute_crop_markers = true; % if true, the crop_start_marker and crop_end_marker will be replaced by the first and last sample of the task, respectively
+cfg.prep_03.crop_start_marker    = 'S 91'; % beginning of cropping area, can also handly multiple markers, e.g. {'S 91','S 92'} to crop from first occurence of either marker
 cfg.prep_03.crop_end_marker      = 'S 97'; % end of cropping area
 cfg.prep_03.crop_padding_sec     = [0 0];
 

@@ -191,14 +191,35 @@ EEG = helpers.append_eeg_comment(EEG, sprintf( ...
 %  CROP TO TASK WINDOW
 % ========================================================================
 if step_cfg.crop_to_task_markers
-    start_latency = helpers.find_first_event_latency(EEG, step_cfg.crop_start_marker);
-    end_latency   = helpers.find_first_event_latency(EEG, step_cfg.crop_end_marker);
+    [start_marker, start_latency] = helpers.find_first_event_latency(EEG, step_cfg.crop_start_marker);
+    [end_marker, end_latency]   = helpers.find_first_event_latency(EEG, step_cfg.crop_end_marker);
 
     if isempty(start_latency) || isempty(end_latency)
+        if isfield(step_cfg, 'substitute_crop_markers') && step_cfg.substitute_crop_markers
+            helpers.log_msg_default( ...
+                'prep03_untilica: WARNING at least one crop marker not found, substituting with first and last sample of the task window.');
+            if isempty(start_latency)
+                start_latency = 1;
+                start_marker = 'first_sample';
+            end
+            if isempty(end_latency)
+                end_latency = EEG.pnts;
+                end_marker = 'last_sample';
+            end
+             
+        else
+            msg = sprintf( ...
+                'prep03_untilica: missing task markers start(%s)=%d end(%s)=%d -> cannot continue', ...
+                start_marker, isempty(start_latency), ...
+                end_marker, isempty(end_latency));
+            helpers.log_msg_default('%s', msg);
+            step_out.message = msg;
+            return;
+        end
         msg = sprintf( ...
             'prep03_untilica: missing task markers start(%s)=%d end(%s)=%d -> cannot continue', ...
-            step_cfg.crop_start_marker, isempty(start_latency), ...
-            step_cfg.crop_end_marker, isempty(end_latency));
+            start_marker, isempty(start_latency), ...
+            end_marker, isempty(end_latency));
         helpers.log_msg_default('%s', msg);
         step_out.message = msg;
         return;
@@ -224,7 +245,7 @@ if step_cfg.crop_to_task_markers
 
     EEG = helpers.append_eeg_comment(EEG, sprintf( ...
         'prep03_untilica: cropped %s..%s padding=[%.2f %.2f] t=[%.3f %.3f]', ...
-        step_cfg.crop_start_marker, step_cfg.crop_end_marker, ...
+        start_marker, end_marker, ...
         step_cfg.crop_padding_sec(1), step_cfg.crop_padding_sec(2), ...
         t_start, t_end));
 end
