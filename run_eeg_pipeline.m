@@ -413,6 +413,25 @@ if isfield(cfg, 'steps') && isfield(cfg.steps, 'prep_06_epoching') && ...
     end
 end
 
+% Combine ICA training summaries after all subjects have finished.
+if cfg.steps.prep_03_until_ica.run && ...
+        helpers.getfield_safe(cfg.prep_03, 'write_run_summary_table', true)
+
+    try
+        [~, summary_files] = helpers.collect_prep03_summary(cfg);
+
+        for k = 1:numel(summary_files)
+            helpers.log_msg(master_log, ...
+                'ICA training summary saved: %s', summary_files{k});
+        end
+
+    catch qc_me
+        helpers.log_msg(master_log, ...
+            'WARNING: Final Step-03 QC collection failed: %s', ...
+            qc_me.message);
+    end
+end
+
 % =========================================================================
 % FINAL SUMMARY
 % =========================================================================

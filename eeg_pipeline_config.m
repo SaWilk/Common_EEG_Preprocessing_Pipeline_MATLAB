@@ -477,6 +477,10 @@ cfg.prep_02.disable_first_acquisition.disabled_plus_code  = "S 24999";
 % =========================================================================
 cfg.prep_03 = struct();
 
+% ICA-training QC: Save a summary of how many epochs were rejected from the ICA training
+% dataset and how many remain.
+cfg.prep_03.write_run_summary_table = true;
+
 % crop dataset around specifically defined triggers, e.g. exp start and exp
 % end
 cfg.prep_03.crop_to_task_markers = false; %if this is set to false, the following lines are irrelevant
