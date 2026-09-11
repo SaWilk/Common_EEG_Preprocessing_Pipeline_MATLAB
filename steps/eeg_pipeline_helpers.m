@@ -3135,8 +3135,9 @@ if nargin >= 5 && ~isempty(label_for_log)
 end
 end
 
-function [EEG, did_apply] = remove_line_noise_from_subset_impl(EEG, subset_indices, step_cfg, helpers)
+function [EEG, did_apply, clean_log] = remove_line_noise_from_subset_impl(EEG, subset_indices, step_cfg, helpers)
 did_apply = false;
+clean_log = struct();
 
 if contains(lower(step_cfg.line_noise_method), 'zap')
     method = 'zapline';
@@ -3152,7 +3153,6 @@ end
 original_data = EEG.data;
 
 % Backward-compatible fallbacks in case older configs are used
-
 bandwidth_hz      = getfield_safe_impl(step_cfg, 'pop_cleanline_bandwidth_hz', 2);
 p_value           = getfield_safe_impl(step_cfg, 'pop_cleanline_p_value', 0.01);
 scanforlines      = getfield_safe_impl(step_cfg, 'pop_cleanline_scanforlines', false);
@@ -3171,47 +3171,54 @@ try
 
     fs = EEG_tmp.srate;
     freqs = step_cfg.line_noise_frequencies_hz;
-    freqs = freqs(freqs < fs / 2); % only keep frequencies below Nyquist
+    freqs = freqs(freqs < fs / 2); % only keep frequencies below Nyquist, as that is also the highest frequency for the lowpass filter.
 
-    if isempty(freqs) % why? shouldn't there be a warning, or some info? perhaps already from prep03
+    clean_log.freqs = freqs;
+
+    if isempty(freqs)
         did_apply = true;
         log_msg_default_impl('\tLine Noise Removal: WARNING Specified frequencies below nyquist.');
         return;
     end
 
     if strcmp(method, "zapline")   
-        if exist('zapline-plus-main', 'dir') ~= 2 % needs to be conditional #TODO
+        if exist('clean_data_with_zapline_plus.m', 'file') ~= 2
             helpers.log_msg_default('prep03_untilica: WARNING zapline-plus was not found on path, continuing with cleanline.');
             method = 'cleanline';
         else
-            zapline = struct();
-            [EEG_tmp.data, zapline.config, zapline.analytics] = clean_data_with_zapline_plus(EEG_tmp.data, fs, struct('noisefreqs', freqs,'plotResults', false));
-            
-            if zapline.analytics.ratioNoiseClean > step_cfg.line_noise_ratio 
+            clean_log.zapline = struct();
+            [EEG_tmp.data, clean_log.zapline.config, clean_log.zapline.analytics] = ...
+                clean_data_with_zapline_plus(EEG_tmp.data, fs, struct('noisefreqs', freqs, 'plotResults', false));
+            clean_log.zapline.applied = true;
+
+            if clean_log.zapline.analytics.ratioNoiseClean > step_cfg.line_noise_ratio
                 if step_cfg.line_noise_fb_cleanline
-                    % add to QC tables? #TODO:
+                    clean_log.fallback_to_cleanline = true;
+                    clean_log.cleanline = struct();
                     method = 'cleanline';
                     helpers.log_msg_default('\tLine Noise Removal: Zapline did not work optimally, using cleanline in next step.');
                 else
-                    helpers.log_msg_default(sprintf('\tLine Noise Removal: WARNING Zapline applied, remaining noise ratio %s.', zapline.analytics.ratioNoiseClean));
+                    helpers.log_msg_default(sprintf('\tLine Noise Removal: WARNING Zapline applied, remaining noise ratio %s.', clean_log.zapline.analytics.ratioNoiseClean));
                 end
             else
-                helpers.log_msg_default(sprintf('\tLine Noise Removal: Zapline applied succesfully. Noise ratio %s.', zapline.analytics.ratioNoiseClean));
+                helpers.log_msg_default(sprintf('\tLine Noise Removal: Zapline applied succesfully. Noise ratio %s.', clean_log.zapline.analytics.ratioNoiseClean));
             end
         end
     end
    
     if strcmp(method, "cleanline")
-        if exist('cleanline.m', 'file') ~= 2 % needs to be conditional #TODO
-            
+        if exist('cleanline.m', 'file') ~= 2  
             if step_cfg.line_noise_fb_notch
-                helpers.log_msg_default('\tLine Noise Removal: WARNING cleanline was not found on path. Using Notch filter as fallback.');
+                clean_log.fallback_to_cleanline = false;
+                clean_log.fallback_to_notch     = true;
                 method = 'notch';
+                helpers.log_msg_default('\tLine Noise Removal: WARNING cleanline was not found on path. Using Notch filter as fallback.');
             else
                 helpers.log_msg_default('\tLine Noise Removal: WARNING cleanline was not found on path. Continuing without removing line noise.');
                 return
             end
         else
+            clean_log.cleanline = struct();
             EEG_tmp = pop_cleanline(EEG_tmp, ...
                 'bandwidth',        bandwidth_hz, ...
                 'chanlist',         1:size(EEG_tmp.data, 1), ...
@@ -3229,7 +3236,9 @@ try
                 'winsize',          winsize_sec, ...
                 'winstep',          winstep_sec);
             
-            % check data quality/noise ratio again and maybe do notch?
+            clean_log.cleanline.applied = true;
+            
+                % check data quality/noise ratio again and maybe do notch?
         end
     end
 
@@ -3243,8 +3252,8 @@ try
 catch ME
     EEG.data = original_data;
     did_apply = false;
-    warning('remove_line_noise_from_subset failed: %s', ME.message);
-    helpers.log_msg_default(sprintf('remove_line_noise_from_subset failed: %s', ME.message));
+    warning('remove_line_noise_from_subset failed: %s (function: %s, line: %d)', ME.message, ME.stack(1).name, ME.stack(1).line);
+    helpers.log_msg_default(sprintf('remove_line_noise_from_subset failed: (function: %s, line: %d)', ME.message, ME.stack(1).name, ME.stack(1).line));
     return
 end
 
