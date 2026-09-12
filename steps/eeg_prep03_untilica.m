@@ -644,7 +644,7 @@ line_noise_applied = false;
 if string(step_cfg.line_noise_method) ~= "none"
     [EEG, line_noise_applied, line_noise_log] = helpers.remove_line_noise_from_subset(EEG, filter_idx, step_cfg, helpers);
     if ~line_noise_applied
-        helpers.log_msg_default('prep03_untilica: WARNING line noise removal failed.');
+        helpers.log_msg_default('prep03_untilica: WARNING line noise removal incomplete or failed.');
     end
 end
 

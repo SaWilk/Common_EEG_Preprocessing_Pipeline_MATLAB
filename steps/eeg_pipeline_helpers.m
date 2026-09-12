@@ -3188,13 +3188,12 @@ try
         else
             clean_log.zapline = struct();
             [EEG_tmp.data, clean_log.zapline.config, clean_log.zapline.analytics] = ...
-                clean_data_with_zapline_plus(EEG_tmp.data, fs, struct('noisefreqs', freqs, 'plotResults', false));
+                clean_data_with_zapline_plus(EEG_tmp.data, fs, struct('noisefreqs', freqs, 'plotResults', false, 'saveSpectra', true));
             clean_log.zapline.applied = true;
-
+            
             if clean_log.zapline.analytics.ratioNoiseClean > step_cfg.line_noise_ratio
                 if step_cfg.line_noise_fb_cleanline
                     clean_log.fallback_to_cleanline = true;
-                    clean_log.cleanline = struct();
                     method = 'cleanline';
                     helpers.log_msg_default('\tLine Noise Removal: Zapline did not work optimally, using cleanline in next step.');
                 else
@@ -3219,6 +3218,22 @@ try
             end
         else
             clean_log.cleanline = struct();
+            clean_log.cleanline.analytics = struct();
+
+            if isfield(clean_log, 'zapline') && isfield(clean_log.zapline, 'config')
+                winSize = clean_log.zapline.config.winSizeCompleteSpectrum;
+                detect_winSize = clean_log.zapline.config.detectionWinsize;
+                pxx_log_before = clean_log.zapline.analytics.cleanSpectrumLog;
+                psd_freqs = clean_log.zapline.analytics.frequencies;
+            else
+                winSize = floor(length(EEG_tmp.data)/8);
+                detect_winSize = 6;
+                [pxx_log_before, psd_freqs] = pwelch(EEG_tmp.data,hanning(winSize,[],[],fs));
+                pxx_log_before = 10*log10(pxx_log_before);
+            end
+
+            %% pop_cleanline tries to call on function that has same name in clean_rawdata, but are different...
+
             EEG_tmp = pop_cleanline(EEG_tmp, ...
                 'bandwidth',        bandwidth_hz, ...
                 'chanlist',         1:size(EEG_tmp.data, 1), ...
@@ -3238,7 +3253,17 @@ try
             
             clean_log.cleanline.applied = true;
             
-                % check data quality/noise ratio again and maybe do notch?
+            pxx_log_after = pwelch(EEG_tmp.data,hanning(winSize,[],[],fs));
+            pxx_log_after = 10*log10(pxx_log_after);
+
+            for f = freqs
+                noise_idx = (psd_freqs>f-0.1 & psd_freqs<f+0.1);
+                surround_idx = (psd_freqs>f+(detect_winSize/6) & psd_freqs<f+(detect_winSize/2));
+                ratioNoiseBefore = 10^((mean(mean(pxx_log_before(noise_idx,:),2)) - mean(pxx_raw_log(surround_idx,:),'all'))/10);
+                ratioNoiseAfter  = 10^((mean(mean(pxx_log_after(noise_idx,:),2)) - mean(pxx_clean_log(surround_idx,:),'all'))/10);
+            end
+
+
         end
     end
 
@@ -3252,7 +3277,6 @@ try
 catch ME
     EEG.data = original_data;
     did_apply = false;
-    warning('remove_line_noise_from_subset failed: %s (function: %s, line: %d)', ME.message, ME.stack(1).name, ME.stack(1).line);
     helpers.log_msg_default(sprintf('remove_line_noise_from_subset failed: (function: %s, line: %d)', ME.message, ME.stack(1).name, ME.stack(1).line));
     return
 end
