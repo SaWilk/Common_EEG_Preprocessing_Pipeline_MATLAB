@@ -3227,16 +3227,16 @@ try
                 pxx_log_before = clean_log.zapline.analytics.cleanSpectrumLog;
                 psd_freqs = clean_log.zapline.analytics.frequencies;
             else
-                winSize = floor(length(EEG_tmp.data)/8);
+                winSize = floor(length(EEG_tmp.data)/8/fs);
                 detect_winSize = 6;
-                [pxx_log_before, psd_freqs] = pwelch(EEG_tmp.data,hanning(winSize,[],[],fs));
+                [pxx_log_before, psd_freqs] = pwelch(EEG_tmp.data',hanning(winSize*fs),[],[],fs);
                 pxx_log_before = 10*log10(pxx_log_before);
+                clean_log.cleanline.analytics.rawSpectrumLog = pxx_log_before;
+                clean_log.cleanline.analytics.frequencies = psd_freqs;
             end
 
-            %% pop_cleanline tries to call on function that has same name in clean_rawdata, but are different...
-
+            % make sure cleanline calls functions from own path
             cleanline_dir = fullfile(plugin_path, plugs(find(cellfun(@(x) contains(lower(x), 'cleanline'),{plugs.name}))).name);
-
             addpath(genpath(cleanline_dir), '-begin');   % puts it first on the path
 
             EEG_tmp = pop_cleanline(EEG_tmp, ...
@@ -3257,21 +3257,30 @@ try
                 'winstep',          winstep_sec);
             
             clean_log.cleanline.applied = true;
-            %% throws error: too many input arguments
-            pxx_log_after = pwelch(EEG_tmp.data,hanning(winSize,[],[],fs));
+
+            pxx_log_after = pwelch(single(EEG_tmp.data)',hanning(winSize*fs),[],[],fs);
             pxx_log_after = 10*log10(pxx_log_after);
+
+            clean_log.cleanline.analytics.cleanSpectrumLog = pxx_log_after;
+            clean_log.cleanline.analytics.ratioNoiseBefore = [];
+            clean_log.cleanline.analytics.ratioNoiseAfter = [];
 
             for f = freqs
                 noise_idx = (psd_freqs>f-0.1 & psd_freqs<f+0.1);
                 surround_idx = (psd_freqs>f+(detect_winSize/6) & psd_freqs<f+(detect_winSize/2));
-                ratioNoiseBefore = 10^((mean(mean(pxx_log_before(noise_idx,:),2)) - mean(pxx_raw_log(surround_idx,:),'all'))/10);
-                ratioNoiseAfter  = 10^((mean(mean(pxx_log_after(noise_idx,:),2)) - mean(pxx_clean_log(surround_idx,:),'all'))/10);
+                clean_log.cleanline.analytics.ratioNoiseBefore(end+1) = 10^((mean(mean(pxx_log_before(noise_idx,:),2)) - mean(pxx_log_before(surround_idx,:),'all'))/10);
+                clean_log.cleanline.analytics.ratioNoiseAfter(end+1)  = 10^((mean(mean(pxx_log_after(noise_idx,:),2)) - mean(pxx_log_after(surround_idx,:),'all'))/10);
             end
 
-
+            % if noise ratio still above acceptable threshold, apply notch
+            % filter
+            if clean_log.cleanline.analytics.ratioNoiseAfter > step_cfg.line_noise_ratio && step_cfg.line_noise_fb_notch
+                clean_log.fallback_to_notch = true;
+                method = 'notch';
+                helpers.log_msg_default(sprintf('\tLine Noise Removal: After Zap-/Cleanline 50 Hz noise ratio at %d. Applying notch filter.', clean_log.cleanline.analytics.ratioNoiseAfter(1)));
+            end
         end
     end
-
     if strcmp(method, "notch")
         % use EEGLab notch filter?
     end
@@ -3282,7 +3291,7 @@ try
 catch ME
     EEG.data = original_data;
     did_apply = false;
-    helpers.log_msg_default(sprintf('remove_line_noise_from_subset failed: (function: %s, line: %d)', ME.message, ME.stack(1).name, ME.stack(1).line));
+    helpers.log_msg_default(sprintf('remove_line_noise_from_subset failed: %s (function: %s, line: %d)', ME.message, ME.stack(1).name, ME.stack(1).line));
     return
 end
 
