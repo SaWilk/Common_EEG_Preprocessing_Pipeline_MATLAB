@@ -3269,9 +3269,6 @@ try
             clean_log.cleanline.analytics.ratioNoiseAfter = [];
 
             for f = freqs % calculate noise ratio for each frequency and append to log
-                noise_idx = (psd_freqs>f-0.1 & psd_freqs<f+0.1);
-                surround_idx = (psd_freqs>f+(detect_winSize/6) & psd_freqs<f+(detect_winSize/2));
-                clean_log.cleanline.analytics.ratioNoiseBefore(end+1) = 10^((mean(mean(pxx_log_before(noise_idx,:),2)) - mean(pxx_log_before(surround_idx,:),'all'))/10);
                 clean_log.cleanline.analytics.ratioNoiseAfter(end+1)  = 10^((mean(mean(pxx_log_after(noise_idx,:),2)) - mean(pxx_log_after(surround_idx,:),'all'))/10);
             end
 
