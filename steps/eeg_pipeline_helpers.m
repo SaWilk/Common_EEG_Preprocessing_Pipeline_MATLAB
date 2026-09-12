@@ -3183,7 +3183,7 @@ try
     end
     
     if strcmp(method, "zapline")  
-        if ~any(cellfun(@(x) contains(x, 'zapline'), {plugs.name}))
+        if ~any(cellfun(@(x) contains(x, 'zapline'), {plugs.name})) % check if zapline plugin installed, otherwise use cleanline
             helpers.log_msg_default('prep03_untilica: WARNING zapline-plus was not found on path, continuing with cleanline.');
             method = 'cleanline';
         else
@@ -3192,8 +3192,8 @@ try
                 clean_data_with_zapline_plus(EEG_tmp.data, fs, struct('noisefreqs', freqs, 'plotResults', false, 'saveSpectra', true));
             clean_log.zapline.applied = true;
             
-            if clean_log.zapline.analytics.ratioNoiseClean > step_cfg.line_noise_ratio
-                if step_cfg.line_noise_fb_cleanline
+            if clean_log.zapline.analytics.ratioNoiseClean > step_cfg.line_noise_ratio % check if noise ratio above acceptable threshold
+                if step_cfg.line_noise_fb_cleanline % check if fallback to cleanline allowed
                     clean_log.fallback_to_cleanline = true;
                     method = 'cleanline';
                     helpers.log_msg_default('\tLine Noise Removal: Zapline did not work optimally, using cleanline in next step.');
@@ -3207,7 +3207,7 @@ try
     end
    
     if strcmp(method, "cleanline")
-        if ~any(cellfun(@(x) contains(lower(x), 'cleanline'),{plugs.name}))
+        if ~any(cellfun(@(x) contains(lower(x), 'cleanline'),{plugs.name})) % check if cleanline plugin installed
             if step_cfg.line_noise_fb_notch
                 clean_log.fallback_to_cleanline = false;
                 clean_log.fallback_to_notch     = true;
@@ -3222,22 +3222,24 @@ try
             clean_log.cleanline.analytics = struct();
 
             if isfield(clean_log, 'zapline') && isfield(clean_log.zapline, 'config')
+                % if zapline was applied, take parameters for noise ratio calculation from there
                 winSize = clean_log.zapline.config.winSizeCompleteSpectrum;
                 detect_winSize = clean_log.zapline.config.detectionWinsize;
                 pxx_log_before = clean_log.zapline.analytics.cleanSpectrumLog;
                 psd_freqs = clean_log.zapline.analytics.frequencies;
             else
-                winSize = floor(length(EEG_tmp.data)/8);
+                % otherwise use the same logic to calculate the noise ratio as in zapline
+                winSize = floor(length(EEG_tmp.data)/8/fs);
                 detect_winSize = 6;
-                [pxx_log_before, psd_freqs] = pwelch(EEG_tmp.data,hanning(winSize,[],[],fs));
+                [pxx_log_before, psd_freqs] = pwelch(EEG_tmp.data',hanning(winSize*fs),[],[],fs);
                 pxx_log_before = 10*log10(pxx_log_before);
+                clean_log.cleanline.analytics.rawSpectrumLog = pxx_log_before;
+                clean_log.cleanline.analytics.frequencies = psd_freqs;
             end
 
-            %% pop_cleanline tries to call on function that has same name in clean_rawdata, but are different...
-
+            % make sure cleanline calls functions from own path
             cleanline_dir = fullfile(plugin_path, plugs(find(cellfun(@(x) contains(lower(x), 'cleanline'),{plugs.name}))).name);
-
-            addpath(genpath(cleanline_dir), '-begin');   % puts it first on the path
+            addpath(genpath(cleanline_dir), '-begin');   % puts it first on matlab paths
 
             EEG_tmp = pop_cleanline(EEG_tmp, ...
                 'bandwidth',        bandwidth_hz, ...
@@ -3257,21 +3259,31 @@ try
                 'winstep',          winstep_sec);
             
             clean_log.cleanline.applied = true;
-            %% throws error: too many input arguments
-            pxx_log_after = pwelch(EEG_tmp.data,hanning(winSize,[],[],fs));
+
+            % calculate power spectrum after cleanline
+            pxx_log_after = pwelch(single(EEG_tmp.data)',hanning(winSize*fs),[],[],fs);
             pxx_log_after = 10*log10(pxx_log_after);
 
-            for f = freqs
+            clean_log.cleanline.analytics.cleanSpectrumLog = pxx_log_after;
+            clean_log.cleanline.analytics.ratioNoiseBefore = [];
+            clean_log.cleanline.analytics.ratioNoiseAfter = [];
+
+            for f = freqs % calculate noise ratio for each frequency and append to log
                 noise_idx = (psd_freqs>f-0.1 & psd_freqs<f+0.1);
                 surround_idx = (psd_freqs>f+(detect_winSize/6) & psd_freqs<f+(detect_winSize/2));
-                ratioNoiseBefore = 10^((mean(mean(pxx_log_before(noise_idx,:),2)) - mean(pxx_raw_log(surround_idx,:),'all'))/10);
-                ratioNoiseAfter  = 10^((mean(mean(pxx_log_after(noise_idx,:),2)) - mean(pxx_clean_log(surround_idx,:),'all'))/10);
+                clean_log.cleanline.analytics.ratioNoiseBefore(end+1) = 10^((mean(mean(pxx_log_before(noise_idx,:),2)) - mean(pxx_log_before(surround_idx,:),'all'))/10);
+                clean_log.cleanline.analytics.ratioNoiseAfter(end+1)  = 10^((mean(mean(pxx_log_after(noise_idx,:),2)) - mean(pxx_log_after(surround_idx,:),'all'))/10);
             end
 
-
+            % if noise ratio still above acceptable threshold, apply notch filter
+            % filter
+            if clean_log.cleanline.analytics.ratioNoiseAfter > step_cfg.line_noise_ratio && step_cfg.line_noise_fb_notch
+                clean_log.fallback_to_notch = true;
+                method = 'notch';
+                helpers.log_msg_default(sprintf('\tLine Noise Removal: After Zap-/Cleanline 50 Hz noise ratio at %d. Applying notch filter.', clean_log.cleanline.analytics.ratioNoiseAfter(1)));
+            end
         end
     end
-
     if strcmp(method, "notch")
         % use EEGLab notch filter?
     end
@@ -3282,7 +3294,7 @@ try
 catch ME
     EEG.data = original_data;
     did_apply = false;
-    helpers.log_msg_default(sprintf('remove_line_noise_from_subset failed: (function: %s, line: %d)', ME.message, ME.stack(1).name, ME.stack(1).line));
+    helpers.log_msg_default(sprintf('remove_line_noise_from_subset failed: %s (function: %s, line: %d)', ME.message, ME.stack(1).name, ME.stack(1).line));
     return
 end
 
