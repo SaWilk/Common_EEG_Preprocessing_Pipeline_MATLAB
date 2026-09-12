@@ -3135,7 +3135,7 @@ if nargin >= 5 && ~isempty(label_for_log)
 end
 end
 
-function [EEG, did_apply, clean_log] = remove_line_noise_from_subset_impl(EEG, subset_indices, step_cfg, helpers)
+function [EEG, did_apply, clean_log] = remove_line_noise_from_subset_impl(EEG, subset_indices, step_cfg, plugin_path, helpers)
 did_apply = false;
 clean_log = struct();
 
@@ -3150,6 +3150,7 @@ else
     return
 end
 
+plugs = dir(fullfile(plugin_path, '*line*'));
 original_data = EEG.data;
 
 % Backward-compatible fallbacks in case older configs are used
@@ -3180,9 +3181,9 @@ try
         log_msg_default_impl('\tLine Noise Removal: WARNING Specified frequencies below nyquist.');
         return;
     end
-
-    if strcmp(method, "zapline")   
-        if exist('clean_data_with_zapline_plus.m', 'file') ~= 2
+    
+    if strcmp(method, "zapline")  
+        if ~any(cellfun(@(x) contains(x, 'zapline'), {plugs.name}))
             helpers.log_msg_default('prep03_untilica: WARNING zapline-plus was not found on path, continuing with cleanline.');
             method = 'cleanline';
         else
@@ -3206,7 +3207,7 @@ try
     end
    
     if strcmp(method, "cleanline")
-        if exist('cleanline.m', 'file') ~= 2  
+        if ~any(cellfun(@(x) contains(lower(x), 'cleanline'),{plugs.name}))
             if step_cfg.line_noise_fb_notch
                 clean_log.fallback_to_cleanline = false;
                 clean_log.fallback_to_notch     = true;
@@ -3234,6 +3235,10 @@ try
 
             %% pop_cleanline tries to call on function that has same name in clean_rawdata, but are different...
 
+            cleanline_dir = fullfile(plugin_path, plugs(find(cellfun(@(x) contains(lower(x), 'cleanline'),{plugs.name}))).name);
+
+            addpath(genpath(cleanline_dir), '-begin');   % puts it first on the path
+
             EEG_tmp = pop_cleanline(EEG_tmp, ...
                 'bandwidth',        bandwidth_hz, ...
                 'chanlist',         1:size(EEG_tmp.data, 1), ...
@@ -3252,7 +3257,7 @@ try
                 'winstep',          winstep_sec);
             
             clean_log.cleanline.applied = true;
-            
+            %% throws error: too many input arguments
             pxx_log_after = pwelch(EEG_tmp.data,hanning(winSize,[],[],fs));
             pxx_log_after = 10*log10(pxx_log_after);
 
