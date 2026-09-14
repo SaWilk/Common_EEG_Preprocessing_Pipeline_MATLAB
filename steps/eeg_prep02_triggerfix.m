@@ -29,6 +29,7 @@ try
     % Paradigm triggerfix config
     % ---------------------------------------------------------------------
     paradigm_name = "MyParadigm";
+    paradigm_name = "myParadigm";
     % if isfield(cfg, 'prep_02') && isstruct(cfg.prep_02) && isfield(cfg.prep_02, 'paradigm_name')
     %     paradigm_name = char(string(cfg.prep_02.paradigm_name));
     % elseif isfield(step_cfg, 'paradigm_name')
