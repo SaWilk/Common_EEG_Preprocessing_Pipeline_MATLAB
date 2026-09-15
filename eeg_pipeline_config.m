@@ -481,15 +481,36 @@ cfg.prep_03 = struct();
 % dataset and how many remain.
 cfg.prep_03.write_run_summary_table = true;
 
-% crop dataset around specifically defined triggers, e.g. exp start and exp
-% end
-cfg.prep_03.crop_to_task_markers = false; %if this is set to false, the following lines are irrelevant
-cfg.prep_03.substitute_crop_markers = true; % if true, the crop_start_marker and crop_end_marker will be replaced by the first and last sample of the task, respectively
-cfg.prep_03.crop_start_marker    = 'S 91'; % beginning of cropping area, can also handly multiple markers, e.g. {'S 91','S 92'} to crop from first occurence of either marker
-cfg.prep_03.crop_end_marker      = 'S 97'; % end of cropping area
-cfg.prep_03.crop_padding_sec     = [0 0];
+% -------------------------------------------------------------------------
+% CROP DATASET (OPTIONAL)
+% -------------------------------------------------------------------------
+% Keep one continuous section between a start and an end marker.
+% Remove data before and after this section.
+% Pauses within the section are kept.
 
+% Enable cropping. When false, the crop settings below are ignored.
+cfg.prep_03.crop_to_task_markers = false;
+
+% If a marker is missing, use the corresponding recording boundary:
+% first sample for a missing start, last sample for a missing end.
+% Existing markers are kept. If both are missing, keep the full recording.
+% If false, stop Step 03 when either marker is missing.
+cfg.prep_03.substitute_crop_markers = true;
+
+% Event codes defining the section to keep.
+% For each boundary, use the first matching entry in EEG.event.
+% Multiple alternative codes are supported, e.g. {'S 91', 'S 92'}, to crop from first occurence of either marker.
+% The end must occur after the selected start.
+cfg.prep_03.crop_start_marker = 'S 91';
+cfg.prep_03.crop_end_marker   = 'S 97';
+
+% Additional seconds to keep [before start, after end].
+% The window is limited to the available recording.
+cfg.prep_03.crop_padding_sec = [0 0];
+
+% -------------------------------------------------------------------------
 % IMPORTANT make sure these include your channel labels for AUX/EOG, otherwise channels will be included as EEG in ICA
+% -------------------------------------------------------------------------
 cfg.prep_03.eog_channel_labels     = {'IO1','IO2','LO1','LO2'}; % ocular channels (detecting eye movements/blinks)
 cfg.prep_03.scr_channel_labels     = {'EDA', 'SCR', 'GSR_MR_100_xx'}; % skin conductance response channels
 cfg.prep_03.startle_channel_labels = {'Startle'}; % Startle response channels
