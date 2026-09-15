@@ -1,7 +1,8 @@
 % =========================================================================
 % TEST: Count bad-channel flags across epoched EEG datasets
 % =========================================================================
-
+% Copyright (C) 2025–2026 Saskia Wilken and contributors
+%
 clear; clc;
 
 base_dir = 'Z:\pb\KLPSY1\KLPSY1-RTG\MATRICS\derivatives\preprocessed_eeg\06_epoched_runica';

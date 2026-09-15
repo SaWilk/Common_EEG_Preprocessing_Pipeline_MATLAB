@@ -1,5 +1,7 @@
 function step_out = eeg_prep02_triggerfix(subj_id, cfg, paths, helpers)
 % EEG_PREP02_TRIGGERFIX
+% Copyright (C) 2025–2026 Saskia Wilken and contributors
+%
 %
 % Step 02 of the EEG pipeline.
 %

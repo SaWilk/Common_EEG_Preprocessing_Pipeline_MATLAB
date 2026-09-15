@@ -1,5 +1,7 @@
 function step_out = eeg_prep04_ica(subj_id, cfg, paths, helpers)
 % EEG_PREP04_ICA
+% Copyright (C) 2025–2026 Saskia Wilken and contributors
+%
 %
 % Run ICA on *_forica.set and transfer weights to *_preica.set.
 %
