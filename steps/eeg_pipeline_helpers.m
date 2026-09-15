@@ -597,10 +597,11 @@ else
                 strlength(string(cfg.prep_01.raw_eeg_regex)) > 0
             raw_regex = char(string(cfg.prep_01.raw_eeg_regex));
         else
-            raw_regex = '^.*?(\d{3})(?:_(\d{3}))?\.vhdr$';
+            raw_regex = '^.*?(\d{3})(?:_(\d{3}))?\.vhdr$'; %raw_regex = '^.*?(\d{3})(?:_(\d{3}))?\.vhdr$';
         end
-
-        dir_info = dir(fullfile(source_root, '*.vhdr'));
+        
+        dir_info = dir(fullfile(source_root, '**', '*.vhdr'));
+        %dir_info = dir(fullfile(source_root, '*.vhdr'));
         tmp_ids = {};
 
         for k = 1:numel(dir_info)
@@ -844,7 +845,7 @@ paths.logs_dir         = resolve_logs_dir_impl(cfg);
 
 paths.subj_label = sprintf('sub-%s', subj_id);
 
-session_label = "01";
+session_label = ""; % 01
 if isfield(cfg, 'bids') && isfield(cfg.bids, 'session_label') && strlength(string(cfg.bids.session_label)) > 0
     session_label = string(cfg.bids.session_label);
 end
@@ -2243,10 +2244,14 @@ event_codes = strings(0,1);
 
 for k = 1:numel(EEG.event)
     code = normalize_trigger_type_impl(EEG.event(k).type);
+
     if strcmpi(code, 'boundary')
         continue;
     end
 
+    if matches_any_prefix_impl(code, step_cfg.baseline_open_marker_prefixes) || ...
+            matches_any_prefix_impl(code, step_cfg.baseline_closed_marker_prefixes) || ...
+            matches_any_exact_impl(code, step_cfg.baseline_end_markers)
     is_condition_marker = false;
     for c = 1:numel(condition_names)
         if matches_any_prefix_impl(code, marker_prefixes{c})
@@ -3142,12 +3147,10 @@ function [EEG, did_apply] = apply_pop_cleanline_to_subset_impl(EEG, subset_indic
 did_apply = false;
 
 if isempty(subset_indices)
-    helpers.log_msg_default('prep03_untilica: WARNING no channel indices available for pop_cleanline.');
     return;
 end
 
 if exist('pop_cleanline', 'file') ~= 2
-    helpers.log_msg_default('prep03_untilica: WARNING pop_cleanline was not found on path.');
     return;
 end
 
@@ -3618,6 +3621,21 @@ end
 
 EEG_work = EEG_in;
 EEG_work = ensure_erplab_epoch_eventlist_compat_impl(EEG_work);
+
+%% LL: add-on to save original trial number for trial-wise analysis combined with behavioral data
+% --- store original trial index per epoch (before pop_rejepoch removes trials) ---
+try
+    if isfield(EEG_work,'epoch') && ~isempty(EEG_work.epoch) && isfield(EEG_work,'trials')
+        nT = EEG_work.trials;
+        nE = numel(EEG_work.epoch);
+        for e = 1:min(nT, nE)
+            EEG_work.epoch(e).orig_trial_index = e; % 1..nTrials before rejection
+        end
+    end
+catch
+    % If metadata write fails, continue preprocessing
+end
+%% LL add-on end
 
 if ~isfield(EEG_work, 'reject') || ~isstruct(EEG_work.reject)
     EEG_work.reject = struct();
