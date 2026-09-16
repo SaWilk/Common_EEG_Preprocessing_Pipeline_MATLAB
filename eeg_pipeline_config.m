@@ -166,8 +166,12 @@ cfg.env.hostname     = helpers.get_hostname();         % host name
 cfg.env.is_slurm      = ~isempty(getenv('SLURM_JOB_ID')); % true if running under SLURM
 cfg.env.slurm_job_id  = string(helpers.get_env_first_nonempty({'SLURM_JOB_ID'}));       % SLURM job id
 cfg.env.slurm_cluster = string(helpers.get_env_first_nonempty({'SLURM_CLUSTER_NAME'})); % SLURM cluster name
-% Note: since MATLAB does not run with SLURM on hummel hpc currently
-% (22.05.2026), these functions are not tested.
+
+% SLURM execution was tested on the University of Leipzig HPC with MATLAB R2024b.
+% The pipeline was submitted through an external sbatch script and executed
+% successfully on a compute node. The fields above record the SLURM context
+% (job ID and cluster name: is_slurm = 1, cluster sc) in the pipeline log.
+% Job submission and resource requests were handled outside MATLAB.
 
 % =========================================================================
 % RESOLVED PATHS -- do not edit, will be resolved at runtime based on profile and environment
