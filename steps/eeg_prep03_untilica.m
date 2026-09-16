@@ -637,12 +637,19 @@ end
 [eeg_idx, eog_idx, ~] = helpers.get_channel_indices_by_type(EEG);
 filter_idx = sort(unique([eeg_idx(:); eog_idx(:)]));
 
+if isempty(filter_idx) % messages might need to be passed to prep03 script, not written here
+    filter_idx = EEG.chanlocs;
+    helpers.log_msg_default('prep03_untilica: WARNING channel indices not available, continuing with all channels.');
+end
 
 line_noise_applied = false;
-if string(step_cfg.line_noise_method) == "pop_cleanline"
-    [EEG, line_noise_applied] = helpers.apply_pop_cleanline_to_subset(EEG, filter_idx, step_cfg);
+
+if string(step_cfg.line_noise_method) ~= "none"
+    plugin_path = fullfile(cfg.toolboxes.("path_eeglab_"+cfg.env.mode), 'plugins');
+
+    [EEG, line_noise_applied, line_noise_log] = helpers.remove_line_noise_from_subset(EEG, filter_idx, step_cfg, plugin_path, helpers);
     if ~line_noise_applied
-        helpers.log_msg_default('prep03_untilica: WARNING pop_cleanline did not apply successfully.');
+        helpers.log_msg_default('prep03_untilica: WARNING line noise removal incomplete or failed.');
     end
 end
 

@@ -20,6 +20,7 @@ function cfg = eeg_pipeline_config()
 %   - FASTER
 %   - (AMICA - optional)
 %   - (cleanline - optional)
+%   - (zapline-plus - optional) https://eeglab.org/plugins/zapline-plus/ 
 
 % Saskia Wilken Dec 2025
 
@@ -571,10 +572,11 @@ cfg.prep_03.mastoid_channel_labels    = {'T9','T10'};
 % Line Noise Filtering
 % -------------------------------------------------------------------------
 
-cfg.prep_03.line_noise_method         = "pop_cleanline"; % "pop_cleanline" | "off"
-cfg.prep_03.line_noise_frequencies_hz = [50 100]; % [50 100] in europe, set to [60 120] in US
-
-cfg.prep_03.ica_prep_epoch_rejection_method = "erplab"; % "erplab" | "faster_ptp" | "mad_variance" | "none"
+cfg.prep_03.line_noise_method         = "zapline"; % "zapline" | "pop_cleanline" | "notch" | "off"
+cfg.prep_03.line_noise_frequencies_hz = [50 100]; % in europe, set to [60 120] in US
+cfg.prep_03.line_noise_ratio          = 1;
+cfg.prep_03.line_noise_fb_cleanline   = true; % use cleanline if zapline fails to remove line noise (# TODO: criterion to be determined)
+cfg.prep_03.line_noise_fb_notch       = false; % if fallback is used, apply notch filter to line noise frequencies if both zapline and cleanline fail
 
 cfg.prep_03.pop_cleanline_bandwidth_hz      = 4;
 cfg.prep_03.pop_cleanline_p_value           = 0.01;
@@ -588,6 +590,7 @@ cfg.prep_03.pop_cleanline_norm_spectrum     = 0;
 cfg.prep_03.pop_cleanline_computepower      = 0;
 cfg.prep_03.pop_cleanline_verbose           = false;
 
+cfg.prep_03.ica_prep_epoch_rejection_method = "erplab"; % "erplab" | "faster_ptp" | "mad_variance" | "none"
 % ERPLAB ICA-prep rejection.
 % Same criteria as final Step 06 rejection, but more lenient:
 %   final:     +/-200 uV, 50 uV step, 100 ms flatline
