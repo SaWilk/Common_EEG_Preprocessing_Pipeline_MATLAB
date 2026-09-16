@@ -5657,7 +5657,8 @@ function step_cfg = default_prep03_cfg_impl()
 step_cfg = struct();
 
 % Crop
-step_cfg.crop_to_task_markers = true;
+step_cfg.crop_to_task_markers = false;
+step_cfg.substitute_crop_markers = true;
 step_cfg.crop_start_marker    = 'S 91';
 step_cfg.crop_end_marker      = 'S 97';
 step_cfg.crop_padding_sec     = [0 0];
