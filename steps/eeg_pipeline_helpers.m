@@ -109,6 +109,31 @@ helpers.save_intermediate_set                  = @save_intermediate_set_impl;
 helpers.apply_hard_epoch_threshold_rejection   = @apply_hard_epoch_threshold_rejection_impl;
 helpers.apply_fallback_epoch_rejection         = @apply_fallback_epoch_rejection_impl;
 helpers.create_baseline_condition_datasets     = @create_baseline_condition_datasets_impl;
+helpers.normalize_event_types                 = @normalize_event_types_impl;
+helpers.normalize_epoching_mode_value         = @normalize_epoching_mode_value_impl;
+helpers.get_channel_indices_by_type           = @get_channel_indices_by_type_impl;
+helpers.apply_reference_mode                  = @apply_reference_mode_impl;
+helpers.build_epoching_output_paths           = @build_epoching_output_paths_impl;
+helpers.normalize_event_list                  = @normalize_event_list_impl;
+helpers.get_present_events                    = @get_present_events_impl;
+helpers.preview_event_types                   = @preview_event_types_impl;
+helpers.evaluate_min_trials_per_condition     = @evaluate_min_trials_per_condition_impl;
+helpers.build_step06_summary_row              = @build_step06_summary_row_impl;
+helpers.build_step06_summary_rows             = @build_step06_summary_rows_impl;
+helpers.build_bad_channel_qc_table            = @build_bad_channel_qc_table_impl;
+helpers.build_epoch_rejection_qc_table        = @build_epoch_rejection_qc_table_impl;
+helpers.write_qc_table                        = @write_qc_table_impl;
+helpers.resolve_qc_timestamp                  = @resolve_qc_timestamp_impl;
+helpers.collect_bad_channel_qc                = @collect_bad_channel_qc_impl;
+helpers.collect_prep06_summary                = @collect_prep06_summary_impl;
+helpers.build_ica_training_summary            = @build_ica_training_summary_impl;
+helpers.write_ica_training_summary            = @write_ica_training_summary_impl;
+helpers.collect_prep03_summary                = @collect_prep03_summary_impl;
+helpers.build_high_epoch_rejection_warning    = @build_high_epoch_rejection_warning_impl;
+helpers.save_intermediate_set                 = @save_intermediate_set_impl;
+helpers.apply_hard_epoch_threshold_rejection  = @apply_hard_epoch_threshold_rejection_impl;
+helpers.apply_fallback_epoch_rejection        = @apply_fallback_epoch_rejection_impl;
+helpers.create_baseline_condition_datasets    = @create_baseline_condition_datasets_impl;
 helpers.resolve_baseline_condition_definitions = @resolve_baseline_condition_definitions_impl;
 helpers.build_epoching_output_stem             = @build_epoching_output_stem_impl;
 helpers.finalize_epoched_dataset               = @finalize_epoched_dataset_impl;
@@ -594,10 +619,11 @@ else
                 strlength(string(cfg.prep_01.raw_eeg_regex)) > 0
             raw_regex = char(string(cfg.prep_01.raw_eeg_regex));
         else
-            raw_regex = '^.*?(\d{3})(?:_(\d{3}))?\.vhdr$';
+            raw_regex = '^.*?(\d{3})(?:_(\d{3}))?\.vhdr$'; %raw_regex = '^.*?(\d{3})(?:_(\d{3}))?\.vhdr$';
         end
-
-        dir_info = dir(fullfile(source_root, '*.vhdr'));
+        
+        dir_info = dir(fullfile(source_root, '**', '*.vhdr'));
+        %dir_info = dir(fullfile(source_root, '*.vhdr'));
         tmp_ids = {};
 
         for k = 1:numel(dir_info)
@@ -841,7 +867,7 @@ paths.logs_dir         = resolve_logs_dir_impl(cfg);
 
 paths.subj_label = sprintf('sub-%s', subj_id);
 
-session_label = "01";
+session_label = ""; % 01
 if isfield(cfg, 'bids') && isfield(cfg.bids, 'session_label') && strlength(string(cfg.bids.session_label)) > 0
     session_label = string(cfg.bids.session_label);
 end
@@ -2240,10 +2266,14 @@ event_codes = strings(0,1);
 
 for k = 1:numel(EEG.event)
     code = normalize_trigger_type_impl(EEG.event(k).type);
+
     if strcmpi(code, 'boundary')
         continue;
     end
 
+    if matches_any_prefix_impl(code, step_cfg.baseline_open_marker_prefixes) || ...
+            matches_any_prefix_impl(code, step_cfg.baseline_closed_marker_prefixes) || ...
+            matches_any_exact_impl(code, step_cfg.baseline_end_markers)
     is_condition_marker = false;
     for c = 1:numel(condition_names)
         if matches_any_prefix_impl(code, marker_prefixes{c})
@@ -3148,6 +3178,13 @@ elseif contains(lower(step_cfg.line_noise_method), 'notch')
 else
     helpers.log_msg_default(sprintf('\tLine Noise Removal: ERROR removal method - %s - not recognized.', step_cfg.line_noise_method));
     return
+
+if isempty(subset_indices)
+    return;
+end
+
+if exist('pop_cleanline', 'file') ~= 2
+    return;
 end
 
 plugs = dir(fullfile(plugin_path, '*line*'));
@@ -3708,6 +3745,21 @@ end
 
 EEG_work = EEG_in;
 EEG_work = ensure_erplab_epoch_eventlist_compat_impl(EEG_work);
+
+%% LL: add-on to save original trial number for trial-wise analysis combined with behavioral data
+% --- store original trial index per epoch (before pop_rejepoch removes trials) ---
+try
+    if isfield(EEG_work,'epoch') && ~isempty(EEG_work.epoch) && isfield(EEG_work,'trials')
+        nT = EEG_work.trials;
+        nE = numel(EEG_work.epoch);
+        for e = 1:min(nT, nE)
+            EEG_work.epoch(e).orig_trial_index = e; % 1..nTrials before rejection
+        end
+    end
+catch
+    % If metadata write fails, continue preprocessing
+end
+%% LL add-on end
 
 if ~isfield(EEG_work, 'reject') || ~isstruct(EEG_work.reject)
     EEG_work.reject = struct();
@@ -5903,6 +5955,10 @@ step_cfg.ica_prep_faster_ptp_epoch_rejection.ptp_uV_thresh = 100;
 % epochs are removed.
 step_cfg.ica_prep_faster_ptp_epoch_rejection.max_reject_prop = 1.00;
 
+% ICA-training summary CSV; metadata/logging are retained when disabled.
+% The timestamp and delimiter use the shared cfg.qc settings.
+step_cfg.write_run_summary_table = true;
+
 % Overwrite override
 step_cfg.overwrite_mode = "";
 end
@@ -6505,4 +6561,138 @@ if strcmp(pattern, '*')
 else
     tf = strcmp(value, pattern);
 end
+end
+
+function summary = build_ica_training_summary_impl( ...
+    EEG, n_before, is_epoched, subj_id, run_base, method, rejection_status, ...
+    status, output_set_path, cfg, step_cfg)
+% Summarize rejected and remaining epochs in one ICA training dataset.
+
+% Count the remaining epochs.
+% Use NaN when epoch counts do not apply to continuous data.
+n_kept = NaN;
+
+if is_epoched
+    n_kept = EEG.trials;
+
+    if isempty(EEG.data)
+        n_kept = 0;
+    end
+else
+    n_before = NaN;
+end
+
+% Calculate how many epochs were removed.
+n_rejected = n_before - n_kept;
+
+% Calculate the rejected fraction: 0.05 means 5%.
+% Leave it undefined when there were no epochs to begin with.
+prop_rejected = NaN;
+
+if n_before > 0
+    prop_rejected = n_rejected / n_before;
+end
+
+% Store the counts together with the dataset name and settings.
+summary = struct( ...
+    'qc_timestamp', resolve_qc_timestamp_impl(cfg), ...
+    'subject_id', string(sprintf('sub-%s', subj_id)), ...
+    'run_base', string(run_base), ...
+    'rejection_method', string(method), ...
+    'rejection_status', string(rejection_status), ...
+    'status', string(status), ...
+    'data_is_epoched', logical(is_epoched), ...
+    'n_epochs_total', n_before, ...
+    'n_rejected_total', n_rejected, ...
+    'n_epochs_kept', n_kept, ...
+    'prop_rejected_total', prop_rejected, ...
+    'output_set_path', string(output_set_path), ...
+    'settings_json', string(jsonencode(step_cfg)));
+end
+
+function out_path = write_ica_training_summary_impl(summary, cfg, step_cfg, helpers)
+% Write the training summary to the log and, if enabled, to a CSV file.
+
+out_path = '';
+
+% Report the counts in the pipeline log.
+helpers.log_msg_default( ...
+    ['prep03_untilica: %s | %s | training summary | method=%s | ' ...
+     'rejected=%g/%g | kept=%g | prop_rejected=%g | rejection_status=%s | status=%s'], ...
+    char(summary.subject_id), char(summary.run_base), ...
+    char(summary.rejection_method), summary.n_rejected_total, ...
+    summary.n_epochs_total, summary.n_epochs_kept, ...
+    summary.prop_rejected_total, char(summary.rejection_status), char(summary.status));
+
+% Stop here if CSV output is switched off.
+if ~getfield_safe_impl(step_cfg, 'write_run_summary_table', true)
+    return;
+end
+
+% Use the pipeline's QC folder and CSV separator.
+[qc_root, ~, delimiter] = resolve_qc_collection_context_impl(cfg);
+
+% Include the timestamp and dataset name in the filename.
+out_path = fullfile(qc_root, 'ica_training', sprintf( ...
+    '%s_%s_prep03_run_summary.csv', ...
+    char(summary.qc_timestamp), char(summary.run_base)));
+
+% Save the summary using the existing QC writer.
+write_qc_table_impl(struct2table(summary), out_path, delimiter);
+end
+
+function [t_all, output_paths] = collect_prep03_summary_impl(cfg_or_qc_root)
+% Combine the latest available training summaries across subjects and runs.
+
+if nargin < 1
+    cfg_or_qc_root = [];
+end
+
+% Find the QC folder and use the pipeline's CSV settings.
+[qc_root, timestamp, delimiter] = ...
+    resolve_qc_collection_context_impl(cfg_or_qc_root);
+
+training_root = fullfile(qc_root, 'ica_training');
+
+t_all = table();
+output_paths = {};
+
+% Return empty outputs if no training-summary folder exists.
+if exist(training_root, 'dir') ~= 7
+    return;
+end
+
+% Find the individual run summaries.
+files = dir(fullfile(training_root, '**', '*_prep03_run_summary.csv'));
+
+% Use the most recently modified readable file for each subject and run.
+t_all = read_latest_qc_tables_impl( ...
+    files, {'subject_id','run_base'}, delimiter);
+
+if isempty(t_all)
+    return;
+end
+
+% Check that the required summary columns are present.
+required = { ...
+    'subject_id', 'run_base', 'rejection_method', 'rejection_status', ...
+    'status', 'n_epochs_total', 'n_rejected_total', ...
+    'n_epochs_kept', 'prop_rejected_total'};
+
+if ~all(ismember(required, t_all.Properties.VariableNames))
+    error('prep03_summary:InvalidSchema', ...
+        'Selected Step-03 summaries are missing required columns below: %s', ...
+        training_root);
+end
+
+% Sort the results by subject and run.
+t_all = sortrows(t_all, {'subject_id','run_base'});
+
+% Save the combined table.
+out_path = fullfile(training_root, sprintf( ...
+    '%s_prep03_ica_training_all_subjects.csv', char(timestamp)));
+
+write_qc_table_impl(t_all, out_path, delimiter);
+
+output_paths = {out_path};
 end
