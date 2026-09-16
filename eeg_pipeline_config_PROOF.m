@@ -1,6 +1,8 @@
 % =========================================================================
 % FILE: eeg_pipeline_config_PROOF.m
 % =========================================================================
+% Copyright (C) 2025–2026 Saskia Wilken and contributors
+%
 function cfg = eeg_pipeline_config_PROOF()
 % EEG_PIPELINE_CONFIG
 %
@@ -50,31 +52,25 @@ cfg.qc.table_delimiter = ';';
 % Project identity
 % -------------------------------------------------------------------------
 cfg.pipeline = struct();
-cfg.pipeline.name        = "matrics_classical_pipeline"; % set recognizable name: project name used in cfg and logsheader
-cfg.pipeline.step_prefix = "eeg";                % step 02-06 function prefix, needed to find step-functions. Keep as "eeg" unless you have a good reason to change it.
+cfg.pipeline.name        = "matrics_classical_pipeline";
+cfg.pipeline.step_prefix = "eeg";
 
 cfg.constants = struct();
-cfg.constants.log_prefix_master = "run_eeg_pipeline_classical"; % master log filename prefix
+cfg.constants.log_prefix_master = "run_eeg_pipeline_classical";
 
 cfg.bids = struct();
-cfg.bids.dataset_folder_name = "BIDS_RTGMN_Classic";   % BIDS dataset folder name (if you have multiple datasets in the same raw folder)
-cfg.bids.task_label          = "classical";   % BIDS task label of EEG dataset
-cfg.bids.session_label       = "01";         % BIDS session label
+cfg.bids.dataset_folder_name = "BIDS_RTGMN_Classic";
+cfg.bids.task_label          = "classical";
+cfg.bids.session_label       = "01";
 
 % -------------------------------------------------------------------------
 % Profile / paths
-% Configure ALL machine-specific path profiles here.
-%
-% To add a new profile later:
-%   1) duplicate one block below
-%   2) give it a new name
-%   3) optionally set cfg.paths.profile_override to that name
 % -------------------------------------------------------------------------
 cfg.paths = struct();
 
-cfg.paths.branch_by_ica_method = true; % create separate 04/05/06 folders per ICA method
+cfg.paths.branch_by_ica_method = true;
 
-cfg.paths.profile_override = ""; % leave empty for automatic profile selection; "pc" | "server_windows" | "hpc_hummel"
+cfg.paths.profile_override = "";
 
 cfg.paths.profile_paths = struct();
 
@@ -87,16 +83,18 @@ cfg.paths.profile_paths.pc = struct( ...
 cfg.paths.profile_paths.server_windows = struct( ...
     'source_eeg_root',  'Z:\pb\KLPSY1\KLPSY1-RTG\PROOF - Data\Real\EEG\Classical', ...
     'source_beh_root',  'Z:\pb\KLPSY1\KLPSY1-RTG\PROOF - Data\Real\LOGFILES\Classical', ...
-    'bids_root',         'Z:\pb\KLPSY1\KLPSY1-RTG\MATRICS\sourcedata', ...
+    'bids_root',        'Z:\pb\KLPSY1\KLPSY1-RTG\MATRICS\sourcedata', ...
     'derivatives_root', 'Z:\pb\KLPSY1\KLPSY1-RTG\MATRICS\derivatives\preprocessed_eeg');
 
 cfg.paths.profile_paths.hpc_hummel = struct( ...
     'source_eeg_root',  '', ...
     'source_beh_root',  '', ...
-    'bids_root',        fullfile('/beegfs/u/bbf7366/sourcedata', char(cfg.bids.dataset_folder_name)), ...
-    'derivatives_root', '/beegfs/u/bbf7366/derivatives/preprocessed_eeg_classical');
+    'bids_root',        fullfile( ...
+        '/beegfs/u/bbf7366/sourcedata', ...
+        char(cfg.bids.dataset_folder_name)), ...
+    'derivatives_root', ...
+        '/beegfs/u/bbf7366/derivatives/preprocessed_eeg_classical');
 
-% only set these if paths deviate but you do not want to change the profile
 cfg.paths.bids_root_override        = "";
 cfg.paths.derivatives_root_override = "";
 cfg.paths.source_eeg_root_override  = "";
@@ -107,34 +105,42 @@ cfg.paths.source_beh_root_override  = "";
 % =========================================================================
 cfg.toolboxes = struct();
 
-cfg.toolboxes.path_eeglab_pc     = "K:\Wilken_Arbeitsordner\MATLAB\eeglab_current\eeglab2025.1.0"; % EEGLAB path on PC
-cfg.toolboxes.path_eeglab_server = "K:\Wilken_Arbeitsordner\MATLAB\eeglab_current\eeglab2025.1.0"; % EEGLAB path on server
-cfg.toolboxes.path_eeglab_hpc    = "/beegfs/u/bbf7366/toolboxes/eeglab2025.1.0";                   % EEGLAB path on HPC
+cfg.toolboxes.path_eeglab_pc = ...
+    "K:\Wilken_Arbeitsordner\MATLAB\eeglab_current\eeglab2025.1.0";
+cfg.toolboxes.path_eeglab_server = ...
+    "K:\Wilken_Arbeitsordner\MATLAB\eeglab_current\eeglab2025.1.0";
+cfg.toolboxes.path_eeglab_hpc = ...
+    "/beegfs/u/bbf7366/toolboxes/eeglab2025.1.0";
 
-cfg.toolboxes.path_faster_pc     = "K:\Wilken_Arbeitsordner\MATLAB\FASTER"; % FASTER path on PC
-cfg.toolboxes.path_faster_server = "K:\Wilken_Arbeitsordner\MATLAB\FASTER"; % FASTER path on server
-cfg.toolboxes.path_faster_hpc    = "/beegfs/u/bbf7366/toolboxes/FASTER";    % FASTER path on HPC
+cfg.toolboxes.path_faster_pc = ...
+    "K:\Wilken_Arbeitsordner\MATLAB\FASTER";
+cfg.toolboxes.path_faster_server = ...
+    "K:\Wilken_Arbeitsordner\MATLAB\FASTER";
+cfg.toolboxes.path_faster_hpc = ...
+    "/beegfs/u/bbf7366/toolboxes/FASTER";
 
-cfg.toolboxes.path_erplab_pc     = "K:\Wilken_Arbeitsordner\MATLAB\erplab13.00";
-cfg.toolboxes.path_erplab_server = "K:\Wilken_Arbeitsordner\MATLAB\erplab13.00";
-cfg.toolboxes.path_erplab_hpc    = "/beegfs/u/bbf7366/toolboxes/erplab";
+cfg.toolboxes.path_erplab_pc = ...
+    "K:\Wilken_Arbeitsordner\MATLAB\erplab13.00";
+cfg.toolboxes.path_erplab_server = ...
+    "K:\Wilken_Arbeitsordner\MATLAB\erplab13.00";
+cfg.toolboxes.path_erplab_hpc = ...
+    "/beegfs/u/bbf7366/toolboxes/erplab";
 
 cfg.toolboxes.erplab = struct();
 cfg.toolboxes.erplab.use_genpath = true;
 
-cfg.toolboxes.use_genpath = false; % add toolbox subfolders recursively
+cfg.toolboxes.use_genpath = false;
 
 cfg.toolboxes.eeglab = struct();
-cfg.toolboxes.eeglab.no_update_check_on_hpc = true; % suppress EEGLAB update checks on HPC
-cfg.toolboxes.eeglab.nogui = true;                  % start EEGLAB without GUI
+cfg.toolboxes.eeglab.no_update_check_on_hpc = true;
+cfg.toolboxes.eeglab.nogui = true;
 
 % -------------------------------------------------------------------------
 % Overwrite behavior
 % -------------------------------------------------------------------------
 cfg.io = struct();
-cfg.io.overwrite_mode          = "delete"; % "skip" | "delete" | "if_older_than"
-cfg.io.overwrite_if_older_than = "";       % cutoff date for "if_older_than", 
-% either "DD.MM.YYYY" or "YYYY-MM-DD", optionally with time in 24h format: HH:MM or HH:MM:SS 
+cfg.io.overwrite_mode          = "delete";
+cfg.io.overwrite_if_older_than = "";
 
 % =========================================================================
 % INTERNAL SETUP
@@ -148,31 +154,33 @@ cfg.root_dir  = root_dir;
 % =========================================================================
 % CONSTANTS
 % =========================================================================
-cfg.constants.valid_sub_id_regex = '^\d{3}$';          % valid subject IDs, default: three digits like "001"
-cfg.constants.log_prefix_subject = 'sub';              % subject log prefix
-cfg.constants.datestr_master     = 'yyyymmdd_HHMMSS';  % master log timestamp format
-cfg.constants.datestr_subject    = 'yyyymmdd_HHMMSS_FFF'; % subject log timestamp format
+cfg.constants.valid_sub_id_regex = '^\d{3}$';
+cfg.constants.log_prefix_subject = 'sub';
+cfg.constants.datestr_master     = 'yyyymmdd_HHMMSS';
+cfg.constants.datestr_subject    = 'yyyymmdd_HHMMSS_FFF';
 
 % =========================================================================
-% ENVIRONMENT  -- do not edit, will be automatically detected at runtime
+% ENVIRONMENT
 % =========================================================================
 cfg.env = struct();
-cfg.env.mode         = helpers.detect_env_mode();      % "pc" | "server" | "hpc"
-cfg.env.machine_kind = helpers.detect_machine_kind();  % concrete machine/profile family
-cfg.env.hostname     = helpers.get_hostname();         % host name
+cfg.env.mode         = helpers.detect_env_mode();
+cfg.env.machine_kind = helpers.detect_machine_kind();
+cfg.env.hostname     = helpers.get_hostname();
 
-cfg.env.is_slurm      = ~isempty(getenv('SLURM_JOB_ID')); % true if running under SLURM
-cfg.env.slurm_job_id  = string(helpers.get_env_first_nonempty({'SLURM_JOB_ID'}));       % SLURM job id
-cfg.env.slurm_cluster = string(helpers.get_env_first_nonempty({'SLURM_CLUSTER_NAME'})); % SLURM cluster name
-% Note: since MATLAB does not run with SLURM on hummel hpc currently
-% (22.05.2026), these functions are not tested.
+cfg.env.is_slurm = ~isempty(getenv('SLURM_JOB_ID'));
+cfg.env.slurm_job_id = string( ...
+    helpers.get_env_first_nonempty({'SLURM_JOB_ID'}));
+cfg.env.slurm_cluster = string( ...
+    helpers.get_env_first_nonempty({'SLURM_CLUSTER_NAME'}));
 
 % =========================================================================
-% RESOLVED PATHS -- do not edit, will be resolved at runtime based on profile and environment
+% RESOLVED PATHS
 % =========================================================================
-cfg.paths.profile = helpers.default_profile_for_mode(cfg.env.mode, cfg.env.machine_kind); % default profile by environment
+cfg.paths.profile = helpers.default_profile_for_mode( ...
+    cfg.env.mode, cfg.env.machine_kind);
 
-profile_env = helpers.get_env_first_nonempty({'EEG_PIPELINE_PROFILE'}); % optional env override
+profile_env = helpers.get_env_first_nonempty( ...
+    {'EEG_PIPELINE_PROFILE'});
 if strlength(profile_env) > 0
     cfg.paths.profile = string(profile_env);
 end
@@ -183,28 +191,30 @@ end
 
 profile_name = char(string(cfg.paths.profile));
 if ~isfield(cfg.paths.profile_paths, profile_name)
-    error('Unknown cfg.paths.profile="%s". Please define it in cfg.paths.profile_paths.', string(cfg.paths.profile));
+    error( ...
+        'Unknown cfg.paths.profile="%s". Define it in cfg.paths.profile_paths.', ...
+        string(cfg.paths.profile));
 end
 
 profile_cfg = cfg.paths.profile_paths.(profile_name);
 
-% -------------------------------------------------------------------------
-% Base paths from selected profile
-% -------------------------------------------------------------------------
 cfg.paths.source_eeg_root  = string(profile_cfg.source_eeg_root);
 cfg.paths.source_beh_root  = string(profile_cfg.source_beh_root);
 cfg.paths.bids_root        = string(profile_cfg.bids_root);
 cfg.paths.derivatives_root = string(profile_cfg.derivatives_root);
-cfg.paths.logs_dir = fullfile(fileparts(cfg.paths.derivatives_root), 'logs', 'runlog_pipeline'); % log folder in data-directory
+cfg.paths.logs_dir = fullfile( ...
+    fileparts(cfg.paths.derivatives_root), ...
+    'logs', ...
+    'runlog_pipeline');
 
-% -------------------------------------------------------------------------
-% Optional environment overrides
-% Intended for batch/HPC/SLURM test runs without editing this config file
-% -------------------------------------------------------------------------
-bids_env = helpers.get_env_first_nonempty({'EEG_PIPELINE_BIDS_ROOT'});
-derivatives_env = helpers.get_env_first_nonempty({'EEG_PIPELINE_DERIVATIVES_ROOT'});
-source_eeg_env = helpers.get_env_first_nonempty({'EEG_PIPELINE_SOURCE_EEG_ROOT'});
-source_beh_env = helpers.get_env_first_nonempty({'EEG_PIPELINE_SOURCE_BEH_ROOT'});
+bids_env = helpers.get_env_first_nonempty( ...
+    {'EEG_PIPELINE_BIDS_ROOT'});
+derivatives_env = helpers.get_env_first_nonempty( ...
+    {'EEG_PIPELINE_DERIVATIVES_ROOT'});
+source_eeg_env = helpers.get_env_first_nonempty( ...
+    {'EEG_PIPELINE_SOURCE_EEG_ROOT'});
+source_beh_env = helpers.get_env_first_nonempty( ...
+    {'EEG_PIPELINE_SOURCE_BEH_ROOT'});
 
 if strlength(bids_env) > 0
     cfg.paths.bids_root = string(bids_env);
@@ -222,57 +232,48 @@ if strlength(source_beh_env) > 0
     cfg.paths.source_beh_root = string(source_beh_env);
 end
 
-% -------------------------------------------------------------------------
-% Explicit config overrides
-% Highest priority because they are set directly in this file (in Profile 
-% paths section above) and intended for manual runs. Environment variables 
-% are more intended for batch/HPC/test runs without editing this config file.
-% -------------------------------------------------------------------------
 if strlength(string(cfg.paths.bids_root_override)) > 0
     cfg.paths.bids_root = string(cfg.paths.bids_root_override);
 end
 
 if strlength(string(cfg.paths.derivatives_root_override)) > 0
-    cfg.paths.derivatives_root = string(cfg.paths.derivatives_root_override);
+    cfg.paths.derivatives_root = ...
+        string(cfg.paths.derivatives_root_override);
 end
 
 if strlength(string(cfg.paths.source_eeg_root_override)) > 0
-    cfg.paths.source_eeg_root = string(cfg.paths.source_eeg_root_override);
+    cfg.paths.source_eeg_root = ...
+        string(cfg.paths.source_eeg_root_override);
 end
 
 if strlength(string(cfg.paths.source_beh_root_override)) > 0
-    cfg.paths.source_beh_root = string(cfg.paths.source_beh_root_override);
+    cfg.paths.source_beh_root = ...
+        string(cfg.paths.source_beh_root_override);
 end
 
 % =========================================================================
 % SUBJECTS
 % =========================================================================
 cfg.subjects = struct();
-cfg.subjects.list   = []; % explicit subject list, e.g. {'211','212'}, leave 
-% empty to autodetect from source_eeg_root using cfg.constants.valid_sub_id_regex
-cfg.subjects.min_id = []; % process all subjects with a higher ID than...
-% numeric/string ID, no lower cutoff if left empty 
+cfg.subjects.list   = [];
+cfg.subjects.min_id = [];
 
 % =========================================================================
 % PARALLEL
 % =========================================================================
 cfg.parallel = struct();
-cfg.parallel.enable         = true;   % allow parallel execution
-cfg.parallel.force_workers  = [];     % explicit worker count, leave empty 
-% for automatic determination (recommended)
+cfg.parallel.enable        = true;
+cfg.parallel.force_workers = [];
 
 % =========================================================================
 % STEP TOGGLES
 % =========================================================================
 cfg.steps = struct();
 
-cfg.steps.enable_downstream_rerun = true; % if true, sets all downstream steps 
-% to run when a step is set to run. E.g. if Step 03 is set to run, but output 
-% for steps 04-06 already exists from a previous run, Steps 04-06 will 
-% automatically also be set to run
+cfg.steps.enable_downstream_rerun = true;
 
 cfg.steps.prep_01_bids_formatting = struct( ...
-    'run', false, ...                % Step 01 creates/updates cfg.paths.bids_root from source_*_root
+    'run', false, ...
     'overwrite_mode', "", ...
     'overwrite_if_older_than', "");
 
@@ -302,71 +303,64 @@ cfg.steps.prep_06_epoching = struct( ...
     'overwrite_if_older_than', "");
 
 % =========================================================================
-% STEP FUNCTION HANDLES -- do not edit, will be resolved at runtime
+% STEP FUNCTION HANDLES
 % =========================================================================
 cfg.step_fns = struct();
-cfg.step_fns.prep_01_bids_formatting = str2func(char(cfg.pipeline.step_prefix + "_prep01_bids_formatting"));
-cfg.step_fns.prep_02_triggerfix      = str2func(char(cfg.pipeline.step_prefix + "_prep02_triggerfix"));
-cfg.step_fns.prep_03_until_ica       = str2func(char(cfg.pipeline.step_prefix + "_prep03_untilica"));
-cfg.step_fns.prep_04_ica             = str2func(char(cfg.pipeline.step_prefix + "_prep04_ica"));
-cfg.step_fns.prep_05_after_ica       = str2func(char(cfg.pipeline.step_prefix + "_prep05_after_ica"));
-cfg.step_fns.prep_06_epoching        = str2func(char(cfg.pipeline.step_prefix + "_prep06_epoching"));
+cfg.step_fns.prep_01_bids_formatting = ...
+    str2func(char(cfg.pipeline.step_prefix + "_prep01_bids_formatting"));
+cfg.step_fns.prep_02_triggerfix = ...
+    str2func(char(cfg.pipeline.step_prefix + "_prep02_triggerfix"));
+cfg.step_fns.prep_03_until_ica = ...
+    str2func(char(cfg.pipeline.step_prefix + "_prep03_untilica"));
+cfg.step_fns.prep_04_ica = ...
+    str2func(char(cfg.pipeline.step_prefix + "_prep04_ica"));
+cfg.step_fns.prep_05_after_ica = ...
+    str2func(char(cfg.pipeline.step_prefix + "_prep05_after_ica"));
+cfg.step_fns.prep_06_epoching = ...
+    str2func(char(cfg.pipeline.step_prefix + "_prep06_epoching"));
 
 % =========================================================================
 % STEP 01: BIDS FORMATTING
-% Step behavior only. Input/output locations come from cfg.paths.
 % =========================================================================
 cfg.prep_01 = struct();
 
-cfg.prep_01.do_eeg = true;  % copy/rename raw BrainVision EEG into BIDS
-cfg.prep_01.do_beh = true; % copy project-specific CF behavior files # HOWTO: what are CF files? specific format needed?
+cfg.prep_01.do_eeg = true;
+cfg.prep_01.do_beh = true;
 
-cfg.prep_01.try_eeglab_bids_export           = true; % additionally try pop_exportbids after copying
-cfg.prep_01.write_readme_if_exporter_did_not = true; % write README if exporter did not create dataset-level description
+cfg.prep_01.try_eeglab_bids_export = true;
+cfg.prep_01.write_readme_if_exporter_did_not = true;
+cfg.prep_01.copy_eeg_sidecar_log_to_events = false;
 
-cfg.prep_01.copy_eeg_sidecar_log_to_events = false; % copy project-specific CF log as *_events.log
-
-cfg.prep_01.raw_eeg_regex = '_(\d{3})(?:_(\d{3}))?\.vhdr$'; % raw EEG 
-% filename pattern: subject ID after an underscore, optionally followed by
-% an underscore plus run ID. Example:
-% _              literal underscore before the subject ID
-% (\d{3})        capture group 1: exactly three digits, e.g. 001 or 123 = subject ID
-% (?: ... )      non-capturing group; used only for grouping, not extracted as separate output
-% _(\d{3})       underscore plus exactly three digits = optional run ID
-% ?              makes the whole previous group optional
-% \.             literal dot before the file extension
-% vhdr           literal file extension text: vhdr
-% $              end of the filename
-% so e.g. PROOF_001.vhdr and PROOF_001_002.vhdr would match, but not
-% PROOF_1.vhdr, PROOF_0001.vhdr, PROOF_001_02.vhdr, or PROOF_001.eeg
+cfg.prep_01.raw_eeg_regex = ...
+    '_(\d{3})(?:_(\d{3}))?\.vhdr$';
 
 cfg.prep_01.existing_bids_vhdr_regex = ...
-    '^sub-(\d+)_ses-(\d+)_task-([A-Za-z0-9]+)(?:_run-(\d+))?_eeg\.vhdr$'; % existing BIDS EEG header pattern used when do_eeg=false
-   
-cfg.prep_01.session_label = cfg.bids.session_label; % get session label defined in project identity
-cfg.prep_01.task_label    = cfg.bids.task_label;    % get task label defined in project identity
+    '^sub-(\d+)_ses-(\d+)_task-([A-Za-z0-9]+)(?:_run-(\d+))?_eeg\.vhdr$';
+
+cfg.prep_01.session_label = cfg.bids.session_label;
+cfg.prep_01.task_label    = cfg.bids.task_label;
 
 % =========================================================================
 % STEP 02: TRIGGERFIX
 % =========================================================================
 cfg.prep_02 = struct();
 
-cfg.prep_02.run_raw_order_qc = true; % compare behavior-log event order to raw EEG triggers
+cfg.prep_02.run_raw_order_qc = true;
 
-cfg.prep_02.allow_multiple_runs  = false;         % allow multiple matching BIDS EEG runs
-cfg.prep_02.multiple_vhdr_policy = "most_recent"; % "most_recent" | "first" | "error"
+cfg.prep_02.allow_multiple_runs  = false;
+cfg.prep_02.multiple_vhdr_policy = "most_recent";
 
-cfg.prep_02.qc_out_dir = ""; % optional QC output folder override
+cfg.prep_02.qc_out_dir = "";
 
-cfg.prep_02.task_label         = cfg.bids.task_label;    % BIDS task label
-cfg.prep_02.session_label      = cfg.bids.session_label; % BIDS session label
-cfg.prep_02.input_vhdr_pattern = "";                     % optional explicit vhdr pattern # HOWTO: as regex pattern?
+cfg.prep_02.task_label         = cfg.bids.task_label;
+cfg.prep_02.session_label      = cfg.bids.session_label;
+cfg.prep_02.input_vhdr_pattern = "";
 
-cfg.prep_02.use_explicit_chanlist = false; % load only explicit channels
-cfg.prep_02.explicit_chanlist     = 1:66;  % explicit channel indices if enabled
+cfg.prep_02.use_explicit_chanlist = false;
+cfg.prep_02.explicit_chanlist     = 1:66;
 
-% quality control settings 
-cfg.prep_02.raw_qc_keep_tokens     = ["S 20","S 21","S 22","S 23","S 24","S 15","S 5"];
+cfg.prep_02.raw_qc_keep_tokens = [ ...
+    "S 20", "S 21", "S 22", "S 23", "S 24", "S 15", "S 5"];
 cfg.prep_02.raw_qc_bin_size_s      = 1;
 cfg.prep_02.raw_qc_max_rows        = 20000;
 cfg.prep_02.raw_qc_write_csv_on_ok = false;
@@ -415,7 +409,7 @@ cfg.prep_02.habituation_map = { ...
     'gs_1',     "S 211"; ...
     'gs_u',     "S 221"; ...
     'gs_2',     "S 231"; ...
-    'cs_plus',  "S 241"  ...
+    'cs_plus',  "S 241" ...
     };
 
 cfg.prep_02.generalization_map = { ...
@@ -423,7 +417,7 @@ cfg.prep_02.generalization_map = { ...
     'gs_1',     "S 213"; ...
     'gs_u',     "S 223"; ...
     'gs_2',     "S 233"; ...
-    'cs_plus',  "S 243"  ...
+    'cs_plus',  "S 243" ...
     };
 
 cfg.prep_02.return_of_fear_map = { ...
@@ -431,7 +425,7 @@ cfg.prep_02.return_of_fear_map = { ...
     'gs_1',     "S 215"; ...
     'gs_u',     "S 225"; ...
     'gs_2',     "S 235"; ...
-    'cs_plus',  "S 245"  ...
+    'cs_plus',  "S 245" ...
     };
 
 cfg.prep_02.acquisition = struct();
@@ -465,8 +459,8 @@ cfg.prep_02.disable_first_extinction.revert_minus_key = 'cs_minus';
 cfg.prep_02.disable_first_extinction.revert_plus_key  = 'cs_plus';
 
 cfg.prep_02.disable_first_acquisition = struct();
-cfg.prep_02.disable_first_acquisition.first_minus_code    = "S 2021";
-cfg.prep_02.disable_first_acquisition.first_plus_code     = "S 2421";
+cfg.prep_02.disable_first_acquisition.first_minus_code = "S 2021";
+cfg.prep_02.disable_first_acquisition.first_plus_code  = "S 2421";
 cfg.prep_02.disable_first_acquisition.disabled_minus_code = "S 20999";
 cfg.prep_02.disable_first_acquisition.disabled_plus_code  = "S 24999";
 
@@ -475,114 +469,84 @@ cfg.prep_02.disable_first_acquisition.disabled_plus_code  = "S 24999";
 % =========================================================================
 cfg.prep_03 = struct();
 
-% crop dataset around specifically defined triggers, e.g. exp start and exp
-% end
-cfg.prep_03.crop_to_task_markers = false; %if this is set to false, the following lines are irrelevant
-cfg.prep_03.crop_start_marker    = 'S 91'; % beginning of cropping area
-cfg.prep_03.crop_end_marker      = 'S 97'; % end of cropping area
+cfg.prep_03.crop_to_task_markers = false;
+cfg.prep_03.crop_start_marker    = 'S 91';
+cfg.prep_03.crop_end_marker      = 'S 97';
 cfg.prep_03.crop_padding_sec     = [0 0];
 
-% IMPORTANT make sure these include your channel labels for AUX/EOG, otherwise channels will be included as EEG in ICA
-cfg.prep_03.eog_channel_labels     = {'IO1','IO2','LO1','LO2'}; % ocular channels (detecting eye movements/blinks)
-cfg.prep_03.scr_channel_labels     = {'SCR'}; % skin conductance response channels
-cfg.prep_03.startle_channel_labels = {'Startle'}; % Startle response channels
-cfg.prep_03.ekg_channel_labels     = {'EKG'}; % Heart rate channels
+% Make sure that all non-EEG channel labels used in the dataset are included
+% here. Otherwise they may be treated as EEG channels during preprocessing.
+cfg.prep_03.eog_channel_labels = ...
+    {'IO1', 'IO2', 'LO1', 'LO2'};
+cfg.prep_03.scr_channel_labels = ...
+    {'SCR'};
+cfg.prep_03.startle_channel_labels = ...
+    {'Startle'};
+cfg.prep_03.ekg_channel_labels = ...
+    {'EKG'};
 
-cfg.prep_03.downsample_hz = 250; % downsample frequency
+cfg.prep_03.downsample_hz = 250;
 
 % -------------------------------------------------------------------------
 % Filter settings
 % -------------------------------------------------------------------------
-cfg.prep_03.highpass_hz          = 0.01; % set lower if you are interested in low-frequency components
-cfg.prep_03.lowpass_hz           = 30; % set higher if you are interested in higher frequencies
-cfg.prep_03.ica_prep_highpass_hz = 1; % only for the ica training set; leave if possible as ICA is sensitive towards slow drifts
+cfg.prep_03.highpass_hz          = 0.01;
+cfg.prep_03.lowpass_hz           = 30;
+cfg.prep_03.ica_prep_highpass_hz = 1;
 
 % -------------------------------------------------------------------------
-% Bad channel detection and interpolation
+% Bad-channel detection and interpolation
 % -------------------------------------------------------------------------
-cfg.prep_03.bad_channel_detection_method = "pop_rejchan"; % "clean_rawdata" | "pop_rejchan" | "off"
-% Note: clean_rawdata used to be called "auto"
+cfg.prep_03.bad_channel_detection_method = "pop_rejchan";
 
-% Flat/invalid EEG-channel detection is applied exactly once, independently
-% of the selected bad-channel backend. AUX channels are only removed if they
-% are non-finite or completely constant.
+% Flat or invalid EEG channels are identified independently of the selected
+% bad-channel backend. AUX channels are removed only if they are non-finite
+% or completely constant.
 cfg.prep_03.flat_channel_detection = struct();
 cfg.prep_03.flat_channel_detection.enable = true;
-cfg.prep_03.flat_channel_detection.mode = "cumulative_fraction"; % "cumulative_fraction" | "continuous_seconds"
-cfg.prep_03.flat_channel_detection.max_flat_fraction = 0.10; % reject if flat for >=10% of the complete post-crop recording, not necessarily continuously
-cfg.prep_03.flat_channel_detection.continuous_flat_sec = 5; % only used for mode="continuous_seconds"
-cfg.prep_03.flat_channel_detection.step_tolerance_uV = 0; % consecutive samples count as flat if their absolute difference is <= this value
+cfg.prep_03.flat_channel_detection.mode = ...
+    "cumulative_fraction";
+cfg.prep_03.flat_channel_detection.max_flat_fraction = 0.10;
+cfg.prep_03.flat_channel_detection.continuous_flat_sec = 5;
+cfg.prep_03.flat_channel_detection.step_tolerance_uV = 0;
 
-% Only used for bad_channel_detection_method = "clean_rawdata".
-% Flat-channel detection is disabled inside clean_rawdata because it is
-% already performed once by cfg.prep_03.flat_channel_detection.
+% Used only with bad_channel_detection_method="clean_rawdata".
 cfg.prep_03.clean_rawdata_channel_corr_threshold = 0.80;
 
-% Only used for bad_channel_detection_method = "pop_rejchan"
+% Used only with bad_channel_detection_method="pop_rejchan".
 cfg.prep_03.pop_rejchan_z_threshold  = 5;
-cfg.prep_03.pop_rejchan_freqrange_hz = [1, cfg.prep_03.lowpass_hz + 10];
+cfg.prep_03.pop_rejchan_freqrange_hz = ...
+    [1, cfg.prep_03.lowpass_hz + 10];
 
-% Applied to final bad EEG channel list
 cfg.prep_03.interpolate_bad_channels_before_ica = true;
 cfg.prep_03.interp_method = 'spherical';
 
 % -------------------------------------------------------------------------
-% Step 03 debug/intermediate exports
+% Step-03 intermediate exports
 % -------------------------------------------------------------------------
-% Master switch. Default false = no Step 03 intermediate debug files.
-% If true, the individual switches below decide which stages are written.
-%
-% Outputs are written to the normal Step 03 output folder:
-%   <derivatives_root>/02_until_ica/sub-XXX/
-%
-% These files are for debugging only and are not used by downstream steps.
 cfg.prep_03.save_intermediate_steps = false;
-
-% Save after final bad EEG channel list has been applied.
-% Note: in this pipeline bad EEG channels are usually interpolated, not
-% permanently removed. So this is effectively "after bad-channel
-% detection/interpolation".
 cfg.prep_03.save_intermediate_after_bad_channel_rejection = true;
-
-% Save after Step 03 rereferencing.
 cfg.prep_03.save_intermediate_after_rereference = true;
-
-% Save after Step 03 high-pass filter.
 cfg.prep_03.save_intermediate_after_highpass = true;
-
-% Save after Step 03 low-pass filter.
 cfg.prep_03.save_intermediate_after_lowpass = true;
-
-% Savemode for debug/intermediate Step 03 files.
 cfg.prep_03.intermediate_savemode = 'twofiles';
 
 % -------------------------------------------------------------------------
-% Re-Referencing
+% Re-referencing
 % -------------------------------------------------------------------------
-% "keep"    = do not rereference in Step 03
-% "avg"     = average reference
-% "mastoid" = rereference to mastoids listed below
-%
-% Default should usually be "avg" to match the preprocessing handout.
-% Keep cfg.prep_06.reference_mode = "keep" unless you intentionally want a
-% second rereference during epoching.
-cfg.prep_03.reference_mode            = "avg";  % "keep" | "avg" | "mastoid"
-cfg.prep_03.reference_exclude_non_eeg = true;   % do not rereference EOG/SCR/Startle/EKG
-cfg.prep_03.mastoid_channel_labels    = {'T9','T10'};
+cfg.prep_03.reference_mode            = "avg";
+cfg.prep_03.reference_exclude_non_eeg = true;
+cfg.prep_03.mastoid_channel_labels    = {'T9', 'T10'};
 
 % -------------------------------------------------------------------------
-% Filtering
+% Line-noise filtering
 % -------------------------------------------------------------------------
-
-cfg.prep_03.line_noise_method         = "pop_cleanline"; % "pop_cleanline" | "off"
-cfg.prep_03.line_noise_frequencies_hz = [50 100]; % in europe, set to [60 120] in US
-
-% only for the ICA training dataset which will not be kept
-cfg.prep_03.ica_prep_epoch_rejection_method = "faster_ptp"; % "erplab" | "faster_ptp" | "mad_variance" | "none"
+cfg.prep_03.line_noise_method = "pop_cleanline";
+cfg.prep_03.line_noise_frequencies_hz = [50 100];
 
 cfg.prep_03.pop_cleanline_bandwidth_hz      = 4;
 cfg.prep_03.pop_cleanline_p_value           = 0.01;
-cfg.prep_03.pop_cleanline_scanforlines      = true; % leave on usually as it improves line noise detection
+cfg.prep_03.pop_cleanline_scanforlines      = true;
 cfg.prep_03.pop_cleanline_winsize_sec       = 2;
 cfg.prep_03.pop_cleanline_winstep_sec       = 1;
 cfg.prep_03.pop_cleanline_tau               = 50;
@@ -592,68 +556,43 @@ cfg.prep_03.pop_cleanline_norm_spectrum     = 0;
 cfg.prep_03.pop_cleanline_computepower      = 0;
 cfg.prep_03.pop_cleanline_verbose           = false;
 
-% ERPLAB ICA-prep rejection.
-% Flatline rejection is OFF by default because it can cause unexpectedly
-% high rejection rates. Enable it only after inspecting its effect on the
-% data. If enabled, the settings below use 0.5 uV over 200 ms.
+% -------------------------------------------------------------------------
+% ICA-training epoch rejection
+% -------------------------------------------------------------------------
+cfg.prep_03.ica_prep_epoch_rejection_method = "faster_ptp";
+
 cfg.prep_03.ica_prep_erplab_epoch_rejection = struct();
-
-% Check only EEG channels, not EOG/SCR/Startle/EKG.
 cfg.prep_03.ica_prep_erplab_epoch_rejection.channel_scope = "eeg";
-
-% [] = whole ICA-training regepoch.
 cfg.prep_03.ica_prep_erplab_epoch_rejection.twindow_ms = [];
-
 cfg.prep_03.ica_prep_erplab_epoch_rejection.clear_existing_flags = true;
 
-% 1) Exclude very large voltages.
 cfg.prep_03.ica_prep_erplab_epoch_rejection.use_extreme_voltage = true;
-cfg.prep_03.ica_prep_erplab_epoch_rejection.extreme_voltage_uV  = 300;
+cfg.prep_03.ica_prep_erplab_epoch_rejection.extreme_voltage_uV = 300;
 cfg.prep_03.ica_prep_erplab_epoch_rejection.flag_extreme_voltage = 1;
 
-% 2) Exclude large sample-to-sample voltage jumps.
 cfg.prep_03.ica_prep_erplab_epoch_rejection.use_sample_diff = true;
-cfg.prep_03.ica_prep_erplab_epoch_rejection.sample_diff_uV  = 75;
+cfg.prep_03.ica_prep_erplab_epoch_rejection.sample_diff_uV = 75;
 cfg.prep_03.ica_prep_erplab_epoch_rejection.flag_sample_diff = 2;
 
-% 3) Optional flatline/blocking rejection. May reject unexpectedly many epochs.
 cfg.prep_03.ica_prep_erplab_epoch_rejection.use_flatline = false;
 cfg.prep_03.ica_prep_erplab_epoch_rejection.flatline_tolerance_uV = 0.5;
-cfg.prep_03.ica_prep_erplab_epoch_rejection.flatline_duration_ms  = 200;
+cfg.prep_03.ica_prep_erplab_epoch_rejection.flatline_duration_ms = 200;
 cfg.prep_03.ica_prep_erplab_epoch_rejection.flag_flatline = 3;
 
 cfg.prep_03.ica_prep_erplab_epoch_rejection.review = "off";
 cfg.prep_03.ica_prep_erplab_epoch_rejection.history = "off";
 cfg.prep_03.ica_prep_erplab_epoch_rejection.lowpass_hz = -1;
 
-% MAD ICA-prep rejection settings.
-% Only used when cfg.prep_03.ica_prep_epoch_rejection_method == "mad_variance".
 cfg.prep_03.ica_prep_mad_z_threshold = 3;
 cfg.prep_03.ica_prep_mad_use_logvar  = true;
 cfg.prep_03.ica_prep_max_reject_prop = 1.00;
 
-% -------------------------------------------------------------------------
-% FASTER/PTP ICA-prep epoch rejection
-% Only used when cfg.prep_03.ica_prep_epoch_rejection_method == "faster_ptp".
-%
-% ICA-prep rejection should usually be more lenient than final Step 06
-% rejection because it only cleans the temporary ICA-training dataset.
-%
-% To use FASTER only: set use_faster=true and use_ptp=false.
-% To use PTP only:    set use_faster=false and use_ptp=true.
-% To use both:        set both to true.
-% -------------------------------------------------------------------------
 cfg.prep_03.ica_prep_faster_ptp_epoch_rejection = struct();
-
-cfg.prep_03.ica_prep_faster_ptp_epoch_rejection.use_faster   = true;
-cfg.prep_03.ica_prep_faster_ptp_epoch_rejection.faster_z     = 4;
+cfg.prep_03.ica_prep_faster_ptp_epoch_rejection.use_faster = true;
+cfg.prep_03.ica_prep_faster_ptp_epoch_rejection.faster_z = 4;
 cfg.prep_03.ica_prep_faster_ptp_epoch_rejection.use_robust_z = true;
-
-cfg.prep_03.ica_prep_faster_ptp_epoch_rejection.use_ptp       = true;
+cfg.prep_03.ica_prep_faster_ptp_epoch_rejection.use_ptp = true;
 cfg.prep_03.ica_prep_faster_ptp_epoch_rejection.ptp_uV_thresh = 100;
-
-% 1.00 means disabled. Example: 0.50 would stop Step 03 if >50% of
-% ICA-training epochs are removed.
 cfg.prep_03.ica_prep_faster_ptp_epoch_rejection.max_reject_prop = 1.00;
 
 % =========================================================================
@@ -661,153 +600,165 @@ cfg.prep_03.ica_prep_faster_ptp_epoch_rejection.max_reject_prop = 1.00;
 % =========================================================================
 cfg.prep_04 = struct();
 
-cfg.prep_04.ica_method                   = "runica"; %"runica" | "amica" -CURRENTLY BROKEN DO NOT USE WILL BE FIXED
-cfg.prep_04.use_extended_infomax         = true;
-cfg.prep_04.interrupt_ica                = 'off';
+cfg.prep_04.ica_method = "runica";
+cfg.prep_04.use_extended_infomax = true;
+cfg.prep_04.interrupt_ica = 'off';
 cfg.prep_04.use_pca_rank_if_interpolated = true;
 cfg.prep_04.amica_require_no_spaces_on_windows = true;
 cfg.prep_04.ica_channel_scope = "eeg_eog";
+% Step 04 derives the task filter from cfg.bids.task_label and requires an
+% exact *_forica.set / *_preica.set pair for every processed run.
+
+% AMICA always fits one model. Reaching max_iter with finite, valid output is
+% retained as a warning. Invalid/non-finite output remains a hard failure.
+cfg.prep_04.amica_max_iter = 3000;
+cfg.prep_04.amica_write_update_norm_history = false;
+cfg.prep_04.amica_check_convergence = true;
+cfg.prep_04.amica_fail_on_nonconvergence = true;
+cfg.prep_04.amica_convergence_min_iterations = 50;
+cfg.prep_04.amica_convergence_tail_window = 20;
+cfg.prep_04.amica_keep_tmp_on_qc_failure = false;
+
+cfg.prep_04.write_run_qc_table = false;
+cfg.prep_04.write_subject_qc_table = true;
+cfg.prep_04.qc_table_delimiter = ';';
 
 % =========================================================================
 % STEP 05: AFTER ICA / ICLABEL
 % =========================================================================
 cfg.prep_05 = struct();
 
-cfg.prep_05.clear_subject_ica_comps_dir = true; % delete existing ICA components 
-% directory for subject before saving new one, to avoid confusion from old ICA results
+cfg.prep_05.clear_subject_ica_comps_dir = true; % remove existing QA PNGs only
+% for the current subject/task/run before exporting replacements
 
-% settings for ICLabel rejection
-% NOTE: In the handout we only agreed on ICLabel for eye artifact
-% rejection. However, why not use it for removing other artifacts as well?
-% It is a well-validated algorithm and if thresholds are set
-% conservatively, no harm is done
+% Every ICLabel rejection rule has an independent switch. The thresholds
+% below retain the previous PROOF configuration.
+cfg.prep_05.iclabel_remove_eye           = true;
+cfg.prep_05.iclabel_remove_muscle        = true;
+cfg.prep_05.iclabel_remove_heart         = true;
+cfg.prep_05.iclabel_remove_linenoise     = true;
+cfg.prep_05.iclabel_remove_channoise     = true;
+cfg.prep_05.iclabel_remove_other         = false;
+cfg.prep_05.iclabel_remove_low_brain     = false;
+
 cfg.prep_05.iclabel_eye_remove_thr       = 0.70;
 cfg.prep_05.iclabel_muscle_remove_thr    = 0.80;
 cfg.prep_05.iclabel_heart_remove_thr     = 0.80;
 cfg.prep_05.iclabel_linenoise_remove_thr = 0.80;
 cfg.prep_05.iclabel_channoise_remove_thr = 0.80;
-cfg.prep_05.iclabel_other_remove_thr     = 1.01;
+cfg.prep_05.iclabel_other_remove_thr     = 0.95;
 cfg.prep_05.iclabel_brain_min_keep_thr   = 0.00;
 
-cfg.prep_05.save_ic_topos_png   = true;
-cfg.prep_05.iclabel_edge_margin = 0.10;
+cfg.prep_05.save_ic_topos_png   = false;
+cfg.prep_05.iclabel_edge_margin = 0.00;
+cfg.prep_05.ic_topo_dpi         = 300;
+cfg.prep_05.ic_topo_fig_cm      = [0 0 18 18];
+cfg.prep_05.ic_topo_electrodes  = 'off';
 
-cfg.prep_05.ic_topo_dpi        = 300;
-cfg.prep_05.ic_topo_fig_cm     = [0 0 18 18];
-cfg.prep_05.ic_topo_electrodes = 'off';
+% -------------------------------------------------------------------------
+% Two-level signal QC after IC rejection
+% -------------------------------------------------------------------------
+% Warning-level violations are written to the log and QC tables, but the
+% cleaned dataset is still saved.
+%
+% Extreme violations are written to QC, but a single extreme metric still
+% remains a warning. At least two simultaneous extreme metrics are required
+% for a signal-QC failure. Invalid/non-finite output remains an immediate
+% technical failure.
+cfg.prep_05.signal_qc_enable = true;
 
-cfg.prep_05.write_component_table       = true; % table with one row per ICA 
-% component: ICLabel probabilities and remove/keep decision
-cfg.prep_05.write_run_summary_table     = true; % one summary file per 
-% run/input file: number of ICs removed and counts per rejection criterion
-cfg.prep_05.write_subject_summary_table = true; % one subject-level summary 
-% file combining all run summaries for this subject; may look identical if 
-% there is only one run
-cfg.prep_05.qc_table_delimiter          = ';';
+% Retained for backward-compatible configuration validation. This must stay
+% true because hard QC failures must never produce a cleaned output dataset.
+cfg.prep_05.signal_qc_fail_on_violation = true;
+
+cfg.prep_05.signal_qc_channel_scope = "eeg";
+cfg.prep_05.signal_qc_max_prop_ic_removed = 0.95;
+cfg.prep_05.signal_qc_min_remaining_components = 2;
+
+% Warning thresholds.
+cfg.prep_05.signal_qc_min_median_channel_correlation = 0.80;
+cfg.prep_05.signal_qc_max_relative_change_rms = 0.85;
+cfg.prep_05.signal_qc_min_rms_ratio = 0.50;
+cfg.prep_05.signal_qc_max_rms_ratio = 1.10;
+
+% Extreme thresholds. At least two must be crossed together to prevent saving.
+cfg.prep_05.signal_qc_hard_min_median_channel_correlation = 0.10;
+cfg.prep_05.signal_qc_hard_max_relative_change_rms = 10.00;
+cfg.prep_05.signal_qc_hard_min_rms_ratio = 0.10;
+cfg.prep_05.signal_qc_hard_max_rms_ratio = 10.00;
+cfg.prep_05.signal_qc_min_extreme_metrics_to_fail = 2; % independent problem domains, not correlated raw metrics
+
+cfg.prep_05.signal_qc_fail_on_nonfinite = true;
+cfg.prep_05.signal_qc_fail_on_flat_channels = true;
+cfg.prep_05.signal_qc_flat_std_epsilon = 1e-8;
+
+% Optional validation-sample diagnostic for either RUNICA or AMICA. MI has no
+% universal pass/fail threshold and is therefore disabled for routine runs.
+cfg.prep_05.compute_decomposition_qc = false;
+cfg.prep_05.decomposition_qc_max_samples = 5000;
+cfg.prep_05.decomposition_qc_mi_bins = 20;
+
+cfg.prep_05.write_component_table = true;       % retained for targeted review
+cfg.prep_05.write_run_summary_table = false;    % avoid duplicate run files
+cfg.prep_05.write_subject_summary_table = true; % one compact source per subject
+cfg.prep_05.qc_table_delimiter = ';';
 
 % =========================================================================
 % STEP 06: EPOCHING + FINAL ARTIFACT REJECTION
 % =========================================================================
 cfg.prep_06 = struct();
 
-% -------------------------------------------------------------------------
-% General mode selection
-% -------------------------------------------------------------------------
-cfg.prep_06.epoching_mode  = "event_locked";   % "baseline" | "event_locked"
+cfg.prep_06.epoching_mode  = "event_locked";
 cfg.prep_06.overwrite_mode = "";
 
-% -------------------------------------------------------------------------
-% Saving
-% -------------------------------------------------------------------------
-cfg.prep_06.save_final_only         = true; % save only one file per step
-cfg.prep_06.save_intermediate_steps = false; % save output files after each 
-% preprocessing sub-step (not fully implemented yet; if you require this please 
-% contact saskia.wilken@uni-hamburg.de)
+cfg.prep_06.save_final_only = true;
+cfg.prep_06.save_intermediate_steps = false;
 
-% -------------------------------------------------------------------------
-% Referencing in Step 06
-% Default is KEEP because rereferencing usually already happened in Step 03.
-% Only change this if you explicitly want a second rereference here.
-% -------------------------------------------------------------------------
-cfg.prep_06.reference_mode         = "keep";   % "keep" | "avg" | "mastoid"
-cfg.prep_06.mastoid_channel_labels = {'T9','T10'};
+cfg.prep_06.reference_mode = "keep";
+cfg.prep_06.mastoid_channel_labels = {'T9', 'T10'};
 
-% -------------------------------------------------------------------------
-% Baseline correction
-% Mainly relevant for event_locked ERP-style epochs.
-% Usually keep false for continuous/resting-state baseline regepochs.
-% -------------------------------------------------------------------------
 cfg.prep_06.do_baseline_correction = true;
-cfg.prep_06.base_start_ms          = -200;
-cfg.prep_06.base_end_ms            = 0;
+cfg.prep_06.base_start_ms = -200;
+cfg.prep_06.base_end_ms   = 0;
 
-% -------------------------------------------------------------------------
-% EVENT-LOCKED mode settings
-% Used only when cfg.prep_06.epoching_mode == "event_locked"
-% -------------------------------------------------------------------------
-cfg.prep_06.events_phase = { ... % enter here triggers that mark where your epochs shoudl start
-    'S 201','S 241', ...
-    'S 2021','S 2421','S 2022','S 2422', ...
-    'S 203','S 213','S 223','S 233','S 243', ...
-    'S 2041','S 2441','S 2042','S 2442','S 2043','S 2443', ...
-    'S 205','S 245' ...
+cfg.prep_06.events_phase = { ...
+    'S 201', 'S 241', ...
+    'S 2021', 'S 2421', 'S 2022', 'S 2422', ...
+    'S 203', 'S 213', 'S 223', 'S 233', 'S 243', ...
+    'S 2041', 'S 2441', 'S 2042', 'S 2442', ...
+    'S 2043', 'S 2443', ...
+    'S 205', 'S 245' ...
     };
- % note: currently as a design choices you should label these epoch types
- % in your analysis scripts as it is not really part of preprocessing
 
-cfg.prep_06.epoch_start_s = -0.4; % start of epoch relative to event in seconds
-cfg.prep_06.epoch_end_s   =   2.6; % end of epoch relative to event in seconds
+cfg.prep_06.epoch_start_s = -0.4;
+cfg.prep_06.epoch_end_s   = 2.6;
 
-% -------------------------------------------------------------------------
-% BASELINE mode settings
-% Used only when cfg.prep_06.epoching_mode == "baseline"
-% -------------------------------------------------------------------------
-cfg.prep_06.regepoch_length_sec = 10; % length of epochs to be created
-cfg.prep_06.regepoch_step_sec = 10; % seconds between starts of consecutive 
-% regepochs; same as length = non-overlapping epochs without gaps
+% Baseline-mode settings are retained for structural consistency but are
+% ignored while epoching_mode="event_locked".
+cfg.prep_06.regepoch_length_sec = 10;
+cfg.prep_06.regepoch_step_sec   = 10;
 
-cfg.prep_06.baseline_has_conditions = false; % false = treat complete baseline as one condition
-
-% Ignored while baseline_has_conditions=false. If enabled, define arbitrary
-% names as rows of {condition_name, marker prefixes starting that condition}.
-% The names are propagated to output filenames and QC tables.
+cfg.prep_06.baseline_has_conditions = false;
 cfg.prep_06.baseline_condition_definitions = {};
 cfg.prep_06.baseline_start_condition = "";
 cfg.prep_06.baseline_end_markers = {};
 cfg.prep_06.baseline_end_condition = "";
 
-% -------------------------------------------------------------------------
-% Artifact rejection
-% -------------------------------------------------------------------------
-cfg.prep_06.do_artifact_rejection = true; %# HOWTO: do we have suggestions when to use which?
+cfg.prep_06.do_artifact_rejection = true;
 
-% Optional first-pass hard absolute-amplitude rejection.
-% Usually keep this false when using ERPLAB, because ERPLAB's extreme-voltage
-% rule can implement the same kind of threshold.
 cfg.prep_06.do_initial_hard_threshold_rejection = false;
-cfg.prep_06.initial_hard_threshold_uv           = 200;
+cfg.prep_06.initial_hard_threshold_uv = 200;
 
-% Select exactly one final epoch-rejection method.
-%
-%   "erplab"       = use cfg.prep_06.erplab_epoch_rejection (what we agreed
-%   on in the kolloq)
-%   "faster_ptp"   = use cfg.prep_06.faster_ptp_epoch_rejection
-%   "mad_variance" = use cfg.prep_06.mad_z_threshold / mad_use_logvar
-%   "none"         = skip final epoch rejection
-%
-cfg.prep_06.epoch_rejection_method = "faster_ptp";  % "erplab" | "faster_ptp" | "mad_variance" | "none"
+cfg.prep_06.epoch_rejection_method = "faster_ptp";
 
-% Subject-level exclusion after epoch rejection.
-% 1 means disabled. Example: 0.50 would exclude subjects with >50% rejected epochs.
 cfg.prep_06.max_reject_prop = 1;
 
-% Warning only (no exclusion): report all subjects with >25% rejected epochs
-% once more at the very end of the console output and in the master run log.
+% Warning only: report subjects with more than 25% rejected epochs at the
+% end of console output and in the master run log.
 cfg.prep_06.warn_if_reject_prop_gt = 0.25;
 
 % -------------------------------------------------------------------------
 % ERPLAB epoch rejection
-% Only used when cfg.prep_06.epoch_rejection_method == "erplab".
 % -------------------------------------------------------------------------
 cfg.prep_06.erplab_epoch_rejection = struct();
 
@@ -816,18 +767,16 @@ cfg.prep_06.erplab_epoch_rejection.twindow_ms = [];
 cfg.prep_06.erplab_epoch_rejection.clear_existing_flags = true;
 
 cfg.prep_06.erplab_epoch_rejection.use_extreme_voltage = true;
-cfg.prep_06.erplab_epoch_rejection.extreme_voltage_uV  = 200;
+cfg.prep_06.erplab_epoch_rejection.extreme_voltage_uV = 200;
 cfg.prep_06.erplab_epoch_rejection.flag_extreme_voltage = 1;
 
 cfg.prep_06.erplab_epoch_rejection.use_sample_diff = true;
-cfg.prep_06.erplab_epoch_rejection.sample_diff_uV  = 50;
+cfg.prep_06.erplab_epoch_rejection.sample_diff_uV = 50;
 cfg.prep_06.erplab_epoch_rejection.flag_sample_diff = 2;
 
-% Optional only: flatline rejection may reject unexpectedly many epochs.
-% Keep false unless its effect has been inspected for the current dataset.
 cfg.prep_06.erplab_epoch_rejection.use_flatline = false;
 cfg.prep_06.erplab_epoch_rejection.flatline_tolerance_uV = 0.5;
-cfg.prep_06.erplab_epoch_rejection.flatline_duration_ms  = 100;
+cfg.prep_06.erplab_epoch_rejection.flatline_duration_ms = 100;
 cfg.prep_06.erplab_epoch_rejection.flag_flatline = 3;
 
 cfg.prep_06.erplab_epoch_rejection.review = "off";
@@ -836,61 +785,41 @@ cfg.prep_06.erplab_epoch_rejection.lowpass_hz = -1;
 
 % -------------------------------------------------------------------------
 % FASTER/PTP epoch rejection
-% Only used when cfg.prep_06.epoch_rejection_method == "faster_ptp".
-%
-% To use FASTER only: set use_faster=true and use_ptp=false.
-% To use PTP only:    set use_faster=false and use_ptp=true.
-% To use both:        set both to true.
 % -------------------------------------------------------------------------
 cfg.prep_06.faster_ptp_epoch_rejection = struct();
 
-cfg.prep_06.faster_ptp_epoch_rejection.use_faster    = true;
-cfg.prep_06.faster_ptp_epoch_rejection.faster_z      = 3;
-cfg.prep_06.faster_ptp_epoch_rejection.use_robust_z  = true;
+cfg.prep_06.faster_ptp_epoch_rejection.use_faster = true;
+cfg.prep_06.faster_ptp_epoch_rejection.faster_z = 3;
+cfg.prep_06.faster_ptp_epoch_rejection.use_robust_z = true;
 
-cfg.prep_06.faster_ptp_epoch_rejection.use_ptp       = true;
+cfg.prep_06.faster_ptp_epoch_rejection.use_ptp = true;
 cfg.prep_06.faster_ptp_epoch_rejection.ptp_uV_thresh = 100;
 
 % -------------------------------------------------------------------------
-% MAD variance epoch rejection
-% Only used when cfg.prep_06.epoch_rejection_method == "mad_variance".
+% MAD-variance epoch rejection
 % -------------------------------------------------------------------------
 cfg.prep_06.mad_z_threshold = 3;
 cfg.prep_06.mad_use_logvar  = true;
 
 % -------------------------------------------------------------------------
-% Reject datasets if too few valid epochs/trials remain.
-%
-% event_locked:
-%   checks minimum trial counts for the event-code groups listed below.
-%
-% baseline:
-%   checks minimum valid regepochs separately for every configured condition.
-%   Without conditions, the check applies once to the complete recording.
-%   The code list below is ignored in baseline mode.
+% Minimum trials per condition
 % -------------------------------------------------------------------------
-cfg.prep_06.min_trials_per_condition_enable      = true; 
-cfg.prep_06.min_trials_per_condition_min_n       = 3; % min num of trials in 
-% each condition so participant is not excluded. Suggestion: at least 10,
-% but you might need to be pragmatic. 
-cfg.prep_06.min_trials_per_condition_zero_tol_ms = 2; % jitter allowed around trigger
-cfg.prep_06.min_trials_per_condition_codes = { ... % adjust this to conditions 
-    'acq_cs_minus', {'S 2021','S 2022'}; ...
-    'acq_cs_plus',  {'S 2421','S 2422'}; ...
-    % 'gen_cs_minus', {'S 203'}; ...
-    % 'gen_gs1',      {'S 213'}; ...
-    % 'gen_gsu',      {'S 223'}; ...
-    % 'gen_gs2',      {'S 233'}; ...
-    % 'gen_cs_plus',  {'S 243'}; ...
-    'ext_cs_minus', {'S 2041','S 2042','S 2043'}; ...
-    'ext_cs_plus',  {'S 2441','S 2442','S 2443'} ...
+cfg.prep_06.min_trials_per_condition_enable = true;
+cfg.prep_06.min_trials_per_condition_min_n = 3;
+cfg.prep_06.min_trials_per_condition_zero_tol_ms = 2;
+
+cfg.prep_06.min_trials_per_condition_codes = { ...
+    'acq_cs_minus', {'S 2021', 'S 2022'}; ...
+    'acq_cs_plus',  {'S 2421', 'S 2422'}; ...
+    'ext_cs_minus', {'S 2041', 'S 2042', 'S 2043'}; ...
+    'ext_cs_plus',  {'S 2441', 'S 2442', 'S 2443'} ...
     };
 
 % -------------------------------------------------------------------------
-% Fixed QC outputs. Step 06 also refreshes all-subject summaries.
+% Summary tables
 % -------------------------------------------------------------------------
-cfg.prep_06.write_run_summary_table     = true;
+cfg.prep_06.write_run_summary_table = true;
 cfg.prep_06.write_subject_summary_table = true;
-cfg.prep_06.qc_table_delimiter          = ';';
+cfg.prep_06.qc_table_delimiter = ';';
 
 end

@@ -55,19 +55,19 @@ step_cfg.amica_require_no_spaces_on_windows = true;
 % AMICA temp handling
 step_cfg.amica_tmp_root          = "";
 step_cfg.amica_delete_tmp        = true;
-step_cfg.amica_keep_tmp_on_error = true;
+step_cfg.amica_keep_tmp_on_error = false;
 
-% AMICA convergence and QC. AMICA's own stopping rules are enabled inside
-% runamica15. A run that reaches amica_max_iter has stopped at the cap rather
-% than at an internal convergence criterion and therefore fails by default.
+% AMICA convergence and QC. Invalid/non-finite AMICA output remains a hard
+% failure. Reaching amica_max_iter with otherwise valid output is retained as
+% a warning so a large cohort does not fail for a diagnostic-only criterion.
 step_cfg.amica_max_iter                         = 2000;
-step_cfg.amica_write_update_norm_history        = true;
+step_cfg.amica_write_update_norm_history        = false;
 step_cfg.amica_check_convergence                = true;
 step_cfg.amica_fail_on_nonconvergence           = true;
 step_cfg.amica_convergence_min_iterations       = 50;
 step_cfg.amica_convergence_tail_window          = 20;
-step_cfg.amica_keep_tmp_on_qc_failure           = true;
-step_cfg.write_run_qc_table                     = true;
+step_cfg.amica_keep_tmp_on_qc_failure           = false;
+step_cfg.write_run_qc_table                     = false;
 step_cfg.write_subject_qc_table                 = true;
 step_cfg.qc_table_delimiter                     = ';';
 
@@ -139,15 +139,18 @@ helpers.ensure_dir(qc_method_dir);
 %% ========================================================================
 %  FIND INPUTS
 % ========================================================================
-forica_sets = dir(fullfile(in_dir_forica, '*_forica.set'));
-
-if isempty(forica_sets)
-    step_out.ok = true;
-    step_out.skipped = true;
-    step_out.message = sprintf('prep04_ica: no *_forica.set found for %s (skip).', subj_label);
-    helpers.log_msg_default('%s', step_out.message);
-    return;
+run_inventory = helpers.resolve_step04_run_inventory(paths, cfg);
+if ~run_inventory.valid
+    error('prep04_ica:Step03RunInventoryInvalid', ...
+        '%s | %s | %s', subj_label, ...
+        char(run_inventory.issue_code), ...
+        char(run_inventory.issue_message));
 end
+
+helpers.log_msg_default( ...
+    'prep04_ica: %s | configured task=%s | matched Step-03 run pairs=%d', ...
+    subj_label, char(run_inventory.task_label), ...
+    numel(run_inventory.matched_run_bases));
 
 %% ========================================================================
 %  AMICA GUARDS
@@ -179,21 +182,12 @@ end
 outputs_written = {};
 qc_rows = table();
 
-for fi = 1:numel(forica_sets)
+for fi = 1:numel(run_inventory.matched_run_bases)
 
-    forica_name = forica_sets(fi).name;
-    run_base    = erase(string(forica_name), "_forica.set");
+    forica_name = char(run_inventory.matched_forica_names(fi));
+    preica_name = char(run_inventory.matched_preica_names(fi));
+    run_base    = run_inventory.matched_run_bases(fi);
     run_base_c  = char(run_base);
-
-    preica_name = [run_base_c '_preica.set'];
-    preica_path = fullfile(in_dir_preica, preica_name);
-
-    if exist(preica_path, 'file') ~= 2
-        helpers.log_msg_default( ...
-            'prep04_ica: %s | %s missing preica: %s (skip run).', ...
-            subj_label, run_base_c, preica_path);
-        continue;
-    end
 
     out_name = [run_base_c '_ica_applied.set'];
     out_path = fullfile(out_dir_after, out_name);
@@ -388,13 +382,21 @@ for fi = 1:numel(forica_sets)
                     mods, ica_train_eeg.icaweights, ica_train_eeg.icasphere, ...
                     pcakeep, ica_train_eeg.nbchan, step_cfg);
 
+                if isfinite(amica_qc.final_update_norm_max)
+                    final_update_text = string(sprintf( ...
+                        '%.12g', amica_qc.final_update_norm_max));
+                elseif ~logical(step_cfg.amica_write_update_norm_history)
+                    final_update_text = "not_saved";
+                else
+                    final_update_text = "nonfinite";
+                end
                 helpers.log_msg_default( ...
                     ['prep04_ica: %s | %s | AMICA convergence=%s | iter=%d/%d | ' ...
-                     'hit_cap=%d | final_LL=%.12g | final_update_max=%.12g'], ...
+                     'hit_cap=%d | final_LL=%.12g | final_update_max=%s'], ...
                     subj_label, run_base_c, char(amica_qc.status), ...
                     amica_qc.n_iterations, round(double(step_cfg.amica_max_iter)), ...
                     amica_qc.hit_max_iter, amica_qc.ll_final, ...
-                    amica_qc.final_update_norm_max);
+                    char(final_update_text));
 
                 if logical(step_cfg.amica_check_convergence) && ~amica_qc.passed
                     amica_qc_failed = true;
@@ -438,15 +440,16 @@ for fi = 1:numel(forica_sets)
                 end
 
             catch ME
-                if ~amica_failure_qc_written
+                is_runtime_failure = ~amica_failure_qc_written;
+                if is_runtime_failure
                     ica_runtime_seconds = toc(ica_runtime_timer);
                     runtime_failure_row = helpers.build_step04_ica_qc_row( ...
                         cfg, subj_label, run_base, ica_method, "fail", ...
                         "AMICA_RUNTIME_ERROR", string(ME.message), ...
-                        ['Inspect the retained AMICA output and the Step-03 ' ...
-                         'ICA-training data; verify sufficient samples, data ' ...
-                         'rank, and the AMICA installation. ICLabel thresholds ' ...
-                         'cannot repair an ICA runtime failure.'], ...
+                        ['Check the AMICA installation and the Step-03 ' ...
+                         'training data/rank, then rerun once. If AMICA ' ...
+                         'fails again, use RUNICA consistently for the cohort. ' ...
+                         'ICLabel thresholds cannot repair an ICA runtime failure.'], ...
                         rank_forica, pcakeep, ica_train_eeg.nbchan, size(x, 2), ...
                         ica_runtime_seconds, step_cfg, amica_qc, ...
                         amica_tmp_dir, out_path);
@@ -471,7 +474,17 @@ for fi = 1:numel(forica_sets)
                         ['prep04_ica: %s | %s | AMICA failed; tmp dir deleted: %s | %s'], ...
                         subj_label, run_base_c, char(amica_tmp_dir), ME.message);
                 end
-                rethrow(ME);
+                if is_runtime_failure
+                    error('prep04_ica:AMICARuntimeFailure', ...
+                        ['%s | %s | %s Recommended action: Check the AMICA ' ...
+                         'installation and the Step-03 training data/rank, ' ...
+                         'then rerun once. If AMICA fails again, use RUNICA ' ...
+                         'consistently for the cohort. ICLabel thresholds ' ...
+                         'cannot repair an ICA runtime failure.'], ...
+                        subj_label, run_base_c, ME.message);
+                else
+                    rethrow(ME);
+                end
             end
 
         case "runica"
@@ -523,7 +536,9 @@ for fi = 1:numel(forica_sets)
                 failure_row = helpers.build_step04_ica_qc_row( ...
                     cfg, subj_label, run_base, ica_method, "fail", ...
                     "RUNICA_ERROR", string(ME.message), ...
-                    ['Inspect the Step-03 ICA-training data, data rank, and sample count. ' ...
+                    ['Check the Step-03 training data, sample count, and ' ...
+                     'estimated rank, then rerun once. If RUNICA fails ' ...
+                     'again, try AMICA before excluding the dataset. ' ...
                      'ICLabel thresholds cannot repair an ICA failure.'], ...
                     rank_forica, max(rank_forica, 1), ica_train_eeg.nbchan, ...
                     size(X, 2), ica_runtime_seconds, step_cfg, amica_qc, ...
@@ -533,7 +548,13 @@ for fi = 1:numel(forica_sets)
                 qc_rows = helpers.append_step04_qc_row(qc_rows, failure_row);
                 helpers.write_step04_subject_qc( ...
                     qc_rows, qc_method_dir, subj_label, step_cfg);
-                rethrow(ME);
+                error('prep04_ica:RUNICAFailure', ...
+                    ['%s | %s | %s Recommended action: Check the Step-03 ' ...
+                     'training data, sample count, and estimated rank, then ' ...
+                     'rerun once. If RUNICA fails again, try AMICA before ' ...
+                     'excluding the dataset. ICLabel thresholds cannot ' ...
+                     'repair an ICA failure.'], ...
+                    subj_label, run_base_c, ME.message);
             end
     end
 
@@ -582,7 +603,15 @@ for fi = 1:numel(forica_sets)
     final_failure_reason = "";
     final_recommended_action = "";
     if ica_method == "amica" && logical(step_cfg.amica_check_convergence) && ...
-            ~amica_qc.passed
+            amica_qc.status == "warning"
+        final_ica_status = "warning";
+        final_failure_code = amica_qc.warning_code;
+        final_failure_reason = amica_qc.warning_reason;
+        final_recommended_action = amica_qc.recommended_action;
+    elseif ica_method == "amica" && ...
+            logical(step_cfg.amica_check_convergence) && ~amica_qc.passed
+        % This branch is reachable only when the user explicitly configured
+        % fatal AMICA QC not to abort. Keep the output visibly flagged.
         final_ica_status = "warning";
         final_failure_code = amica_qc.failure_code;
         final_failure_reason = amica_qc.failure_reason;
@@ -608,7 +637,7 @@ end
 if isempty(outputs_written)
     step_out.ok = false;
     step_out.message = sprintf( ...
-        'prep04_ica: no runs processed successfully for %s (no matching preica or all skipped).', ...
+        'prep04_ica: no task-matched runs produced an output for %s.', ...
         subj_label);
     return;
 end

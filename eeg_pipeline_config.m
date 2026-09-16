@@ -256,23 +256,6 @@ cfg.subjects.min_id = []; % process all subjects with a higher ID than...
 % numeric/string ID, no lower cutoff if left empty 
 
 % =========================================================================
-% OPTIONAL RUNICA-VERSUS-AMICA PILOT
-% =========================================================================
-% Normal pipeline behavior is unchanged while enable=false. When enabled,
-% the runner reuses the existing Step-03 inputs and runs Steps 04 and 05
-% once with runica and once with single-model AMICA for the listed subjects.
-% Choose about three representative subjects. The pilot is forced to serial
-% execution and writes method-specific outputs plus paired QC comparison
-% tables under derivatives_root/qc/ica_pilot.
-cfg.ica_pilot = struct();
-cfg.ica_pilot.enable = false;
-cfg.ica_pilot.subjects = []; % e.g. {'211','212','213'}; required when enabled
-cfg.ica_pilot.run_step06 = false; % usually false; comparison is based on Steps 04-05
-cfg.ica_pilot.overwrite_mode = "delete"; % recompute both decompositions cleanly
-cfg.ica_pilot.mi_max_samples = 20000; % larger values improve precision but cost time/RAM
-cfg.ica_pilot.mi_bins = 20; % residual pairwise-MI estimator resolution
-
-% =========================================================================
 % PARALLEL
 % =========================================================================
 cfg.parallel = struct();
@@ -676,20 +659,22 @@ cfg.prep_04.interrupt_ica                = 'off';
 cfg.prep_04.use_pca_rank_if_interpolated = true;
 cfg.prep_04.amica_require_no_spaces_on_windows = true;
 cfg.prep_04.ica_channel_scope = "eeg_eog";
+% Step 04 derives the task filter from cfg.bids.task_label and requires an
+% exact *_forica.set / *_preica.set pair for every processed run.
 
 % AMICA is intentionally fixed to one model in Step 04. Increasing the
 % mixture-model count is not exposed here. 
-% max_iter is only an upper bound: raising it can rescue otherwise 
-% well-behaved runs that hit the cap, but increases worst-case runtime. Do 
-% not raise it for non-finite/invalid runs.
+% max_iter is an upper bound. Reaching it with otherwise valid output creates
+% a warning rather than rejection. Raising it increases worst-case runtime;
+% invalid/non-finite output remains a hard failure.
 cfg.prep_04.amica_max_iter = 2000;
-cfg.prep_04.amica_write_update_norm_history = true;
+cfg.prep_04.amica_write_update_norm_history = false;
 cfg.prep_04.amica_check_convergence = true;
 cfg.prep_04.amica_fail_on_nonconvergence = true;
 cfg.prep_04.amica_convergence_min_iterations = 50;
 cfg.prep_04.amica_convergence_tail_window = 20;
-cfg.prep_04.amica_keep_tmp_on_qc_failure = true;
-cfg.prep_04.write_run_qc_table = true;
+cfg.prep_04.amica_keep_tmp_on_qc_failure = false;
+cfg.prep_04.write_run_qc_table = false;
 cfg.prep_04.write_subject_qc_table = true;
 cfg.prep_04.qc_table_delimiter = ';';
 
@@ -698,13 +683,14 @@ cfg.prep_04.qc_table_delimiter = ';';
 % =========================================================================
 cfg.prep_05 = struct();
 
-cfg.prep_05.clear_subject_ica_comps_dir = true; % delete existing ICA components 
-% directory for subject before saving new one, to avoid confusion from old ICA results
+cfg.prep_05.clear_subject_ica_comps_dir = true; % remove existing QA PNGs only
+% for the current subject/task/run before exporting replacements
 
 % Every named ICLabel artifact class is independently configurable. "Other"
 % and low-Brain are broader rules and therefore remain opt-in. A HIGHER
 % probability threshold removes FEWER components; a lower threshold removes
-% more. Inspect pilot component tables/topographies before changing values.
+% more. Inspect validation-sample component tables and topographies before
+% changing values for a cohort.
 cfg.prep_05.iclabel_remove_eye           = true;
 cfg.prep_05.iclabel_remove_muscle        = true;
 cfg.prep_05.iclabel_remove_heart         = true;
@@ -721,45 +707,47 @@ cfg.prep_05.iclabel_channoise_remove_thr = 0.85;
 cfg.prep_05.iclabel_other_remove_thr     = 0.95;
 cfg.prep_05.iclabel_brain_min_keep_thr   = 0.05;
 
-cfg.prep_05.save_ic_topos_png   = true;
-cfg.prep_05.iclabel_edge_margin = 0.10;
+cfg.prep_05.save_ic_topos_png   = false;
+cfg.prep_05.iclabel_edge_margin = 0.00;
 
 cfg.prep_05.ic_topo_dpi        = 300;
 cfg.prep_05.ic_topo_fig_cm     = [0 0 18 18];
 cfg.prep_05.ic_topo_electrodes = 'off';
 
-% Hard before/after signal QC. These are conservative engineering safety
-% rails, not universal physiological cutoffs. Calibrate stricter values in
-% the pilot. With fail_on_violation=true, the subject/run fails and no
-% cleaned .set is saved, but the QC CSV contains reason and recommended
-% action. "eeg" excludes EOG from the comparison; use "all" if desired.
+% Two-level before/after signal QC. Warnings retain the cleaned dataset.
+% Extreme metrics are deliberately very broad; one extreme metric still only
+% warns. A signal-QC failure requires at least two simultaneous extreme
+% metrics. Invalid/non-finite output remains an immediate technical failure.
+% "eeg" excludes EOG from the comparison.
 cfg.prep_05.signal_qc_enable = true;
 cfg.prep_05.signal_qc_fail_on_violation = true;
 cfg.prep_05.signal_qc_channel_scope = "eeg"; % "eeg" | "all"
-cfg.prep_05.signal_qc_max_prop_ic_removed = 0.50;
+cfg.prep_05.signal_qc_max_prop_ic_removed = 0.95;
 cfg.prep_05.signal_qc_min_remaining_components = 2;
 cfg.prep_05.signal_qc_min_median_channel_correlation = 0.80;
 cfg.prep_05.signal_qc_max_relative_change_rms = 0.75;
 cfg.prep_05.signal_qc_min_rms_ratio = 0.50;
 cfg.prep_05.signal_qc_max_rms_ratio = 1.10;
+cfg.prep_05.signal_qc_hard_min_median_channel_correlation = 0.10;
+cfg.prep_05.signal_qc_hard_max_relative_change_rms = 10.00;
+cfg.prep_05.signal_qc_hard_min_rms_ratio = 0.10;
+cfg.prep_05.signal_qc_hard_max_rms_ratio = 10.00;
+cfg.prep_05.signal_qc_min_extreme_metrics_to_fail = 2; % independent problem domains, not correlated raw metrics
 cfg.prep_05.signal_qc_fail_on_nonfinite = true;
 cfg.prep_05.signal_qc_fail_on_flat_channels = true;
 cfg.prep_05.signal_qc_flat_std_epsilon = 1e-8;
 
-% This diagnostic is normally off and is enabled by the pilot controller.
-% It reports residual pairwise mutual information between IC activations;
-% lower is better. More samples/bins cost additional runtime and memory.
+% Optional validation-sample diagnostic for RUNICA and AMICA. MI is disabled
+% in routine runs because it has no universal decision threshold.
 cfg.prep_05.compute_decomposition_qc = false;
-cfg.prep_05.decomposition_qc_max_samples = 20000;
+cfg.prep_05.decomposition_qc_max_samples = 5000;
 cfg.prep_05.decomposition_qc_mi_bins = 20;
 
 cfg.prep_05.write_component_table       = true; % table with one row per ICA 
 % component: ICLabel probabilities and remove/keep decision
-cfg.prep_05.write_run_summary_table     = true; % one summary file per 
-% run/input file: number of ICs removed and counts per rejection criterion
+cfg.prep_05.write_run_summary_table     = false; % optional duplicate per-run summary
 cfg.prep_05.write_subject_summary_table = true; % one subject-level summary 
-% file combining all run summaries for this subject; may look identical if 
-% there is only one run
+% file combining all run summaries for this subject
 cfg.prep_05.qc_table_delimiter          = ';';
 
 % =========================================================================

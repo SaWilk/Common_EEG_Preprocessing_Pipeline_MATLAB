@@ -4,9 +4,9 @@ function step_out = eeg_prep05_after_ica(subj_id, cfg, paths, helpers)
 %
 % Classify independent components with ICLabel, remove only the configured
 % artifact classes, verify the resulting signal, and save QC tables before
-% handing the data to epoching. Signal-QC failures are hard failures by
-% default: the cleaned .set file is not written, while the failure reason
-% and a corrective recommendation remain available in the normal QC files.
+% handing the data to epoching. Warning-level signal changes are retained
+% and documented; hard signal-QC failures prevent the cleaned .set file
+% from being written and remain documented in the normal QC files.
 
 step_out = struct('ok', false, 'message', '', 'outputs', {{}});
 
@@ -26,6 +26,8 @@ MIN_IC_COUNT = 2;
 % ========================================================================
 step_cfg = struct();
 
+% Retained setting name for compatibility. Cleanup is restricted to PNGs
+% of the current task/run so outputs from other tasks are not removed.
 step_cfg.clear_subject_ica_comps_dir = true;
 
 % Each ICLabel removal rule has an independent switch. A higher threshold
@@ -47,39 +49,48 @@ step_cfg.iclabel_channoise_remove_thr = 0.85;
 step_cfg.iclabel_other_remove_thr     = 0.95;
 step_cfg.iclabel_brain_min_keep_thr   = 0.05;
 
-step_cfg.save_ic_topos_png   = true;
-step_cfg.iclabel_edge_margin = 0.10;
+step_cfg.save_ic_topos_png   = false;
+step_cfg.iclabel_edge_margin = 0.00;
 step_cfg.ic_topo_dpi         = 300;
 step_cfg.ic_topo_fig_cm      = [0 0 18 18];
 step_cfg.ic_topo_electrodes  = 'off';
 
-% Conservative engineering safety rails. They are not universal EEG
-% validity criteria and should be calibrated in the small pilot sample.
-% The default scope excludes EOG channels so intended ocular cleanup does
-% not by itself dominate the before/after comparison.
+% Two-level engineering safety rails. They are not universal EEG validity
+% criteria. Warning thresholds are descriptive and never block output.
+% Extreme thresholds are deliberately very broad; one extreme metric still
+% produces only a warning. A signal-QC failure requires the configured number
+% of simultaneous extreme metrics. Objectively invalid data (for example
+% non-finite values or changed dimensions) remain immediate technical failures.
+% The default scope excludes EOG channels so intended ocular cleanup does not
+% by itself dominate the before/after comparison.
 step_cfg.signal_qc_enable                         = true;
 step_cfg.signal_qc_fail_on_violation              = true;
 step_cfg.signal_qc_channel_scope                  = "eeg";
-step_cfg.signal_qc_max_prop_ic_removed            = 0.50;
+step_cfg.signal_qc_max_prop_ic_removed            = 0.95;
 step_cfg.signal_qc_min_remaining_components       = 2;
 step_cfg.signal_qc_min_median_channel_correlation = 0.80;
 step_cfg.signal_qc_max_relative_change_rms        = 0.75;
 step_cfg.signal_qc_min_rms_ratio                  = 0.50;
 step_cfg.signal_qc_max_rms_ratio                  = 1.10;
+step_cfg.signal_qc_hard_min_median_channel_correlation = 0.10;
+step_cfg.signal_qc_hard_max_relative_change_rms   = 10.00;
+step_cfg.signal_qc_hard_min_rms_ratio             = 0.10;
+step_cfg.signal_qc_hard_max_rms_ratio             = 10.00;
+step_cfg.signal_qc_min_extreme_metrics_to_fail    = 2; % independent problem domains, not correlated raw metrics
 step_cfg.signal_qc_fail_on_nonfinite              = true;
 step_cfg.signal_qc_fail_on_flat_channels          = true;
 step_cfg.signal_qc_flat_std_epsilon               = 1e-8;
 
-% Enabled automatically by the runica-versus-AMICA pilot. This computes a
-% deterministic, algorithm-independent residual pairwise-MI diagnostic on
-% the IC activations before IC rejection. Lower values indicate more nearly
-% independent components. It is a pilot comparison metric, not a hard gate.
+% Optional, algorithm-independent decomposition diagnostic for both RUNICA
+% and AMICA. It computes residual pairwise mutual information between IC
+% activations before rejection. Lower values indicate more nearly independent
+% components. This is a descriptive QC metric, not a hard gate.
 step_cfg.compute_decomposition_qc    = false;
-step_cfg.decomposition_qc_max_samples = 20000;
+step_cfg.decomposition_qc_max_samples = 5000;
 step_cfg.decomposition_qc_mi_bins     = 20;
 
 step_cfg.write_component_table       = true;
-step_cfg.write_run_summary_table     = true;
+step_cfg.write_run_summary_table     = false;
 step_cfg.write_subject_summary_table = true;
 step_cfg.qc_table_delimiter          = ';';
 step_cfg.overwrite_mode              = "";
@@ -112,6 +123,7 @@ end
 ica_method_tag = lower(regexprep(char(ica_method), '[^\w\-]', '_'));
 
 required_path_fields = { ...
+    'prep_03_out_dir_for_ica', 'prep_03_out_dir_until_ica', ...
     'prep_04_out_dir', 'prep_05_out_dir', 'qc_dir', ...
     'checks_ica_components_subj_dir'};
 for pi = 1:numel(required_path_fields)
@@ -135,14 +147,35 @@ helpers.ensure_dir(qc_method_dir);
 %% ========================================================================
 %  FIND INPUTS
 % ========================================================================
-in_sets = dir(fullfile(in_dir, INPUT_FILE_GLOB));
-if isempty(in_sets)
-    step_out.ok = true;
-    step_out.message = sprintf( ...
-        'prep05_after_ica: no %s found for %s (skip).', ...
-        INPUT_FILE_GLOB, subj_label);
-    helpers.log_msg_default('%s', step_out.message);
-    return;
+run_inventory = helpers.resolve_step04_run_inventory(paths, cfg);
+if ~run_inventory.valid
+    error('prep05_after_ica:Step03RunInventoryInvalid', ...
+        '%s | %s | %s', subj_label, ...
+        char(run_inventory.issue_code), ...
+        char(run_inventory.issue_message));
+end
+
+in_names = run_inventory.expected_output_names;
+input_exists = false(numel(in_names), 1);
+for ii = 1:numel(in_names)
+    input_exists(ii) = exist(fullfile(in_dir, char(in_names(ii))), 'file') == 2;
+end
+if any(~input_exists)
+    missing_names = strjoin(in_names(~input_exists), ', ');
+    error('prep05_after_ica:Step04RunsMissing', ...
+        ['%s | Missing task-matched Step-04 output(s): %s. ' ...
+         'Step 04 completeness is checked per run; rerun Step 04 first.'], ...
+        subj_label, char(missing_names));
+end
+
+all_input_info = dir(fullfile(in_dir, INPUT_FILE_GLOB));
+all_input_names = string({all_input_info.name})';
+ignored_input_names = setdiff(all_input_names, in_names, 'stable');
+if ~isempty(ignored_input_names)
+    helpers.log_msg_default( ...
+        ['prep05_after_ica: %s | ignoring %d Step-04 file(s) that do not ' ...
+         'belong to the configured task/run inventory'], ...
+        subj_label, numel(ignored_input_names));
 end
 
 %% ========================================================================
@@ -153,8 +186,8 @@ qa_dirs_prepared = false;
 summary_rows     = table();
 
 try
-    for fi = 1:numel(in_sets)
-        in_name    = in_sets(fi).name;
+    for fi = 1:numel(in_names)
+        in_name    = char(in_names(fi));
         run_base   = erase(string(in_name), INPUT_FILE_SUFFIX);
         run_base_c = char(run_base);
         out_name   = [run_base_c OUTPUT_SET_SUFFIX];
@@ -171,14 +204,21 @@ try
             continue;
         end
 
-        if ~qa_dirs_prepared
-            if step_cfg.clear_subject_ica_comps_dir
-                helpers.safe_rmdir(checks_method_dir);
-            end
+        if logical(step_cfg.save_ic_topos_png) && ~qa_dirs_prepared
             helpers.ensure_dir(checks_method_dir);
             helpers.ensure_dir(checks_rej_dir);
             helpers.ensure_dir(checks_edge_dir);
             qa_dirs_prepared = true;
+        end
+
+        run_file_prefix = sprintf('%s_%s_%s', ...
+            subj_label, run_base_c, ica_method_tag);
+        if logical(step_cfg.save_ic_topos_png) && ...
+                step_cfg.clear_subject_ica_comps_dir
+            helpers.delete_files_matching(checks_rej_dir, ...
+                [run_file_prefix '_IC*_rej.png']);
+            helpers.delete_files_matching(checks_edge_dir, ...
+                [run_file_prefix '_IC*_edge.png']);
         end
 
         if overwrite_mode == "delete" && exist(out_path, 'file') == 2
@@ -252,20 +292,38 @@ try
                     ['prep05_after_ica: %s | %s | topoplot missing -> ' ...
                      'skip QA PNG export.'], subj_label, run_base_c);
             else
-                file_prefix = sprintf('%s_%s_%s', ...
-                    subj_label, run_base_c, ica_method_tag);
+                file_prefix = run_file_prefix;
+                helpers.log_msg_default( ...
+                    ['prep05_after_ica: %s | %s | IC-topography export ' ...
+                     'START | rejected=%d | edge=%d | dpi=%d'], ...
+                    subj_label, run_base_c, numel(ic_to_remove), ...
+                    numel(ic_edge), round(double(step_cfg.ic_topo_dpi)));
                 helpers.write_ic_topography_pngs( ...
                     EEG, ic_to_remove(:)', checks_rej_dir, file_prefix, ...
-                    REJECTED_TAG, step_cfg, classif);
+                    REJECTED_TAG, step_cfg, classif, ...
+                    helpers.log_msg_default);
                 helpers.write_ic_topography_pngs( ...
                     EEG, ic_edge(:)', checks_edge_dir, file_prefix, ...
-                    EDGE_TAG, step_cfg, classif);
+                    EDGE_TAG, step_cfg, classif, ...
+                    helpers.log_msg_default);
+                helpers.log_msg_default( ...
+                    'prep05_after_ica: %s | %s | IC-topography export DONE', ...
+                    subj_label, run_base_c);
             end
         end
 
         decomposition_qc = helpers.empty_ica_decomposition_qc();
         if logical(step_cfg.compute_decomposition_qc)
-            decomposition_qc = helpers.compute_ica_decomposition_qc(EEG, step_cfg);
+            n_qc_samples = min(EEG.pnts * EEG.trials, ...
+                round(double(step_cfg.decomposition_qc_max_samples)));
+            n_qc_pairs = n_ic * (n_ic - 1) / 2;
+            helpers.log_msg_default( ...
+                ['prep05_after_ica: %s | %s | residual pairwise MI ' ...
+                 'START | components=%d | pairs=%d | samples=%d | bins=%d'], ...
+                subj_label, run_base_c, n_ic, n_qc_pairs, n_qc_samples, ...
+                round(double(step_cfg.decomposition_qc_mi_bins)));
+            decomposition_qc = helpers.compute_ica_decomposition_qc( ...
+                EEG, step_cfg, helpers.log_msg_default);
             helpers.log_msg_default( ...
                 ['prep05_after_ica: %s | %s | residual pairwise MI ' ...
                  'mean=%.6f bits | median=%.6f bits | pairs=%d'], ...
@@ -310,16 +368,23 @@ try
         if signal_qc.status == "fail" && ...
                 ~logical(step_cfg.signal_qc_fail_on_violation)
             signal_qc.status = "warning";
+            signal_qc.decision = "accept_with_warning";
+            signal_qc.warning_code = signal_qc.failure_code;
+            signal_qc.warning_reason = signal_qc.failure_reason;
+            signal_qc.failure_code = "";
+            signal_qc.failure_reason = "";
         end
 
         EEG.etc.ic_rejection.signal_qc = signal_qc;
         EEG.etc.ic_rejection.decomposition_qc = decomposition_qc;
         EEG = helpers.append_eeg_comment(EEG, sprintf( ...
             ['prep05_after_ica: signal_qc=%s | median_corr=%.4f | ' ...
-             'relative_change_rms=%.4f | rms_ratio=%.4f'], ...
+             'relative_change_rms=%.4f | rms_ratio=%.4f | extreme=%d/%d'], ...
             char(signal_qc.status), ...
             signal_qc.median_channel_correlation, ...
-            signal_qc.relative_change_rms, signal_qc.rms_ratio));
+            signal_qc.relative_change_rms, signal_qc.rms_ratio, ...
+            signal_qc.extreme_metric_count, ...
+            signal_qc.extreme_metrics_required_to_fail));
 
         prep04_qc = helpers.extract_prep04_qc_from_eeg(EEG);
         summary_row = helpers.build_prep05_summary_row( ...
@@ -327,6 +392,16 @@ try
             signal_qc, decomposition_qc, prep04_qc, n_ic, ...
             n_ic_removed_unique, n_ic_remaining, prop_ic_removed, ...
             numel(ic_edge), component_table_path, out_path, false);
+
+        if signal_qc.status == "warning"
+            helpers.log_msg_default( ...
+                ['prep05_after_ica: SIGNAL QC WARNING | %s | %s | %s | ' ...
+                 'decision=%s | action=%s | output will be retained'], ...
+                subj_label, run_base_c, ...
+                char(signal_qc.warning_reason), ...
+                char(signal_qc.decision), ...
+                char(signal_qc.recommended_action));
+        end
 
         if signal_qc.status == "fail"
             summary_rows = helpers.append_prep05_summary_row(summary_rows, summary_row);
@@ -337,8 +412,9 @@ try
 
             helpers.log_msg_default( ...
                 ['prep05_after_ica: HARD QC FAIL | %s | %s | %s | ' ...
-                 'action=%s'], subj_label, run_base_c, ...
+                 'decision=%s | action=%s'], subj_label, run_base_c, ...
                 char(signal_qc.failure_reason), ...
+                char(signal_qc.decision), ...
                 char(signal_qc.recommended_action));
 
             if logical(step_cfg.signal_qc_fail_on_violation)
