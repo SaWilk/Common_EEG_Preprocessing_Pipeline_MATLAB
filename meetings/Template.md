@@ -3,16 +3,14 @@
 
 ---
 ## General Info
-Created::. {{date: DD-MM-YYYY}} {{time}}
+Created: {{date: DD-MM-YYYY}} {{time}}
+Meeting Members:
 
-Type:
-
-Meeting Members :
 # 📅 Agenda
 1. 
-# 🎯 - Goals
+# 🎯 Goals
 1. 
-# 📝 - Discussion notes
+# 📝 Discussion notes
 - 
 
 #  Action items
