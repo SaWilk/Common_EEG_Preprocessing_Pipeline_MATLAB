@@ -477,6 +477,9 @@ cfg.prep_02.disable_first_acquisition.disabled_plus_code  = "S 24999";
 % =========================================================================
 cfg.prep_03 = struct();
 
+% -------------------------------------------------------------------------
+% SUMMARY OPTION
+% -------------------------------------------------------------------------
 % ICA-training QC: Save a summary of how many epochs were rejected from the ICA training
 % dataset and how many remain.
 cfg.prep_03.write_run_summary_table = true;
@@ -714,6 +717,15 @@ cfg.prep_05.ic_topo_dpi        = 300;
 cfg.prep_05.ic_topo_fig_cm     = [0 0 18 18];
 cfg.prep_05.ic_topo_electrodes = 'off';
 
+%--------------------------------------------------------------------------
+% SUMMARY OPTION
+%--------------------------------------------------------------------------
+% Save QC tables for ICA component rejection. The component table contains
+% ICLabel probabilities and the remove/keep decision for each component.
+% Run- and subject-level summaries report how many components were removed
+% and which rejection criteria were responsible. All-subject summaries are
+% refreshed automatically after all subjects have finished.
+
 cfg.prep_05.write_component_table       = true; % table with one row per ICA 
 % component: ICLabel probabilities and remove/keep decision
 cfg.prep_05.write_run_summary_table     = true; % one summary file per 
@@ -904,9 +916,14 @@ cfg.prep_06.min_trials_per_condition_codes = {}; % adjust this to conditions
 %    }
 
 % -------------------------------------------------------------------------
-% Summary tables
+% SUMMARY OPTION
 % -------------------------------------------------------------------------
-% These are fixed QC outputs. Step 06 also refreshes all-subject summaries.
+% Save QC summaries for final epoch rejection. The tables report the number
+% of total, rejected and remaining epochs, including the rejection method
+% and individual rejection reasons. Subject- and all-subject summaries are
+% created automatically to provide an overview across runs and subjects.
+
+% Step 06 also refreshes the corresponding all-subject summaries automatically.
 cfg.prep_06.write_run_summary_table     = true;
 cfg.prep_06.write_subject_summary_table = true;
 cfg.prep_06.qc_table_delimiter          = ';';
