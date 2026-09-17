@@ -1,5 +1,26 @@
 function step_out = eeg_prep02_triggerfix(subj_id, cfg, paths, helpers)
-% Generic Step 02: triggerfix via phase gates + generic blocking
+% EEG_PREP02_TRIGGERFIX
+% Copyright (C) 2025–2026 Saskia Wilken and contributors
+%
+%
+% Step 02 of the EEG pipeline.
+%
+% Does:
+%   - Load BIDS BrainVision EEG (.vhdr) for one subject
+%   - Optional RTGMN-specific RAW QC: compare CF behavior-log token order
+%     against raw EEG trigger order
+%   - Remap raw triggers into phase-specific or globally-applied codes using cfg.paradigms settings 
+%   - Optionally disable first trials within a phase
+%   - Save *_triggersfixed.set into derivatives/01_trigger_fix/sub-XXX/
+%
+% Important note:
+%   The behavior-log branch in this step is RTGMN/CF-specific. Most users
+%   will not have this custom file format. For other projects, leave
+%   cfg.prep_02.run_raw_order_qc = false unless you explicitly adapt that
+%   branch for your own experiment-specific logs.
+%
+% Saskia Wilken Dez 2025/Laura Langemeyer Sept 2026
+
 step_out = struct('ok', false, 'skipped', false, 'out_set_file', '', 'message', '');
 
 try
@@ -28,12 +49,7 @@ try
     % ---------------------------------------------------------------------
     % Paradigm triggerfix config
     % ---------------------------------------------------------------------
-    paradigm_name = "myParadigm";
-    % if isfield(cfg, 'prep_02') && isstruct(cfg.prep_02) && isfield(cfg.prep_02, 'paradigm_name')
-    %     paradigm_name = char(string(cfg.prep_02.paradigm_name));
-    % elseif isfield(step_cfg, 'paradigm_name')
-    %     paradigm_name = char(string(step_cfg.paradigm_name));
-    % end
+    paradigm_name = "myParadigm"; %initiates the extraction of the triggerfix paradigm set in the config
 
     if strlength(paradigm_name) > 0 && isfield(cfg, 'paradigms') && isfield(cfg.paradigms, paradigm_name) ...
             && isfield(cfg.paradigms.(paradigm_name), 'triggerfix')

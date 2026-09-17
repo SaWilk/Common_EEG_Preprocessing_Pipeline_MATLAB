@@ -360,60 +360,58 @@ cfg.steps.prep_02_triggerfix.run_raw_order_qc = false; %find behavior log file
 % 1) Phases: Enter start markers and names for your phases if use_gating_from_start_markers = true
 cfg.paradigms.myParadigm.triggerfix.gates = struct();
 cfg.paradigms.myParadigm.triggerfix.gates.start_markers = struct( ...
-    'Learning',    "S 91", ...
-    'Distraction', "S 92", ...
-    'Recap',       "S 93" );
+    '',    " ", ...
+    '', " ", ...
+    '', " " );
 
 % 2) Name Trigger and there category in your paradigm
 % add more blocks if necessary
 cfg.paradigms.myParadigm.triggerfix.raw_triggers = struct();
-cfg.paradigms.myParadigm.triggerfix.raw_triggers.rawA = "S 60";   % trigger category A: no CP miss
-cfg.paradigms.myParadigm.triggerfix.raw_triggers.rawB = "S 61";   % trigger category B: no CP hit
-cfg.paradigms.myParadigm.triggerfix.raw_triggers.rawC = "S 62";   % trigger category C: CP miss
-cfg.paradigms.myParadigm.triggerfix.raw_triggers.rawD = "S 63";   % trigger category D: CP hit
+cfg.paradigms.myParadigm.triggerfix.raw_triggers.rawA = " ";   % trigger category A: no CP miss
+cfg.paradigms.myParadigm.triggerfix.raw_triggers.rawB = " ";   % trigger category B: no CP hit
+cfg.paradigms.myParadigm.triggerfix.raw_triggers.rawC = " ";   % trigger category C: CP miss
+cfg.paradigms.myParadigm.triggerfix.raw_triggers.rawD = " ";   % trigger category D: CP hit
 
 % 3) Blocking/Counting:renaming and counting event triggers per phase
 cfg.paradigms.myParadigm.triggerfix.blocking = struct();
-cfg.paradigms.myParadigm.triggerfix.blocking.count_scope = "global"; % global for counting across all trials; 
-% "phase" for counting within phases if cfg.paradigms.myParadigm.triggerfix.use_gating_from_start_markers = false;
+cfg.paradigms.myParadigm.triggerfix.blocking.count_scope = " "; % global for counting across all trials; 
+% "phase" for counting within phases if cfg.paradigms.myParadigm.triggerfix.use_gating_from_start_markers = true and if cfg.paradigms.myParadigm.triggerfix.gates.start_markers are set accordingly.
+% Starting markers themselves are not counted and not renamed;
 
 %Add more blocks if necessary!
 %'n' is the amount of triggers that should be renamed: eg. 10 means that
-%the first 10 triggers found are renamed. Inf for all triggers
+%the first 10 triggers found are renamed (if counted individually for each phase, it refers to counting within the phase and not globally). 
+% Inf for all triggers
 cfg.paradigms.myParadigm.triggerfix.blocking.categoryA = struct();
 cfg.paradigms.myParadigm.triggerfix.blocking.categoryA.raw_key = "rawA";
 cfg.paradigms.myParadigm.triggerfix.blocking.categoryA.blocks = { ...
-    %struct('n', 10,  'code', "S 2011"), ...
-    struct('n', inf, 'code', "S 160")  ...
+    struct('n', inf, 'code', " ")  ...
 };
 
 cfg.paradigms.myParadigm.triggerfix.blocking.categoryB = struct();
 cfg.paradigms.myParadigm.triggerfix.blocking.categoryB.raw_key = "rawB";
 cfg.paradigms.myParadigm.triggerfix.blocking.categoryB.blocks = { ...
-    %struct('n', 5,   'code', "S 2021"), ...
-    struct('n', inf, 'code', "S 161")  ...
+    struct('n', inf, 'code', " ")  ...
 };
 
 cfg.paradigms.myParadigm.triggerfix.blocking.categoryC = struct();
 cfg.paradigms.myParadigm.triggerfix.blocking.categoryC.raw_key = "rawC";
 cfg.paradigms.myParadigm.triggerfix.blocking.categoryC.blocks = { ...
-    %struct('n', 5,   'code', "S 2021"), ...
-    struct('n', inf, 'code', "S 162")  ...
+    struct('n', inf, 'code', " ")  ...
 };
 cfg.paradigms.myParadigm.triggerfix.blocking.categoryD = struct();
 cfg.paradigms.myParadigm.triggerfix.blocking.categoryD.raw_key = "rawD";
 cfg.paradigms.myParadigm.triggerfix.blocking.categoryD.blocks = { ...
-    %struct('n', 5,   'code', "S 2021"), ...
-    struct('n', inf, 'code', "S 163")  ...
+    struct('n', inf, 'code', " ")  ...
 };
 
 cfg.paradigms.myParadigm.triggerfix.enable_first_match_replacements = false; %true if you want to replace the first accuring trigger
 
 cfg.paradigms.myParadigm.triggerfix.first_match_replacements = {
-    struct('match_code',"S 2041", 'replace_code',"S 20",    'max_replacements',1),
-    struct('match_code',"S 2441", 'replace_code',"S 21",    'max_replacements',1),
-    struct('match_code',"S 2021", 'replace_code',"S 20999", 'max_replacements',1),
-    struct('match_code',"S 2421", 'replace_code',"S 204999",'max_replacements',1)
+    struct('match_code'," ", 'replace_code'," ",    'max_replacements',1),
+    struct('match_code'," ", 'replace_code'," ",    'max_replacements',1),
+    struct('match_code'," ", 'replace_code'," ", 'max_replacements',1),
+    struct('match_code'," ", 'replace_code'," ",'max_replacements',1)
 };
 
 % =========================================================================
