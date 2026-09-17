@@ -352,126 +352,70 @@ cfg.prep_01.task_label    = cfg.bids.task_label;    % get task label defined in 
 % =========================================================================
 % STEP 02: TRIGGERFIX
 % =========================================================================
-cfg.prep_02 = struct();
+cfg.paradigms.myParadigm.triggerfix = struct();
 
-cfg.prep_02.run_raw_order_qc = true; % compare behavior-log event order to raw EEG triggers
+cfg.paradigms.myParadigm.triggerfix.use_gating_from_start_markers = false; % true if there are phases, false if there are no phases in your paradigm
 
-cfg.prep_02.allow_multiple_runs  = false;         % allow multiple matching BIDS EEG runs
-cfg.prep_02.multiple_vhdr_policy = "most_recent"; % "most_recent" | "first" | "error"
+cfg.steps.prep_02_triggerfix.run_raw_order_qc = false; %find behavior log file
 
-cfg.prep_02.qc_out_dir = ""; % optional QC output folder override
+% 1) Phases: Enter start markers and names for your phases if use_gating_from_start_markers = true
+cfg.paradigms.myParadigm.triggerfix.gates = struct();
+cfg.paradigms.myParadigm.triggerfix.gates.start_markers = struct( ...
+    'Learning',    "S 91", ...
+    'Distraction', "S 92", ...
+    'Recap',       "S 93" );
 
-cfg.prep_02.task_label         = cfg.bids.task_label;    % BIDS task label
-cfg.prep_02.session_label      = cfg.bids.session_label; % BIDS session label
-cfg.prep_02.input_vhdr_pattern = "";                     % optional explicit vhdr pattern # HOWTO: as regex pattern?
+% 2) Name Trigger and there category in your paradigm
+% add more blocks if necessary
+cfg.paradigms.myParadigm.triggerfix.raw_triggers = struct();
+cfg.paradigms.myParadigm.triggerfix.raw_triggers.rawA = "S 60";   % trigger category A: no CP miss
+cfg.paradigms.myParadigm.triggerfix.raw_triggers.rawB = "S 61";   % trigger category B: no CP hit
+cfg.paradigms.myParadigm.triggerfix.raw_triggers.rawC = "S 62";   % trigger category C: CP miss
+cfg.paradigms.myParadigm.triggerfix.raw_triggers.rawD = "S 63";   % trigger category D: CP hit
 
-cfg.prep_02.use_explicit_chanlist = false; % load only explicit channels
-cfg.prep_02.explicit_chanlist     = 1:66;  % explicit channel indices if enabled
+% 3) Blocking/Counting:renaming and counting event triggers per phase
+cfg.paradigms.myParadigm.triggerfix.blocking = struct();
+cfg.paradigms.myParadigm.triggerfix.blocking.count_scope = "global"; % global for counting across all trials; 
+% "phase" for counting within phases if cfg.paradigms.myParadigm.triggerfix.use_gating_from_start_markers = false;
 
-% quality control settings 
-cfg.prep_02.raw_qc_keep_tokens     = ["S 20","S 21","S 22","S 23","S 24","S 15","S 5"];
-cfg.prep_02.raw_qc_bin_size_s      = 1;
-cfg.prep_02.raw_qc_max_rows        = 20000;
-cfg.prep_02.raw_qc_write_csv_on_ok = false;
+%Add more blocks if necessary!
+%'n' is the amount of triggers that should be renamed: eg. 10 means that
+%the first 10 triggers found are renamed. Inf for all triggers
+cfg.paradigms.myParadigm.triggerfix.blocking.categoryA = struct();
+cfg.paradigms.myParadigm.triggerfix.blocking.categoryA.raw_key = "rawA";
+cfg.paradigms.myParadigm.triggerfix.blocking.categoryA.blocks = { ...
+    %struct('n', 10,  'code', "S 2011"), ...
+    struct('n', inf, 'code', "S 160")  ...
+};
 
-cfg.prep_02.behavior_log_column_event_type = 'EventType';
-cfg.prep_02.behavior_log_column_code       = 'Code';
-cfg.prep_02.behavior_log_column_time       = 'Time';
-cfg.prep_02.behavior_log_time_unit         = "ms";
+cfg.paradigms.myParadigm.triggerfix.blocking.categoryB = struct();
+cfg.paradigms.myParadigm.triggerfix.blocking.categoryB.raw_key = "rawB";
+cfg.paradigms.myParadigm.triggerfix.blocking.categoryB.blocks = { ...
+    %struct('n', 5,   'code', "S 2021"), ...
+    struct('n', inf, 'code', "S 161")  ...
+};
 
-cfg.prep_02.behavior_log_map = { ...
-    'Picture', 'cs-',      'cs_minus'; ...
-    'Picture', 'csminus',  'cs_minus'; ...
-    'Picture', 'cs_min',   'cs_minus'; ...
-    'Picture', 'csmin',    'cs_minus'; ...
-    'Picture', 'cs1',      'cs_minus'; ...
-    'Picture', 'GS1',      'gs_1'; ...
-    'Picture', 'GSU',      'gs_u'; ...
-    'Picture', 'GS2',      'gs_2'; ...
-    'Picture', 'cs+',      'cs_plus'; ...
-    'Picture', 'csplus',   'cs_plus'; ...
-    'Picture', 'cs_pls',   'cs_plus'; ...
-    'Picture', 'cspls',    'cs_plus'; ...
-    'Picture', 'cs2',      'cs_plus'; ...
-    'Sound',   'Startle',  'startle'; ...
-    'Nothing', 'Shock',    'shock' ...
-    };
+cfg.paradigms.myParadigm.triggerfix.blocking.categoryC = struct();
+cfg.paradigms.myParadigm.triggerfix.blocking.categoryC.raw_key = "rawC";
+cfg.paradigms.myParadigm.triggerfix.blocking.categoryC.blocks = { ...
+    %struct('n', 5,   'code', "S 2021"), ...
+    struct('n', inf, 'code', "S 162")  ...
+};
+cfg.paradigms.myParadigm.triggerfix.blocking.categoryD = struct();
+cfg.paradigms.myParadigm.triggerfix.blocking.categoryD.raw_key = "rawD";
+cfg.paradigms.myParadigm.triggerfix.blocking.categoryD.blocks = { ...
+    %struct('n', 5,   'code', "S 2021"), ...
+    struct('n', inf, 'code', "S 163")  ...
+};
 
-cfg.prep_02.phase_start_markers = struct();
-cfg.prep_02.phase_start_markers.habituation    = "S 91";
-cfg.prep_02.phase_start_markers.acquisition    = "S 92";
-cfg.prep_02.phase_start_markers.generalization = "S 93";
-cfg.prep_02.phase_start_markers.extinction     = "S 94";
-cfg.prep_02.phase_start_markers.return_of_fear = "S 95";
+cfg.paradigms.myParadigm.triggerfix.enable_first_match_replacements = false; %true if you want to replace the first accuring trigger
 
-cfg.prep_02.raw_triggers = struct();
-cfg.prep_02.raw_triggers.cs_minus = "S 20";
-cfg.prep_02.raw_triggers.gs_1     = "S 21";
-cfg.prep_02.raw_triggers.gs_u     = "S 22";
-cfg.prep_02.raw_triggers.gs_2     = "S 23";
-cfg.prep_02.raw_triggers.cs_plus  = "S 24";
-cfg.prep_02.raw_triggers.startle  = "S 15";
-cfg.prep_02.raw_triggers.shock    = "S 5";
-
-cfg.prep_02.habituation_map = { ...
-    'cs_minus', "S 201"; ...
-    'gs_1',     "S 211"; ...
-    'gs_u',     "S 221"; ...
-    'gs_2',     "S 231"; ...
-    'cs_plus',  "S 241"  ...
-    };
-
-cfg.prep_02.generalization_map = { ...
-    'cs_minus', "S 203"; ...
-    'gs_1',     "S 213"; ...
-    'gs_u',     "S 223"; ...
-    'gs_2',     "S 233"; ...
-    'cs_plus',  "S 243"  ...
-    };
-
-cfg.prep_02.return_of_fear_map = { ...
-    'cs_minus', "S 205"; ...
-    'gs_1',     "S 215"; ...
-    'gs_u',     "S 225"; ...
-    'gs_2',     "S 235"; ...
-    'cs_plus',  "S 245"  ...
-    };
-
-cfg.prep_02.acquisition = struct();
-cfg.prep_02.acquisition.cs_minus_key      = 'cs_minus';
-cfg.prep_02.acquisition.cs_plus_key       = 'cs_plus';
-cfg.prep_02.acquisition.n_first_block     = 10;
-cfg.prep_02.acquisition.code_minus_block1 = "S 2021";
-cfg.prep_02.acquisition.code_plus_block1  = "S 2421";
-cfg.prep_02.acquisition.code_minus_block2 = "S 2022";
-cfg.prep_02.acquisition.code_plus_block2  = "S 2422";
-
-cfg.prep_02.extinction = struct();
-cfg.prep_02.extinction.cs_minus_key      = 'cs_minus';
-cfg.prep_02.extinction.cs_plus_key       = 'cs_plus';
-cfg.prep_02.extinction.n_first_block     = 11;
-cfg.prep_02.extinction.n_second_block    = 10;
-cfg.prep_02.extinction.code_minus_block1 = "S 2041";
-cfg.prep_02.extinction.code_plus_block1  = "S 2441";
-cfg.prep_02.extinction.code_minus_block2 = "S 2042";
-cfg.prep_02.extinction.code_plus_block2  = "S 2442";
-cfg.prep_02.extinction.code_minus_block3 = "S 2043";
-cfg.prep_02.extinction.code_plus_block3  = "S 2443";
-
-cfg.prep_02.disable_first_ext_trials = true;
-cfg.prep_02.disable_first_acq_trials = true;
-
-cfg.prep_02.disable_first_extinction = struct();
-cfg.prep_02.disable_first_extinction.first_minus_code = "S 2041";
-cfg.prep_02.disable_first_extinction.first_plus_code  = "S 2441";
-cfg.prep_02.disable_first_extinction.revert_minus_key = 'cs_minus';
-cfg.prep_02.disable_first_extinction.revert_plus_key  = 'cs_plus';
-
-cfg.prep_02.disable_first_acquisition = struct();
-cfg.prep_02.disable_first_acquisition.first_minus_code    = "S 2021";
-cfg.prep_02.disable_first_acquisition.first_plus_code     = "S 2421";
-cfg.prep_02.disable_first_acquisition.disabled_minus_code = "S 20999";
-cfg.prep_02.disable_first_acquisition.disabled_plus_code  = "S 24999";
+cfg.paradigms.myParadigm.triggerfix.first_match_replacements = {
+    struct('match_code',"S 2041", 'replace_code',"S 20",    'max_replacements',1),
+    struct('match_code',"S 2441", 'replace_code',"S 21",    'max_replacements',1),
+    struct('match_code',"S 2021", 'replace_code',"S 20999", 'max_replacements',1),
+    struct('match_code',"S 2421", 'replace_code',"S 204999",'max_replacements',1)
+};
 
 % =========================================================================
 % STEP 03: UNTIL ICA
