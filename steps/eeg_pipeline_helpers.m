@@ -904,12 +904,14 @@ paths.prep_06_out_dir           = fullfile(paths.step_06_root, paths.subj_label)
 paths.qc_root = fullfile(paths.derivatives_root, 'qc');
 ensure_dir_impl(paths.qc_root);
 
-paths.qc_ica_components_root = fullfile(paths.qc_root, 'ica_comps');
-paths.qc_bad_chans_root       = fullfile(paths.qc_root, 'bad_chans');
-paths.qc_epoch_rej_root       = fullfile(paths.qc_root, 'epoch_rej');
+paths.qc_ica_training_root   = fullfile(paths.qc_root, '03_ica_training');
+paths.qc_bad_chans_root      = fullfile(paths.qc_root, '03_bad_chans');
+paths.qc_ica_components_root = fullfile(paths.qc_root, '05_ica_comps');
+paths.qc_epoch_rej_root      = fullfile(paths.qc_root, '06_epoch_rej');
 
-ensure_dir_impl(paths.qc_ica_components_root);
+ensure_dir_impl(paths.qc_ica_training_root);
 ensure_dir_impl(paths.qc_bad_chans_root);
+ensure_dir_impl(paths.qc_ica_components_root);
 ensure_dir_impl(paths.qc_epoch_rej_root);
 
 paths.qc_ica_components_subj_dir = fullfile(paths.qc_ica_components_root, paths.subj_label);
@@ -917,7 +919,7 @@ paths.qc_bad_chans_subj_dir       = fullfile(paths.qc_bad_chans_root, paths.subj
 paths.qc_epoch_rej_subj_dir       = fullfile(paths.qc_epoch_rej_root, paths.subj_label);
 
 % Backward-compatible aliases for Step 05 and older callers. Their values
-% now point into qc/ica_comps; no new derivatives/checks tree is created.
+% now point into qc/05_ica_comps; no new derivatives/checks tree is created.
 paths.checks_root = paths.qc_root;
 paths.checks_ica_components_root = paths.qc_ica_components_root;
 paths.checks_ica_components_subj_dir = paths.qc_ica_components_subj_dir;
@@ -5209,7 +5211,7 @@ end
 
 function [t_all, t_by_reason, output_paths] = collect_bad_channel_qc_impl(cfg_or_qc_root)
 [qc_root, timestamp, delimiter] = resolve_qc_collection_context_impl(cfg_or_qc_root);
-bad_root = fullfile(qc_root, 'bad_chans');
+bad_root = fullfile(qc_root, '03_bad_chans');
 t_all = table();
 t_by_reason = table();
 output_paths = {};
@@ -5249,7 +5251,7 @@ end
 
 function [t_all, t_by_method, t_pair, t_reasons, output_paths] = collect_prep06_summary_impl(cfg_or_qc_root)
 [qc_root, timestamp, delimiter] = resolve_qc_collection_context_impl(cfg_or_qc_root);
-epoch_root = fullfile(qc_root, 'epoch_rej');
+epoch_root = fullfile(qc_root, '06_epoch_rej');
 t_all = table();
 t_by_method = table();
 t_pair = table();
@@ -5403,7 +5405,7 @@ for r = 1:height(warning_table)
         round(warning_table.n_epochs_total(r)), ...
         100 * warning_table.prop_rejected_total(r)));
 end
-lines(end) = "Review the timestamped tables under qc/epoch_rej/.";
+lines(end) = "Review the timestamped tables under qc/06_epoch_rej/.";
 warning_message = strjoin(lines, newline);
 end
 
@@ -6491,7 +6493,7 @@ end
 [qc_root, ~, delimiter] = resolve_qc_collection_context_impl(cfg);
 
 % Include the timestamp and dataset name in the filename.
-out_path = fullfile(qc_root, 'ica_training', sprintf( ...
+out_path = fullfile(qc_root, '03_ica_training', sprintf( ...
     '%s_%s_prep03_run_summary.csv', ...
     char(summary.qc_timestamp), char(summary.run_base)));
 
@@ -6510,7 +6512,7 @@ end
 [qc_root, timestamp, delimiter] = ...
     resolve_qc_collection_context_impl(cfg_or_qc_root);
 
-training_root = fullfile(qc_root, 'ica_training');
+training_root = fullfile(qc_root, '03_ica_training');
 
 t_all = table();
 output_paths = {};
