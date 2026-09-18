@@ -18,7 +18,6 @@ function step_out = eeg_prep05_after_ica(subj_id, cfg, paths, helpers)
 %
 % OPTIONAL QA OUTPUT
 %   Method-specific QC subfolders below:
-%       paths.qc_dir/<ica_method>/
 %       paths.checks_ica_components_subj_dir/<ica_method>/
 
 step_out = struct('ok', false, 'message', '', 'outputs', {{}});
@@ -98,9 +97,7 @@ if ~isfield(paths, 'prep_05_out_dir') || strlength(string(paths.prep_05_out_dir)
     error('prep05_after_ica: paths.prep_05_out_dir is missing or empty.');
 end
 
-if ~isfield(paths, 'qc_dir') || strlength(string(paths.qc_dir)) == 0
-    error('prep05_after_ica: paths.qc_dir is missing or empty.');
-end
+
 
 if ~isfield(paths, 'checks_ica_components_subj_dir') || ...
         strlength(string(paths.checks_ica_components_subj_dir)) == 0
@@ -110,8 +107,8 @@ end
 in_dir  = paths.prep_04_out_dir;
 out_dir = paths.prep_05_out_dir;
 
-qc_method_dir     = fullfile(paths.qc_dir, ica_method_tag);
 checks_method_dir = fullfile(paths.checks_ica_components_subj_dir, ica_method_tag);
+qc_method_dir     = checks_method_dir;
 checks_rej_dir    = fullfile(checks_method_dir, REJECTED_TAG);
 checks_edge_dir   = fullfile(checks_method_dir, EDGE_TAG);
 

@@ -1,0 +1,148 @@
+HOWTO: Summary / QC Outputs
+===========================
+
+The pipeline creates quality-control (QC) summary tables for Steps 03, 05 and 06.
+All tables are written as CSV files.
+
+Config switches
+---------------
+
+Step 03:
+    cfg.prep_03.write_run_summary_table = true;
+
+Step 05:
+    cfg.prep_05.write_component_table       = true;
+    cfg.prep_05.write_run_summary_table     = true;
+    cfg.prep_05.write_subject_summary_table = true;
+
+Step 06:
+    cfg.prep_06.write_run_summary_table     = true;
+    cfg.prep_06.write_subject_summary_table = true;
+
+
+QC folders
+----------
+
+All QC outputs are stored below:
+
+    <derivatives_root>/qc/
+
+Main folders:
+
+    03_ica_training   ICA-training epoch rejection summaries
+    03_bad_chans      Bad-channel QC
+    05_ica_comps      ICLabel / ICA-component QC
+    06_epoch_rej      Final epoch-rejection QC
+
+
+Step 03: ICA training
+---------------------
+
+Folder:
+
+    qc/03_ica_training/
+
+The Step-03 summary describes the temporary ICA-training dataset.
+
+Typical information includes:
+    - subject and run
+    - ICA-training rejection method
+    - number of epochs before rejection
+    - number of rejected epochs
+    - number of remaining epochs
+    - rejection / processing status
+    - path to the resulting *_forica.set dataset
+
+An all-subject summary is refreshed automatically after Step 03.
+
+
+Step 03: Bad channels
+---------------------
+
+Folder:
+
+    qc/03_bad_chans/
+
+The bad-channel QC tables document which EEG channels were flagged and why.
+
+Typical information includes:
+    - subject and run
+    - channel name / index
+    - whether the channel was classified as bad
+    - reason for rejection, e.g. flat/invalid signal or low correlation
+    - bad-channel detection method and relevant settings
+
+Combined all-subject bad-channel summaries are also created.
+
+
+Step 05: ICA components / ICLabel
+---------------------------------
+
+Folder:
+
+    qc/05_ica_comps/
+
+Per-subject files are stored below:
+
+    qc/05_ica_comps/sub-<ID>/<ica_method>/
+
+The component table contains one row per independent component and includes:
+    - ICLabel probabilities for Brain, Muscle, Eye, Heart, Line Noise,
+      Channel Noise and Other
+    - flags showing which rejection criteria were met
+    - whether the component was removed
+    - whether it was close to a rejection threshold ("edge" component)
+
+The run and subject summaries contain:
+    - total number of ICs
+    - number and proportion of removed ICs
+    - number of remaining ICs
+    - counts of components flagged as Eye, Muscle, Heart, Line Noise,
+      Channel Noise, Other or low Brain probability
+    - number of edge components
+    - ICLabel thresholds used
+
+IC topography PNGs for removed and edge components are stored in the same
+subject/method folder.
+
+After all subjects have finished, combined summaries are created automatically
+directly in:
+
+    qc/05_ica_comps/
+
+These include:
+    - one table containing all subject/run summaries
+    - a descriptive summary grouped by ICA method
+    - if both methods are available, an optional runica-vs-AMICA comparison
+
+
+Step 06: Epoch rejection
+------------------------
+
+Folder:
+
+    qc/06_epoch_rej/
+
+The Step-06 tables document the final epoching and artifact-rejection results.
+
+Run and subject summaries include:
+    - subject and run
+    - ICA method and epoching mode
+    - condition / event code
+    - total number of epochs
+    - number of rejected epochs
+    - number of remaining epochs
+    - proportion of rejected epochs
+    - rejection method
+    - counts for individual rejection reasons, e.g. extreme voltage,
+      sample difference or flatline
+    - number of EEG, EOG and other channels
+    - final dataset status and output path
+
+Additional rejection-reason tables provide a more detailed breakdown of how
+many epochs were rejected by each criterion.
+
+Combined all-subject summaries are refreshed automatically and include:
+    - all subject/run/condition rows
+    - summaries grouped by ICA method and condition
+    - combined rejection-reason tables
