@@ -6135,7 +6135,7 @@ rep.eeg_ctx_j2 = min(numel(eeg_tokens), lastMatchEegIdx+30);
 rep.eeg_ctx = eeg_tokens(rep.eeg_ctx_j1:rep.eeg_ctx_j2);
 end
 
-function raw_qc_behavior_vs_eeg_and_write_csv_impl(beh, EEG, subj_id, bids_base, out_dir, varargin)
+function [qc_ok, rep] = raw_qc_behavior_vs_eeg_and_write_csv_impl(beh, EEG, subj_id, bids_base, out_dir, varargin)
 
 arguments
     beh table
@@ -6191,6 +6191,7 @@ if isempty(beh_tok) || isempty(eeg_tok)
 end
 
 [ok, rep] = check_subsequence_order_detailed_impl(beh_tok, eeg_tok);
+qc_ok = ok;
 
 if ok && ~opts.write_csv_on_ok
     return;

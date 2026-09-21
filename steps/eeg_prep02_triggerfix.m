@@ -60,12 +60,58 @@ try
         else
             step_cfg.enable_first_match_replacements = true; % Default
         end
+        
+        if isfield(tf, 'phase_strategy')
+            step_cfg.phase_strategy = string(tf.phase_strategy);
+        end
+
+        if isfield(tf,'trigger_phase_max_phase_share')
+            step_cfg.trigger_phase_max_phase_share = double(tf.trigger_phase_max_phase_share);
+        end
+
+        if isfield(tf, 'trigger_phase_min_remaps')
+            step_cfg.trigger_phase_min_remaps = double(tf.trigger_phase_min_remaps);
+        end
+        
+        if isfield(tf,'trigger_phase_min_start_markers')
+            step_cfg.trigger_phase_min_start_markers = double(tf.trigger_phase_min_start_markers);
+        end
+        
+        if isfield(tf,'trigger_phase_min_phases_with_remaps')
+            step_cfg.trigger_phase_min_phases_with_remaps = double(tf.trigger_phase_min_phases_with_remaps);
+        end
 
         if isfield(tf, 'use_gating_from_start_markers')
             step_cfg.use_gating_from_start_markers = logical(tf.use_gating_from_start_markers);
         else
             step_cfg.use_gating_from_start_markers = true;
         end
+        
+        %step cfg fields
+        if isfield(tf,'run_raw_order_qc'); step_cfg.run_raw_order_qc = logical(tf.run_raw_order_qc); end
+        if isfield(tf,'allow_multiple_runs'); step_cfg.allow_multiple_runs = logical(tf.allow_multiple_runs); end
+        if isfield(tf,'multiple_vhdr_policy'); step_cfg.multiple_vhdr_policy = string(tf.multiple_vhdr_policy); end
+        if isfield(tf,'qc_out_dir'); step_cfg.qc_out_dir = string(tf.qc_out_dir); end
+        
+        if isfield(tf,'task_label'); step_cfg.task_label = string(tf.task_label); end
+        if isfield(tf,'session_label'); step_cfg.session_label = string(tf.session_label); end
+        if isfield(tf,'input_vhdr_pattern'); step_cfg.input_vhdr_pattern = string(tf.input_vhdr_pattern); end
+        
+        if isfield(tf,'use_explicit_chanlist'); step_cfg.use_explicit_chanlist = logical(tf.use_explicit_chanlist); end
+        if isfield(tf,'explicit_chanlist'); step_cfg.explicit_chanlist = tf.explicit_chanlist; end
+        
+        % raw qc numeric settings
+        if isfield(tf,'raw_qc_keep_tokens'); step_cfg.raw_qc_keep_tokens = tf.raw_qc_keep_tokens; end
+        if isfield(tf,'raw_qc_bin_size_s'); step_cfg.raw_qc_bin_size_s = double(tf.raw_qc_bin_size_s); end
+        if isfield(tf,'raw_qc_max_rows'); step_cfg.raw_qc_max_rows = double(tf.raw_qc_max_rows); end
+        if isfield(tf,'raw_qc_write_csv_on_ok'); step_cfg.raw_qc_write_csv_on_ok = logical(tf.raw_qc_write_csv_on_ok); end
+        
+        % behavior log settings
+        if isfield(tf,'behavior_log_column_event_type'); step_cfg.behavior_log_column_event_type = tf.behavior_log_column_event_type; end
+        if isfield(tf,'behavior_log_column_code'); step_cfg.behavior_log_column_code = tf.behavior_log_column_code; end
+        if isfield(tf,'behavior_log_column_time'); step_cfg.behavior_log_column_time = tf.behavior_log_column_time; end
+        if isfield(tf,'behavior_log_time_unit'); step_cfg.behavior_log_time_unit = tf.behavior_log_time_unit; end
+        if isfield(tf,'behavior_log_map'); step_cfg.behavior_log_map = tf.behavior_log_map; end 
 
         if isfield(tf, 'gates') && isfield(tf.gates, 'start_markers')
             if ~isempty(tf.gates.start_markers) && ~isstruct(tf.gates.start_markers)
@@ -109,6 +155,7 @@ try
     else
         helpers.log_msg_default('Step 02: No paradigm triggerfix config found -> using defaults.');
     end
+    
 
     session_label = char(string(step_cfg.session_label));
     task_label    = char(string(step_cfg.task_label));
@@ -170,6 +217,8 @@ try
     end
 
     beh = [];
+    qc_ok_beh = false;  
+
     if step_cfg.run_raw_order_qc
         try
             beh_file = helpers.find_behavior_log(paths.bids_root, subj_id, session_label);
@@ -295,111 +344,455 @@ try
                 qc_cfg.behavior_log_map           = step_cfg.behavior_log_map;
                 qc_cfg.raw_triggers               = step_cfg.raw_triggers;
 
-                helpers.raw_qc_behavior_vs_eeg_and_write_csv( ...
+                qc_ok_beh = true;
+                rep_beh = struct();
+                
+                [qc_ok_beh, rep_beh] = helpers.raw_qc_behavior_vs_eeg_and_write_csv( ...
                     beh, EEG, subj_id, bids_base, char(qc_out_dir), qc_cfg);
             catch me_qc
                 helpers.log_msg_default('WARNING: Step 02 RAW QC failed for %s (sub-%s). Reason: %s', ...
                     bids_base, subj_id, me_qc.message);
+                qc_ok_beh = false;
             end
         else
             helpers.log_msg_default('Step 02 RAW QC skipped for %s (run_raw_order_qc=%d, beh_present=%d).', ...
                 bids_base, logical(step_cfg.run_raw_order_qc), ~isempty(beh));
         end
-
+        
         % ---- PASS 1: generic blocking (with optional phase gating) ----
-        % Reset counters per file
-        cat_counter = struct();
-        cat_counter_phase = struct();
 
-        for x = 1:numel(EEG.event)
+        % Primary/Fallback decision for phase indication by triggers
+        % Phase strategy options
+        %   "trigger_only"
+        %   "block_only"
+        %   "trigger_then_block_fallback"
+        phase_strategy = string(step_cfg.phase_strategy);
+        
+        do_trigger = false;
+        do_block   = false;
+        trigger_then_fallback = false;
+        
+        switch lower(strtrim(phase_strategy))
+            case "trigger_only"
+                do_trigger = true; do_block = false;
+        
+            case "block_only"
+                do_trigger = false; do_block = true;
+        
+            case {"trigger_then_block_fallback","trigger_primary_fallback_block"}
+                do_trigger = true; do_block = true;
+                trigger_then_fallback = true;
+        
+            otherwise
+                helpers.log_msg_default('Step 02: WARNING unknown phase_strategy="%s" -> default trigger_then_block_fallback', ...
+                    char(phase_strategy));
+                do_trigger = true; do_block = true;
+                trigger_then_fallback = true;
+        end
+        
+        trigger_phase_min_remaps = double(step_cfg.trigger_phase_min_remaps);
+        if isempty(trigger_phase_min_remaps) || ~isfinite(trigger_phase_min_remaps)
+            trigger_phase_min_remaps = 5;
+        end
+        
+        EEG_primary_backup = EEG;     % backup for fallback
+        trigger_primary_ok = false;
+        n_remaps_primary_total = 0;
+        n_remaps_primary_by_phase = struct();
+        n_remaps_primary_by_phase_and_cat = struct();
+        phases_with_remaps_count = 0;
+        
+        % Primary only meaningful if count_scope is phase and we have phase markers
+        if do_trigger && count_scope == "phase" && has_any_phase_marker
+            phase_marker_names = fieldnames(phase_marker_tokens);
 
-            current_type = helpers.normalize_trigger_type(EEG.event(x).type);
-
-            % phase update (skip remap for phase markers)
-            if has_any_phase_marker
-                hitPhase = false;
-                pFields = fieldnames(phase_marker_tokens);
-                for kk = 1:numel(pFields)
-                    pName = pFields{kk};
-                    if strcmp(current_type, phase_marker_tokens.(pName))
-                        current_phase = string(pName);
-                        hitPhase = true;
-                        break;
+            phase_start_seen_counts = struct();
+            for kk = 1:numel(phase_marker_names)
+                phName = char(phase_marker_names{kk});
+                phase_start_seen_counts.(phName) = 0;
+            end
+            n_remaps_primary_by_phase_only = struct();
+            
+            for kk = 1:numel(phase_marker_names)
+                phName = char(phase_marker_names{kk});
+                n_remaps_primary_by_phase_only.(phName) = 0;
+            end
+            
+            if ~isempty(phase_marker_names)
+                EEGp = EEG_primary_backup;
+                current_phase = "";
+        
+                cat_counter_phase_primary = struct();
+        
+                for x = 1:numel(EEGp.event)
+                    current_type = helpers.normalize_trigger_type(EEGp.event(x).type);
+        
+                    % --- phase update from trigger ---
+                    hitPhase = false;
+                    for kk = 1:numel(phase_marker_names)
+                        pName = char(phase_marker_names{kk});
+                        if strcmp(current_type, phase_marker_tokens.(pName))
+                            current_phase = string(pName);
+                            hitPhase = true;
+                            break;
+                        end
                     end
-                end
-                if hitPhase
+                    if hitPhase
+                        phase_start_seen_counts.(char(current_phase)) = phase_start_seen_counts.(char(current_phase)) + 1;
                     continue;
+                    end
+        
+                    % find matched category by raw token
+                    matched_cat = "";
+                    catKeys = fieldnames(cat_raw_tok);
+                    for ci = 1:numel(catKeys)
+                        cat = catKeys{ci};
+                        if strcmp(current_type, cat_raw_tok.(cat))
+                            matched_cat = string(cat);
+                            break;
+                        end
+                    end
+        
+                    if strlength(matched_cat) == 0
+                        EEGp.event(x).type = current_type;
+                        continue;
+                    end
+        
+                    cat = char(matched_cat);
+        
+                    if ~isfield(blocking, cat) || ~isfield(blocking.(cat),'blocks')
+                        continue;
+                    end
+        
+                    blocks = blocking.(cat).blocks;
+                    if isempty(blocks); continue; end
+        
+                    if strlength(current_phase) == 0
+                        continue;
+                    end
+        
+                    phKey = char(current_phase);
+        
+                    if ~isfield(cat_counter_phase_primary, phKey)
+                        cat_counter_phase_primary.(phKey) = struct();
+                    end
+                    if ~isfield(cat_counter_phase_primary.(phKey), cat)
+                        cat_counter_phase_primary.(phKey).(cat) = 0;
+                    end
+        
+                    cat_counter_phase_primary.(phKey).(cat) = cat_counter_phase_primary.(phKey).(cat) + 1;
+                    n = cat_counter_phase_primary.(phKey).(cat);
+        
+                    % select matching block
+                    cum = 0;
+                    new_code = "";
+                    for bi = 1:numel(blocks)
+                        bi_n = blocks{bi}.n;
+                        if isempty(bi_n); continue; end
+                        cum = cum + double(bi_n);
+                        if n <= cum
+                            new_code = blocks{bi}.code;
+                            break;
+                        end
+                    end
+        
+                    before = helpers.normalize_trigger_type(EEGp.event(x).type);
+        
+                    if strlength(string(new_code)) > 0
+                        EEGp.event(x).type = char(string(new_code));
+                    else
+                        EEGp.event(x).type = current_type;
+                    end
+        
+                    after = helpers.normalize_trigger_type(EEGp.event(x).type);
+                   
+                    if ~strcmp(after, before)
+
+                        n_remaps_primary_total = n_remaps_primary_total + 1;
+
+                        % total per phase
+                            if ~isfield(n_remaps_primary_by_phase, phKey)
+                                n_remaps_primary_by_phase.(phKey) = 0;
+                            end
+                        n_remaps_primary_by_phase.(phKey) = n_remaps_primary_by_phase.(phKey) + 1;
+
+                        % total per phase+category
+                        if count_scope == "phase" && strlength(current_phase) > 0
+                            catKey = char(cat);
+                            phKey  = char(current_phase);
+                    
+                            if ~isfield(n_remaps_primary_by_phase_and_cat, phKey)
+                                n_remaps_primary_by_phase_and_cat.(phKey) = struct();
+                            end
+                            if ~isfield(n_remaps_primary_by_phase_and_cat.(phKey), catKey)
+                                n_remaps_primary_by_phase_and_cat.(phKey).(catKey) = 0;
+                            end
+                            n_remaps_primary_by_phase_and_cat.(phKey).(catKey) = ...
+                                n_remaps_primary_by_phase_and_cat.(phKey).(catKey) + 1;
+                            
+                            n_remaps_primary_by_phase_only.(phKey) = ...
+                                n_remaps_primary_by_phase_only.(phKey) + 1;
+                        end
+                    end
+                        n_start_total = 0;
+                        phase_keys = fieldnames(phase_start_seen_counts);
+                        for kk = 1:numel(phase_keys)
+                            n_start_total = n_start_total + double(phase_start_seen_counts.(phase_keys{kk}));
+                        end
+                        
+                        phase_keys_with_remaps = fieldnames(n_remaps_primary_by_phase);
+                        num_phases_with_remaps = numel(phase_keys_with_remaps);
+                        
+                        min_start_markers = double(step_cfg.trigger_phase_min_start_markers);
+                        min_phases_remaps = double(step_cfg.trigger_phase_min_phases_with_remaps);
+                        
+                        
                 end
+                    phaseKeysPrim = fieldnames(n_remaps_primary_by_phase_only);
+                    for kk = 1:numel(phaseKeysPrim)
+                        ph = phaseKeysPrim{kk};
+                        helpers.log_msg_default( ...
+                            'Step 02 QA PRIMARY: renamed trials by condition(phase)=%s -> n=%d', ...
+                            ph, n_remaps_primary_by_phase_only.(ph));
+                    end
+                    
+                    max_phase_share = 0;
+                    if n_remaps_primary_total > 0
+                        pk = fieldnames(n_remaps_primary_by_phase_only);
+                        for kk = 1:numel(pk)
+                            ph = pk{kk};
+                            share = n_remaps_primary_by_phase_only.(ph) / n_remaps_primary_total;
+                            if share > max_phase_share
+                                max_phase_share = share;
+                            end
+                        end
+                    end
+                    
+                    dominant_share_max = double(step_cfg.trigger_phase_max_phase_share);
+                    if n_remaps_primary_total >= trigger_phase_min_remaps && ...
+                               n_start_total >= min_start_markers && ...
+                               num_phases_with_remaps >= min_phases_remaps
+                                max_phase_share <= dominant_share_max 
+                               trigger_primary_ok = true;
+                               EEG = EEGp;
+                    end
             end
-
-            % find matched category by raw token
-            matched_cat = "";
-            catKeys = fieldnames(cat_raw_tok);
-            for ci = 1:numel(catKeys)
-                cat = catKeys{ci};
-                if strcmp(current_type, cat_raw_tok.(cat))
-                    matched_cat = string(cat);
-                    break;
-                end
-            end
-
-            if strlength(matched_cat) == 0
-                EEG.event(x).type = current_type;
-                continue;
-            end
-
-            cat = char(matched_cat);
-
-            if ~isfield(blocking, cat) || ~isfield(blocking.(cat),'blocks')
-                continue;
-            end
-
-            blocks = blocking.(cat).blocks;
-            if isempty(blocks); continue; end
-
-            % counter
-            if count_scope == "phase"
-                if ~exist('current_phase','var') || strlength(current_phase) == 0
-                    continue;
-                end
-                phKey = char(current_phase);
-                if ~isfield(cat_counter_phase, phKey)
-                    cat_counter_phase.(phKey) = struct();
-                end
-                if ~isfield(cat_counter_phase.(phKey), cat)
-                    cat_counter_phase.(phKey).(cat) = 0;
-                end
-                cat_counter_phase.(phKey).(cat) = cat_counter_phase.(phKey).(cat) + 1;
-                n = cat_counter_phase.(phKey).(cat);
-            else
-                if ~isfield(cat_counter, cat); cat_counter.(cat) = 0; end
-                cat_counter.(cat) = cat_counter.(cat) + 1;
-                n = cat_counter.(cat);
-            end
-
-            % select matching block
-            cum = 0;
-            new_code = "";
-            for bi = 1:numel(blocks)
-                bi_n = blocks{bi}.n;
-                if isempty(bi_n); continue; end
-                cum = cum + double(bi_n);
-                if n <= cum
-                    new_code = blocks{bi}.code;
-                    break;
-                end
-            end
-
-            if strlength(string(new_code)) > 0
-                EEG.event(x).type = char(string(new_code));
-            else
-                EEG.event(x).type = current_type;
+        end
+        
+       
+        % Optional: Behavior-QC gating for trigger-based phase remapping
+        if do_trigger && logical(getfield_default(step_cfg, 'use_behavior_for_trigger_strategy', true)) ...
+                && step_cfg.run_raw_order_qc && ~isempty(beh)
+        
+            if ~qc_ok_beh
+                helpers.log_msg_default('Step 02: Behavior-QC indicates trigger order mismatch -> disable trigger-based phase remapping (force block/fallback).');
+                trigger_primary_ok = false;
             end
         end
 
-        EEG = helpers.append_eeg_comment(EEG, ...
-            sprintf('prep02_triggerfix: generic blocking applied for sub-%s', subj_id));
+        %if ~trigger_primary_ok
+        if do_block && ( ~trigger_then_fallback || ~trigger_primary_ok )
+            % ---------------- Fallback: block-counting logic ----------------
+            cat_counter = struct();
+            cat_counter_phase = struct();
+        
+            n_remaps_fallback_total = 0;
+            n_remaps_fallback_by_phase = struct();
+        
+            current_phase = ""; 
+        
+            for x = 1:numel(EEG.event)
+        
+                current_type = helpers.normalize_trigger_type(EEG.event(x).type);
+        
+                % phase update (skip remap for phase markers)
+                if has_any_phase_marker
+                    hitPhase = false;
+                    pFields = fieldnames(phase_marker_tokens);
+                    for kk = 1:numel(pFields)
+                        pName = pFields{kk};
+                        if strcmp(current_type, phase_marker_tokens.(pName))
+                            current_phase = string(pName);
+                            hitPhase = true;
+                            break;
+                        end
+                    end
+                    if hitPhase
+                        phase_start_seen_counts.(char(current_phase)) = phase_start_seen_counts.(char(current_phase)) + 1;
+                    continue;
+                        continue;
+                    end
+                end
+        
+                % find matched category by raw token
+                matched_cat = "";
+                catKeys = fieldnames(cat_raw_tok);
+                for ci = 1:numel(catKeys)
+                    cat = catKeys{ci};
+                    if strcmp(current_type, cat_raw_tok.(cat))
+                        matched_cat = string(cat);
+                        break;
+                    end
+                end
+        
+                if strlength(matched_cat) == 0
+                    EEG.event(x).type = current_type;
+                    continue;
+                end
+        
+                cat = char(matched_cat);
+        
+                if ~isfield(blocking, cat) || ~isfield(blocking.(cat),'blocks')
+                    continue;
+                end
+        
+                blocks = blocking.(cat).blocks;
+                if isempty(blocks); continue; end
+        
+                % counter
+                if count_scope == "phase"
+                    if strlength(current_phase) == 0
+                        continue;
+                    end
+                    phKey = char(current_phase);
+        
+                    if ~isfield(cat_counter_phase, phKey)
+                        cat_counter_phase.(phKey) = struct();
+                    end
+                    if ~isfield(cat_counter_phase.(phKey), cat)
+                        cat_counter_phase.(phKey).(cat) = 0;
+                    end
+        
+                    cat_counter_phase.(phKey).(cat) = cat_counter_phase.(phKey).(cat) + 1;
+                    n = cat_counter_phase.(phKey).(cat);
+                else
+                    if ~isfield(cat_counter, cat); cat_counter.(cat) = 0; end
+                    cat_counter.(cat) = cat_counter.(cat) + 1;
+                    n = cat_counter.(cat);
+                end
+        
+                % select matching block
+                cum = 0;
+                new_code = "";
+                for bi = 1:numel(blocks)
+                    bi_n = blocks{bi}.n;
+                    if isempty(bi_n); continue; end
+                    cum = cum + double(bi_n);
+                    if n <= cum
+                        new_code = blocks{bi}.code;
+                        break;
+                    end
+                end
+        
+                before = helpers.normalize_trigger_type(EEG.event(x).type);
+        
+                if strlength(string(new_code)) > 0
+                    EEG.event(x).type = char(string(new_code));
+                else
+                    EEG.event(x).type = current_type;
+                end
+        
+                after = helpers.normalize_trigger_type(EEG.event(x).type);
+        
+               if ~strcmp(after, before)
 
+                n_remaps_fallback_total = n_remaps_fallback_total + 1;
+            
+                % total per phase
+                if count_scope == "phase" && strlength(current_phase) > 0
+                    phKey = char(current_phase);
+                    n_remaps_primary_by_phase_only.(phKey) = ...
+                    n_remaps_primary_by_phase_only.(phKey) + 1;
+                    if ~isfield(n_remaps_fallback_by_phase, phKey)
+                        n_remaps_fallback_by_phase.(phKey) = 0;
+                    end
+                    n_remaps_fallback_by_phase.(phKey) = n_remaps_fallback_by_phase.(phKey) + 1;
+                end
+            
+                % total per phase+category
+                if count_scope == "phase" && strlength(current_phase) > 0
+                    catKey = char(cat);
+                    phKey  = char(current_phase);
+            
+                    if ~isfield(n_remaps_fallback_by_phase_and_cat, phKey)
+                        n_remaps_fallback_by_phase_and_cat.(phKey) = struct();
+                    end
+                    if ~isfield(n_remaps_fallback_by_phase_and_cat.(phKey), catKey)
+                        n_remaps_fallback_by_phase_and_cat.(phKey).(catKey) = 0;
+                    end
+                    n_remaps_fallback_by_phase_and_cat.(phKey).(catKey) = ...
+                        n_remaps_fallback_by_phase_and_cat.(phKey).(catKey) + 1;
+                end
+            end
+            end
+        
+            EEG = helpers.append_eeg_comment(EEG, ...
+                sprintf('prep02_triggerfix: FALLBACK generic blocking applied for sub-%s', subj_id));
+        
+            helpers.log_msg_default('Step 02: fallback remaps total=%d', n_remaps_fallback_total);
+            
+            % QA: renamed counts per condition = phase + category
+                phaseKeysFB2 = fieldnames(n_remaps_fallback_by_phase_and_cat);
+                for kk = 1:numel(phaseKeysFB2)
+                    ph = phaseKeysFB2{kk};
+                    catKeys = fieldnames(n_remaps_fallback_by_phase_and_cat.(ph));
+                    for cc = 1:numel(catKeys)
+                        catKey = catKeys{cc};
+                        nHere  = n_remaps_fallback_by_phase_and_cat.(ph).(catKey);
+                        helpers.log_msg_default('Step 02 QA FALLBACK: renamed condition phase="%s", cat="%s" -> n=%d', ...
+                            ph, catKey, nHere);
+                    end
+                end
+
+            
+            phaseKeysFB = fieldnames(n_remaps_fallback_by_phase);
+            for kk = 1:numel(phaseKeysFB)
+                ph = phaseKeysFB{kk};
+                helpers.log_msg_default('Step 02: fallback remaps in phase "%s" = %d', ph, n_remaps_fallback_by_phase.(ph));
+            end
+            phaseKeysFB2 = fieldnames(n_remaps_fallback_by_phase_and_cat);
+            for kk = 1:numel(phaseKeysFB2)
+                ph = phaseKeysFB2{kk};
+                catKeys = fieldnames(n_remaps_fallback_by_phase_and_cat.(ph));
+                for cc = 1:numel(catKeys)
+                    catKey = catKeys{cc};
+                    helpers.log_msg_default('Step 02: FALLBACK remaps in phase "%s" for category "%s" = %d', ...
+                        ph, catKey, n_remaps_fallback_by_phase_and_cat.(ph).(catKey));
+                end
+            end
+        else
+            helpers.log_msg_default('Step 02: Primary trigger-indicates-phase REMAPPING used (total remaps=%d).', n_remaps_primary_total);
+            % QA: renamed counts per condition = phase + category
+            phaseKeysP2 = fieldnames(n_remaps_primary_by_phase_and_cat);
+            for kk = 1:numel(phaseKeysP2)
+                ph = phaseKeysP2{kk};
+                catKeys = fieldnames(n_remaps_primary_by_phase_and_cat.(ph));
+                for cc = 1:numel(catKeys)
+                    catKey = catKeys{cc};
+                    nHere  = n_remaps_primary_by_phase_and_cat.(ph).(catKey);
+                    helpers.log_msg_default('Step 02 QA PRIMARY: renamed condition phase="%s", cat="%s" -> n=%d', ...
+                        ph, catKey, nHere);
+                end
+            end
+            phaseKeysP = fieldnames(n_remaps_primary_by_phase);
+            for kk = 1:numel(phaseKeysP)
+                ph = phaseKeysP{kk};
+                helpers.log_msg_default('Step 02: primary remaps in phase "%s" = %d', ph, n_remaps_primary_by_phase.(ph));
+            end
+            phaseKeysP2 = fieldnames(n_remaps_primary_by_phase_and_cat);
+            for kk = 1:numel(phaseKeysP2)
+                ph = phaseKeysP2{kk};
+                catKeys = fieldnames(n_remaps_primary_by_phase_and_cat.(ph));
+                for cc = 1:numel(catKeys)
+                    catKey = catKeys{cc};
+                    helpers.log_msg_default('Step 02: PRIMARY remaps in phase "%s" for category "%s" = %d', ...
+                        ph, catKey, n_remaps_primary_by_phase_and_cat.(ph).(catKey));
+                end
+            end
+        
+            EEG = helpers.append_eeg_comment(EEG, ...
+                sprintf('prep02_triggerfix: PRIMARY trigger-indicates-phase applied for sub-%s', subj_id));
+        end
         % ---- PASS X: generic first-match replacements ----
         if isfield(step_cfg, 'enable_first_match_replacements')
             run_replacements = logical(step_cfg.enable_first_match_replacements);
@@ -556,6 +949,8 @@ step_cfg.behavior_log_map               = {};
 
 % Phase markers
 step_cfg.phase_start_markers = struct();
+step_cfg.trigger_phase_min_start_markers = 5;
+step_cfg.trigger_phase_min_phases_with_remaps = 2;
 
 % Optional enabling flags / generic defaults
 step_cfg.enable_first_match_replacements = true;
@@ -566,5 +961,10 @@ step_cfg.blocking = struct();
 
 % First-match replacements default (leer)
 step_cfg.first_match_replacements = {};
+
+% fallback to current block-counting if trigger-based remapping seems unreliable.
+step_cfg.phase_strategy = "trigger_then_block_fallback";
+step_cfg.trigger_phase_min_remaps = 5; 
+step_cfg.trigger_phase_max_phase_share = 0.80;
 
 end

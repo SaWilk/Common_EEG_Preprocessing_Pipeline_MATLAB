@@ -353,9 +353,53 @@ cfg.prep_01.task_label    = cfg.bids.task_label;    % get task label defined in 
 % =========================================================================
 cfg.paradigms.myParadigm.triggerfix = struct();
 
-cfg.paradigms.myParadigm.triggerfix.use_gating_from_start_markers = false; % true if there are phases, false if there are no phases in your paradigm
+cfg.paradigms.myParadigm.triggerfix.use_gating_from_start_markers = true; % true if there are phases, false if there are no phases in your paradigm
 
 cfg.steps.prep_02_triggerfix.run_raw_order_qc = false; %find behavior log file
+
+% RAW QC Triggerabgleich über Behavior (optional)
+cfg.paradigms.myParadigm.triggerfix.run_raw_order_qc = true;
+
+cfg.paradigms.myParadigm.triggerfix.behavior_log_column_event_type = 'EventType';
+cfg.paradigms.myParadigm.triggerfix.behavior_log_column_code       = 'Code';
+cfg.paradigms.myParadigm.triggerfix.behavior_log_column_time       = 'Time';
+cfg.paradigms.myParadigm.triggerfix.behavior_log_time_unit         = "ms";
+
+cfg.paradigms.myParadigm.triggerfix.raw_qc_keep_tokens      = [" ", " "]; %list of trigger
+cfg.paradigms.myParadigm.triggerfix.raw_qc_bin_size_s       = 1;
+cfg.paradigms.myParadigm.triggerfix.raw_qc_max_rows         = 20000;
+cfg.paradigms.myParadigm.triggerfix.raw_qc_write_csv_on_ok  = false;
+
+cfg.paradigms.myParadigm.triggerfix.behavior_log_map = { ...
+    % 'Picture', 'cs-',      'cs_minus'; ...
+    % 'Picture', 'csminus',  'cs_minus'; ...
+    % 'Picture', 'cs_min',   'cs_minus'; ...
+    % 'Picture', 'csmin',    'cs_minus'; ...
+    % 'Picture', 'cs1',      'cs_minus'; ...
+    % 'Picture', 'GS1',      'gs_1'; ...
+    % 'Picture', 'GSU',      'gs_u'; ...
+    % 'Picture', 'GS2',      'gs_2'; ...
+    % 'Picture', 'cs+',      'cs_plus'; ...
+    % 'Picture', 'csplus',   'cs_plus'; ...
+    % 'Picture', 'cs_pls',   'cs_plus'; ...
+    % 'Picture', 'cspls',    'cs_plus'; ...
+    % 'Picture', 'cs2',      'cs_plus'; ...
+    % 'Sound',   'Startle',  'startle'; ...
+    % 'Nothing', 'Shock',    'shock' ...
+};
+
+cfg.paradigms.myParadigm.triggerfix.allow_multiple_runs = false;
+cfg.paradigms.myParadigm.triggerfix.multiple_vhdr_policy = "most_recent";
+cfg.paradigms.myParadigm.triggerfix.input_vhdr_pattern = ""; % regex
+cfg.paradigms.myParadigm.triggerfix.use_explicit_chanlist = false;
+cfg.paradigms.myParadigm.triggerfix.explicit_chanlist = 1:66;
+
+% Namens-/Label-Felder (damit pattern sicher ist und Review "task/session" nicht fehlt)
+cfg.paradigms.myParadigm.triggerfix.task_label = cfg.bids.task_label;
+cfg.paradigms.myParadigm.triggerfix.session_label = cfg.bids.session_label;
+
+% optional output QC override
+cfg.paradigms.myParadigm.triggerfix.qc_out_dir = "";
 
 % 1) Phases: Enter start markers and names for your phases if use_gating_from_start_markers = true
 cfg.paradigms.myParadigm.triggerfix.gates = struct();
@@ -374,7 +418,7 @@ cfg.paradigms.myParadigm.triggerfix.raw_triggers.rawD = " ";   % trigger categor
 
 % 3) Blocking/Counting:renaming and counting event triggers per phase
 cfg.paradigms.myParadigm.triggerfix.blocking = struct();
-cfg.paradigms.myParadigm.triggerfix.blocking.count_scope = " "; % global for counting across all trials; 
+cfg.paradigms.myParadigm.triggerfix.blocking.count_scope = "phase"; % global for counting across all trials; 
 % "phase" for counting within phases if cfg.paradigms.myParadigm.triggerfix.use_gating_from_start_markers = true and if cfg.paradigms.myParadigm.triggerfix.gates.start_markers are set accordingly.
 % Starting markers themselves are not counted and not renamed;
 
@@ -405,7 +449,7 @@ cfg.paradigms.myParadigm.triggerfix.blocking.categoryD.blocks = { ...
     struct('n', inf, 'code', " ")  ...
 };
 
-cfg.paradigms.myParadigm.triggerfix.enable_first_match_replacements = false; %true if you want to replace the first accuring trigger
+cfg.paradigms.myParadigm.triggerfix.enable_first_match_replacements = true; %true if you want to replace the first accuring trigger
 
 cfg.paradigms.myParadigm.triggerfix.first_match_replacements = {
     struct('match_code'," ", 'replace_code'," ",    'max_replacements',1),
@@ -413,6 +457,18 @@ cfg.paradigms.myParadigm.triggerfix.first_match_replacements = {
     struct('match_code'," ", 'replace_code'," ", 'max_replacements',1),
     struct('match_code'," ", 'replace_code'," ",'max_replacements',1)
 };
+
+cfg.paradigms.myParadigm.triggerfix.phase_strategy = " "; 
+%"trigger_only" remapping only following start trigger; useful if triggers
+%have already been checked or corrected before pipeline
+%"block_only" remapping following counting within blocks; useful if
+% start triggers are missing
+% "trigger_then_block_fallback" remapping following start triggers, if less
+% than min_remap switch to block counting
+
+cfg.paradigms.myParadigm.triggerfix.trigger_phase_min_remaps = 5; % minimal number of expected remaps in total
+cfg.paradigms.myParadigm.triggerfix.trigger_phase_min_phases_with_remaps = 2; %minimal number of extpected remaps per phase
+cfg.paradigms.myParadigm.triggerfix.trigger_phase_max_phase_share = 0.80; % max percentage of remaps in phase, if higher start triggers not plausible and fallback to blocks
 
 % =========================================================================
 % STEP 03: UNTIL ICA
