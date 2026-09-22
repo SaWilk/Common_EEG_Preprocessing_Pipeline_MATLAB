@@ -11,7 +11,7 @@ function [t_all, t_by_method, t_pair] = eeg_collect_prep05_summary(cfg_or_qc_roo
 % INPUT
 %   cfg_or_qc_root
 %       - [] or omitted: uses eeg_pipeline_config()
-%       - cfg struct:     uses fullfile(cfg.paths.out_root, 'qc')
+%       - cfg struct:     uses fullfile(cfg.paths.derivatives_root, 'qc')
 %       - char/string:    interpreted as qc root folder
 %
 % OUTPUT
@@ -26,9 +26,11 @@ function [t_all, t_by_method, t_pair] = eeg_collect_prep05_summary(cfg_or_qc_roo
 
 if nargin < 1 || isempty(cfg_or_qc_root)
     cfg = eeg_pipeline_config();
-    qc_root = fullfile(cfg.paths.out_root, 'qc');
+    qc_root = fullfile(char(string(cfg.paths.derivatives_root)), 'qc');
+
 elseif isstruct(cfg_or_qc_root)
-    qc_root = fullfile(cfg_or_qc_root.paths.out_root, 'qc');
+    qc_root = fullfile(char(string(cfg_or_qc_root.paths.derivatives_root)), 'qc');
+
 else
     qc_root = char(string(cfg_or_qc_root));
 end
@@ -37,10 +39,16 @@ if exist(qc_root, 'dir') ~= 7
     error('QC root not found: %s', qc_root);
 end
 
-summary_files = dir(fullfile(qc_root, '**', '*_prep05_summary.csv'));
+ica_comps_root = fullfile(qc_root, '05_ica_comps');
+
+if exist(ica_comps_root, 'dir') ~= 7
+    error('Step-05 QC folder not found: %s', ica_comps_root);
+end
+
+summary_files = dir(fullfile(ica_comps_root, '**', '*_prep05_summary.csv'));
 
 if isempty(summary_files)
-    error('No Step-05 summary files found below: %s', qc_root);
+    error('No Step-05 summary files found below: %s', ica_comps_root);
 end
 
 t_all = table();
@@ -72,7 +80,9 @@ end
 
 t_all = sortrows(t_all, {'ica_method', 'subject_id', 'run_base'});
 
-all_out = fullfile(qc_root, 'prep05_iclabel_summary_all_subjects.csv');
+all_out = fullfile(ica_comps_root, ...
+    'prep05_iclabel_summary_all_subjects.csv');
+
 writetable(t_all, all_out, 'Delimiter', ';');
 
 numeric_vars = { ...
@@ -85,7 +95,9 @@ numeric_vars = numeric_vars(ismember(numeric_vars, t_all.Properties.VariableName
 
 t_by_method = groupsummary(t_all, 'ica_method', {'mean', 'std', 'median'}, numeric_vars);
 
-by_method_out = fullfile(qc_root, 'prep05_iclabel_summary_by_method.csv');
+by_method_out = fullfile(ica_comps_root, ...
+    'prep05_iclabel_summary_by_method.csv');
+
 writetable(t_by_method, by_method_out, 'Delimiter', ';');
 
 method_a = "runica";
@@ -153,7 +165,8 @@ for k = 1:numel(unique_keys)
 end
 
 if ~isempty(t_pair)
-    pair_out = fullfile(qc_root, 'prep05_iclabel_comparison_runica_vs_amica.csv');
+    pair_out = fullfile(ica_comps_root, ...
+    'prep05_iclabel_comparison_runica_vs_amica.csv');
     writetable(t_pair, pair_out, 'Delimiter', ';');
 end
 

@@ -10,7 +10,7 @@ function step_out = eeg_prep03_untilica(subj_id, cfg, paths, helpers)
 %   (2) *_forica.set : ICA-training-only dataset
 
 %       Also stores a summary of rejected and remaining training epochs.
-%   (3) Summary CSV under qc/ica_training/, if enabled in the config.
+%   (3) Summary CSV under qc/03_ica_training/, if enabled in the config.
 %
 % Input preference:
 %   A) Step 02 output: *_triggersfixed.set
@@ -87,7 +87,7 @@ helpers.ensure_dir(prep03_out_dir_forica);
 if isfield(paths, 'qc_bad_chans_root') && strlength(string(paths.qc_bad_chans_root)) > 0
     bad_chan_qc_dir = paths.qc_bad_chans_root;
 else
-    bad_chan_qc_dir = fullfile(paths.derivatives_root, 'qc', 'bad_chans');
+    bad_chan_qc_dir = fullfile(paths.derivatives_root, 'qc', '03_bad_chans');
 end
 helpers.ensure_dir(bad_chan_qc_dir);
 

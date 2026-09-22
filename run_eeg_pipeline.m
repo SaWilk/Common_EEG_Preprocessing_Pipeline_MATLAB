@@ -391,6 +391,23 @@ else
     end
 end
 
+% Combine Step-05 ICLabel summaries after all subjects have finished.
+if cfg.steps.prep_05_after_ica.run && ...
+        helpers.getfield_safe(cfg.prep_05, 'write_subject_summary_table', true)
+
+    try
+        [~, ~, ~] = eeg_collect_prep05_summary(cfg);
+
+        helpers.log_msg(master_log, ...
+            'Step-05 all-subject ICLabel summaries refreshed.');
+
+    catch qc_me
+        helpers.log_msg(master_log, ...
+            'WARNING: Final Step-05 QC collection failed: %s', ...
+            qc_me.message);
+    end
+end
+
 % Refresh the group summary once after every worker has finished, then build
 % one consolidated warning for the subjects processed in this run. The
 % warning itself is emitted only after the normal final summary below so it
