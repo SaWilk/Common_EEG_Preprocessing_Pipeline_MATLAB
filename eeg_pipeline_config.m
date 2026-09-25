@@ -365,32 +365,32 @@ cfg.paradigms.myParadigm.triggerfix.behavior_log_column_code       = 'Code';
 cfg.paradigms.myParadigm.triggerfix.behavior_log_column_time       = 'Time';
 cfg.paradigms.myParadigm.triggerfix.behavior_log_time_unit         = "ms";
 
-cfg.paradigms.myParadigm.triggerfix.raw_qc_keep_tokens      = [" ", " "]; %list of trigger
+cfg.paradigms.myParadigm.triggerfix.raw_qc_keep_tokens      = ["S 20","S 21","S 22","S 23","S 24","S 15","S 5"]; %list of trigger
 cfg.paradigms.myParadigm.triggerfix.raw_qc_bin_size_s       = 1;
 cfg.paradigms.myParadigm.triggerfix.raw_qc_max_rows         = 20000;
 cfg.paradigms.myParadigm.triggerfix.raw_qc_write_csv_on_ok  = false;
 
 cfg.paradigms.myParadigm.triggerfix.behavior_log_map = { ...
-    % 'Picture', 'cs-',      'cs_minus'; ...
-    % 'Picture', 'csminus',  'cs_minus'; ...
-    % 'Picture', 'cs_min',   'cs_minus'; ...
-    % 'Picture', 'csmin',    'cs_minus'; ...
-    % 'Picture', 'cs1',      'cs_minus'; ...
-    % 'Picture', 'GS1',      'gs_1'; ...
-    % 'Picture', 'GSU',      'gs_u'; ...
-    % 'Picture', 'GS2',      'gs_2'; ...
-    % 'Picture', 'cs+',      'cs_plus'; ...
-    % 'Picture', 'csplus',   'cs_plus'; ...
-    % 'Picture', 'cs_pls',   'cs_plus'; ...
-    % 'Picture', 'cspls',    'cs_plus'; ...
-    % 'Picture', 'cs2',      'cs_plus'; ...
-    % 'Sound',   'Startle',  'startle'; ...
-    % 'Nothing', 'Shock',    'shock' ...
+    'Picture', 'cs-',      'cs_minus'; ...
+    'Picture', 'csminus',  'cs_minus'; ...
+    'Picture', 'cs_min',   'cs_minus'; ...
+    'Picture', 'csmin',    'cs_minus'; ...
+    'Picture', 'cs1',      'cs_minus'; ...
+    'Picture', 'GS1',      'gs_1'; ...
+    'Picture', 'GSU',      'gs_u'; ...
+    'Picture', 'GS2',      'gs_2'; ...
+    'Picture', 'cs+',      'cs_plus'; ...
+    'Picture', 'csplus',   'cs_plus'; ...
+    'Picture', 'cs_pls',   'cs_plus'; ...
+    'Picture', 'cspls',    'cs_plus'; ...
+    'Picture', 'cs2',      'cs_plus'; ...
+    'Sound',   'Startle',  'startle'; ...
+    'Nothing', 'Shock',    'shock' ...
 };
 
 cfg.paradigms.myParadigm.triggerfix.allow_multiple_runs = false;
 cfg.paradigms.myParadigm.triggerfix.multiple_vhdr_policy = "most_recent";
-cfg.paradigms.myParadigm.triggerfix.input_vhdr_pattern = ""; % regex
+cfg.paradigms.myParadigm.triggerfix.input_vhdr_pattern = ""; % 
 cfg.paradigms.myParadigm.triggerfix.use_explicit_chanlist = false;
 cfg.paradigms.myParadigm.triggerfix.explicit_chanlist = 1:66;
 
@@ -404,17 +404,22 @@ cfg.paradigms.myParadigm.triggerfix.qc_out_dir = "";
 % 1) Phases: Enter start markers and names for your phases if use_gating_from_start_markers = true
 cfg.paradigms.myParadigm.triggerfix.gates = struct();
 cfg.paradigms.myParadigm.triggerfix.gates.start_markers = struct( ...
-    '',    " ", ...
-    '', " ", ...
-    '', " " );
+    'phase1',    "S 91", ...
+    'phase2', "S 92", ...
+    'phase3', "S 93", ... 
+    'phase4', " S 94", ...
+    'phase5', "S 95");
 
 % 2) Name Trigger and there category in your paradigm
 % add more blocks if necessary
 cfg.paradigms.myParadigm.triggerfix.raw_triggers = struct();
-cfg.paradigms.myParadigm.triggerfix.raw_triggers.rawA = " ";   % trigger category A: no CP miss
-cfg.paradigms.myParadigm.triggerfix.raw_triggers.rawB = " ";   % trigger category B: no CP hit
-cfg.paradigms.myParadigm.triggerfix.raw_triggers.rawC = " ";   % trigger category C: CP miss
-cfg.paradigms.myParadigm.triggerfix.raw_triggers.rawD = " ";   % trigger category D: CP hit
+cfg.paradigms.myParadigm.triggerfix.raw_triggers.rawA = "S 20";   % trigger category A: no CP miss
+cfg.paradigms.myParadigm.triggerfix.raw_triggers.rawB = "S 21";   % trigger category B: no CP hit
+cfg.paradigms.myParadigm.triggerfix.raw_triggers.rawC = "S 22";   % trigger category C: CP miss
+cfg.paradigms.myParadigm.triggerfix.raw_triggers.rawD = "S 23";   % trigger category D: CP hit
+cfg.paradigms.myParadigm.triggerfix.raw_triggers.rawE = "S 24";
+cfg.paradigms.myParadigm.triggerfix.raw_triggers.rawF = "S 15";
+cfg.paradigms.myParadigm.triggerfix.raw_triggers.rawG = "S 5";
 
 % 3) Blocking/Counting:renaming and counting event triggers per phase
 cfg.paradigms.myParadigm.triggerfix.blocking = struct();
@@ -449,6 +454,24 @@ cfg.paradigms.myParadigm.triggerfix.blocking.categoryD.blocks = { ...
     struct('n', inf, 'code', " ")  ...
 };
 
+cfg.paradigms.myParadigm.triggerfix.blocking.categoryD = struct();
+cfg.paradigms.myParadigm.triggerfix.blocking.categoryD.raw_key = "rawE";
+cfg.paradigms.myParadigm.triggerfix.blocking.categoryD.blocks = { ...
+    struct('n', inf, 'code', " ")  ...
+};
+
+cfg.paradigms.myParadigm.triggerfix.blocking.categoryD = struct();
+cfg.paradigms.myParadigm.triggerfix.blocking.categoryD.raw_key = "rawF";
+cfg.paradigms.myParadigm.triggerfix.blocking.categoryD.blocks = { ...
+    struct('n', inf, 'code', " ")  ...
+};
+
+cfg.paradigms.myParadigm.triggerfix.blocking.categoryD = struct();
+cfg.paradigms.myParadigm.triggerfix.blocking.categoryD.raw_key = "rawG";
+cfg.paradigms.myParadigm.triggerfix.blocking.categoryD.blocks = { ...
+    struct('n', inf, 'code', " ")  ...
+};
+
 cfg.paradigms.myParadigm.triggerfix.enable_first_match_replacements = true; %true if you want to replace the first accuring trigger
 
 cfg.paradigms.myParadigm.triggerfix.first_match_replacements = {
@@ -458,13 +481,62 @@ cfg.paradigms.myParadigm.triggerfix.first_match_replacements = {
     struct('match_code'," ", 'replace_code'," ",'max_replacements',1)
 };
 
-cfg.paradigms.myParadigm.triggerfix.phase_strategy = " "; 
+cfg.paradigms.myParadigm.triggerfix.phase_strategy = "trigger_then_block_fallback"; 
 %"trigger_only" remapping only following start trigger; useful if triggers
 %have already been checked or corrected before pipeline
 %"block_only" remapping following counting within blocks; useful if
 % start triggers are missing
 % "trigger_then_block_fallback" remapping following start triggers, if less
 % than min_remap switch to block counting
+
+% --- Phase-specific trigger renaming (optional) ---
+cfg.paradigms.myParadigm.triggerfix.phase_specific_trigger_renaming = true;
+
+% Rules format (Keys müssen exakt zu den Phase-Keys passen,
+% die in gates.start_markers definiert sind):
+% phase_specific_trigger_renaming_rules.(phaseKey).(categoryKey).code = "NEW_CODE"
+cfg.paradigms.myParadigm.triggerfix.phase_specific_trigger_renaming_rules = struct();
+% Example (keys generisch nach euren gate keys, bitte anpassen):
+cfg.paradigms.myParadigm.triggerfix.phase_specific_trigger_renaming_rules.phase1.categoryA.code = "S 201";
+cfg.paradigms.myParadigm.triggerfix.phase_specific_trigger_renaming_rules.phase1.categoryB.code = "S 211";
+cfg.paradigms.myParadigm.triggerfix.phase_specific_trigger_renaming_rules.phase1.categoryC.code = "S 221";
+cfg.paradigms.myParadigm.triggerfix.phase_specific_trigger_renaming_rules.phase1.categoryD.code = "S 231";
+cfg.paradigms.myParadigm.triggerfix.phase_specific_trigger_renaming_rules.phase1.categoryE.code = "S 241";
+cfg.paradigms.myParadigm.triggerfix.phase_specific_trigger_renaming_rules.phase1.categoryF.code = "S 151";
+cfg.paradigms.myParadigm.triggerfix.phase_specific_trigger_renaming_rules.phase1.categoryG.code = "S 51";
+
+cfg.paradigms.myParadigm.triggerfix.phase_specific_trigger_renaming_rules.phase2.categoryA.code = "S 202";
+cfg.paradigms.myParadigm.triggerfix.phase_specific_trigger_renaming_rules.phase2.categoryB.code = "S 212";
+cfg.paradigms.myParadigm.triggerfix.phase_specific_trigger_renaming_rules.phase2.categoryC.code = "S 222";
+cfg.paradigms.myParadigm.triggerfix.phase_specific_trigger_renaming_rules.phase2.categoryD.code = "S 232";
+cfg.paradigms.myParadigm.triggerfix.phase_specific_trigger_renaming_rules.phase2.categoryE.code = "S 242";
+cfg.paradigms.myParadigm.triggerfix.phase_specific_trigger_renaming_rules.phase2.categoryF.code = "S 152";
+cfg.paradigms.myParadigm.triggerfix.phase_specific_trigger_renaming_rules.phase2.categoryG.code = "S 52";
+
+cfg.paradigms.myParadigm.triggerfix.phase_specific_trigger_renaming_rules.phase3.categoryA.code = "S 203";
+cfg.paradigms.myParadigm.triggerfix.phase_specific_trigger_renaming_rules.phase3.categoryB.code = "S 213";
+cfg.paradigms.myParadigm.triggerfix.phase_specific_trigger_renaming_rules.phase3.categoryC.code = "S 223";
+cfg.paradigms.myParadigm.triggerfix.phase_specific_trigger_renaming_rules.phase3.categoryD.code = "S 233";
+cfg.paradigms.myParadigm.triggerfix.phase_specific_trigger_renaming_rules.phase3.categoryE.code = "S 243";
+cfg.paradigms.myParadigm.triggerfix.phase_specific_trigger_renaming_rules.phase3.categoryF.code = "S 153";
+cfg.paradigms.myParadigm.triggerfix.phase_specific_trigger_renaming_rules.phase3.categoryG.code = "S 53";
+
+cfg.paradigms.myParadigm.triggerfix.phase_specific_trigger_renaming_rules.phase4.categoryA.code = "S 204";
+cfg.paradigms.myParadigm.triggerfix.phase_specific_trigger_renaming_rules.phase4.categoryB.code = "S 214";
+cfg.paradigms.myParadigm.triggerfix.phase_specific_trigger_renaming_rules.phase4.categoryC.code = "S 224";
+cfg.paradigms.myParadigm.triggerfix.phase_specific_trigger_renaming_rules.phase4.categoryD.code = "S 234";
+cfg.paradigms.myParadigm.triggerfix.phase_specific_trigger_renaming_rules.phase4.categoryE.code = "S 244";
+cfg.paradigms.myParadigm.triggerfix.phase_specific_trigger_renaming_rules.phase4.categoryF.code = "S 154";
+cfg.paradigms.myParadigm.triggerfix.phase_specific_trigger_renaming_rules.phase4.categoryG.code = "S 54";
+
+cfg.paradigms.myParadigm.triggerfix.phase_specific_trigger_renaming_rules.phase5.categoryA.code = "S 205";
+cfg.paradigms.myParadigm.triggerfix.phase_specific_trigger_renaming_rules.phase5.categoryB.code = "S 215";
+cfg.paradigms.myParadigm.triggerfix.phase_specific_trigger_renaming_rules.phase5.categoryC.code = "S 225";
+cfg.paradigms.myParadigm.triggerfix.phase_specific_trigger_renaming_rules.phase5.categoryD.code = "S 235";
+cfg.paradigms.myParadigm.triggerfix.phase_specific_trigger_renaming_rules.phase5.categoryE.code = "S 245";
+cfg.paradigms.myParadigm.triggerfix.phase_specific_trigger_renaming_rules.phase5.categoryF.code = "S 155";
+cfg.paradigms.myParadigm.triggerfix.phase_specific_trigger_renaming_rules.phase5.categoryG.code = "S 55";
+
 
 cfg.paradigms.myParadigm.triggerfix.trigger_phase_min_remaps = 5; % minimal number of expected remaps in total
 cfg.paradigms.myParadigm.triggerfix.trigger_phase_min_phases_with_remaps = 2; %minimal number of extpected remaps per phase
