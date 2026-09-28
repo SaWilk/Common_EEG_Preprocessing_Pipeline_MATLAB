@@ -353,14 +353,16 @@ cfg.prep_01.task_label    = cfg.bids.task_label;    % get task label defined in 
 % =========================================================================
 cfg.paradigms.myParadigm.triggerfix = struct();
 
-cfg.paradigms.myParadigm.triggerfix.use_gating_from_start_markers = true; % true if there are phases, false if there are no phases in your paradigm
+cfg.paradigms.myParadigm.triggerfix.use_gating_from_start_markers = false; % true if there are phases, false if there are no phases in your paradigm
 
-cfg.steps.prep_02_triggerfix.run_raw_order_qc = false; %find behavior log file
+cfg.steps.prep_02_triggerfix.run_raw_order_qc = false; %find behavior log file (only if you want to use RAW QC triggerfix)
+%if false skip Raw QC block and go on with 1) Phases
 
-% RAW QC Triggerabgleich über Behavior (optional)
-cfg.paradigms.myParadigm.triggerfix.run_raw_order_qc = true;
+%%% RAW QC Trigger from Behavior files (optional)
+cfg.paradigms.myParadigm.triggerfix.run_raw_order_qc = false;
 
-cfg.paradigms.myParadigm.triggerfix.behavior_log_column_event_type = 'EventType';
+%Enter column labels from behavioral data sets
+cfg.paradigms.myParadigm.triggerfix.behavior_log_column_event_type = 'Event_Type';
 cfg.paradigms.myParadigm.triggerfix.behavior_log_column_code       = 'Code';
 cfg.paradigms.myParadigm.triggerfix.behavior_log_column_time       = 'Time';
 cfg.paradigms.myParadigm.triggerfix.behavior_log_time_unit         = "ms";
@@ -370,6 +372,7 @@ cfg.paradigms.myParadigm.triggerfix.raw_qc_bin_size_s       = 1;
 cfg.paradigms.myParadigm.triggerfix.raw_qc_max_rows         = 20000;
 cfg.paradigms.myParadigm.triggerfix.raw_qc_write_csv_on_ok  = false;
 
+%Event types
 cfg.paradigms.myParadigm.triggerfix.behavior_log_map = { ...
     'Picture', 'cs-',      'cs_minus'; ...
     'Picture', 'csminus',  'cs_minus'; ...
@@ -394,11 +397,11 @@ cfg.paradigms.myParadigm.triggerfix.input_vhdr_pattern = ""; %
 cfg.paradigms.myParadigm.triggerfix.use_explicit_chanlist = false;
 cfg.paradigms.myParadigm.triggerfix.explicit_chanlist = 1:66;
 
-% Namens-/Label-Felder (damit pattern sicher ist und Review "task/session" nicht fehlt)
+%labels
 cfg.paradigms.myParadigm.triggerfix.task_label = cfg.bids.task_label;
 cfg.paradigms.myParadigm.triggerfix.session_label = cfg.bids.session_label;
 
-% optional output QC override
+%%% optional output QC override
 cfg.paradigms.myParadigm.triggerfix.qc_out_dir = "";
 
 % 1) Phases: Enter start markers and names for your phases if use_gating_from_start_markers = true
@@ -410,20 +413,20 @@ cfg.paradigms.myParadigm.triggerfix.gates.start_markers = struct( ...
     'phase4', " S 94", ...
     'phase5', "S 95");
 
-% 2) Name Trigger and there category in your paradigm
+% 2) Name Triggers per category in your paradigm
 % add more blocks if necessary
 cfg.paradigms.myParadigm.triggerfix.raw_triggers = struct();
-cfg.paradigms.myParadigm.triggerfix.raw_triggers.rawA = "S 20";   % trigger category A: no CP miss
-cfg.paradigms.myParadigm.triggerfix.raw_triggers.rawB = "S 21";   % trigger category B: no CP hit
-cfg.paradigms.myParadigm.triggerfix.raw_triggers.rawC = "S 22";   % trigger category C: CP miss
-cfg.paradigms.myParadigm.triggerfix.raw_triggers.rawD = "S 23";   % trigger category D: CP hit
-cfg.paradigms.myParadigm.triggerfix.raw_triggers.rawE = "S 24";
-cfg.paradigms.myParadigm.triggerfix.raw_triggers.rawF = "S 15";
-cfg.paradigms.myParadigm.triggerfix.raw_triggers.rawG = "S 5";
+cfg.paradigms.myParadigm.triggerfix.raw_triggers.rawA = "S 62";   
+cfg.paradigms.myParadigm.triggerfix.raw_triggers.rawB = "S 60";   
+cfg.paradigms.myParadigm.triggerfix.raw_triggers.rawC = "S 61";   
+cfg.paradigms.myParadigm.triggerfix.raw_triggers.rawD = "S 63";   
+% cfg.paradigms.myParadigm.triggerfix.raw_triggers.rawE = "S 24";
+% cfg.paradigms.myParadigm.triggerfix.raw_triggers.rawF = "S 15";
+% cfg.paradigms.myParadigm.triggerfix.raw_triggers.rawG = "S 5";
 
 % 3) Blocking/Counting:renaming and counting event triggers per phase
 cfg.paradigms.myParadigm.triggerfix.blocking = struct();
-cfg.paradigms.myParadigm.triggerfix.blocking.count_scope = "phase"; % global for counting across all trials; 
+cfg.paradigms.myParadigm.triggerfix.blocking.count_scope = "global"; % global for counting across all trials (e.g. with your paradigm does not include phases); 
 % "phase" for counting within phases if cfg.paradigms.myParadigm.triggerfix.use_gating_from_start_markers = true and if cfg.paradigms.myParadigm.triggerfix.gates.start_markers are set accordingly.
 % Starting markers themselves are not counted and not renamed;
 
@@ -434,45 +437,45 @@ cfg.paradigms.myParadigm.triggerfix.blocking.count_scope = "phase"; % global for
 cfg.paradigms.myParadigm.triggerfix.blocking.categoryA = struct();
 cfg.paradigms.myParadigm.triggerfix.blocking.categoryA.raw_key = "rawA";
 cfg.paradigms.myParadigm.triggerfix.blocking.categoryA.blocks = { ...
-    struct('n', inf, 'code', " ")  ...
+    struct('n', inf, 'code', "S 162")  ...
 };
 
 cfg.paradigms.myParadigm.triggerfix.blocking.categoryB = struct();
 cfg.paradigms.myParadigm.triggerfix.blocking.categoryB.raw_key = "rawB";
 cfg.paradigms.myParadigm.triggerfix.blocking.categoryB.blocks = { ...
-    struct('n', inf, 'code', " ")  ...
+    struct('n', inf, 'code', "S 160")  ...
 };
 
 cfg.paradigms.myParadigm.triggerfix.blocking.categoryC = struct();
 cfg.paradigms.myParadigm.triggerfix.blocking.categoryC.raw_key = "rawC";
 cfg.paradigms.myParadigm.triggerfix.blocking.categoryC.blocks = { ...
-    struct('n', inf, 'code', " ")  ...
+    struct('n', inf, 'code', "S 161")  ...
 };
 cfg.paradigms.myParadigm.triggerfix.blocking.categoryD = struct();
 cfg.paradigms.myParadigm.triggerfix.blocking.categoryD.raw_key = "rawD";
 cfg.paradigms.myParadigm.triggerfix.blocking.categoryD.blocks = { ...
-    struct('n', inf, 'code', " ")  ...
+    struct('n', inf, 'code', "S 163")  ...
 };
 
-cfg.paradigms.myParadigm.triggerfix.blocking.categoryD = struct();
-cfg.paradigms.myParadigm.triggerfix.blocking.categoryD.raw_key = "rawE";
-cfg.paradigms.myParadigm.triggerfix.blocking.categoryD.blocks = { ...
-    struct('n', inf, 'code', " ")  ...
-};
+% cfg.paradigms.myParadigm.triggerfix.blocking.categoryD = struct();
+% cfg.paradigms.myParadigm.triggerfix.blocking.categoryD.raw_key = "rawE";
+% cfg.paradigms.myParadigm.triggerfix.blocking.categoryD.blocks = { ...
+%     struct('n', inf, 'code', "S ")  ...
+% };
+% 
+% cfg.paradigms.myParadigm.triggerfix.blocking.categoryD = struct();
+% cfg.paradigms.myParadigm.triggerfix.blocking.categoryD.raw_key = "rawF";
+% cfg.paradigms.myParadigm.triggerfix.blocking.categoryD.blocks = { ...
+%     struct('n', inf, 'code', " ")  ...
+% };
+% 
+% cfg.paradigms.myParadigm.triggerfix.blocking.categoryD = struct();
+% cfg.paradigms.myParadigm.triggerfix.blocking.categoryD.raw_key = "rawG";
+% cfg.paradigms.myParadigm.triggerfix.blocking.categoryD.blocks = { ...
+%     struct('n', inf, 'code', " ")  ...
+% };
 
-cfg.paradigms.myParadigm.triggerfix.blocking.categoryD = struct();
-cfg.paradigms.myParadigm.triggerfix.blocking.categoryD.raw_key = "rawF";
-cfg.paradigms.myParadigm.triggerfix.blocking.categoryD.blocks = { ...
-    struct('n', inf, 'code', " ")  ...
-};
-
-cfg.paradigms.myParadigm.triggerfix.blocking.categoryD = struct();
-cfg.paradigms.myParadigm.triggerfix.blocking.categoryD.raw_key = "rawG";
-cfg.paradigms.myParadigm.triggerfix.blocking.categoryD.blocks = { ...
-    struct('n', inf, 'code', " ")  ...
-};
-
-cfg.paradigms.myParadigm.triggerfix.enable_first_match_replacements = true; %true if you want to replace the first accuring trigger
+cfg.paradigms.myParadigm.triggerfix.enable_first_match_replacements = false; %true if you want to replace the first accuring trigger
 
 cfg.paradigms.myParadigm.triggerfix.first_match_replacements = {
     struct('match_code'," ", 'replace_code'," ",    'max_replacements',1),
@@ -481,7 +484,7 @@ cfg.paradigms.myParadigm.triggerfix.first_match_replacements = {
     struct('match_code'," ", 'replace_code'," ",'max_replacements',1)
 };
 
-cfg.paradigms.myParadigm.triggerfix.phase_strategy = "trigger_then_block_fallback"; 
+cfg.paradigms.myParadigm.triggerfix.phase_strategy = "trigger_only"; 
 %"trigger_only" remapping only following start trigger; useful if triggers
 %have already been checked or corrected before pipeline
 %"block_only" remapping following counting within blocks; useful if
@@ -490,11 +493,9 @@ cfg.paradigms.myParadigm.triggerfix.phase_strategy = "trigger_then_block_fallbac
 % than min_remap switch to block counting
 
 % --- Phase-specific trigger renaming (optional) ---
-cfg.paradigms.myParadigm.triggerfix.phase_specific_trigger_renaming = true;
+cfg.paradigms.myParadigm.triggerfix.phase_specific_trigger_renaming = false;
 
-% Rules format (Keys müssen exakt zu den Phase-Keys passen,
-% die in gates.start_markers definiert sind):
-% phase_specific_trigger_renaming_rules.(phaseKey).(categoryKey).code = "NEW_CODE"
+% Enter new codes after renaming per phase and category
 cfg.paradigms.myParadigm.triggerfix.phase_specific_trigger_renaming_rules = struct();
 % Example (keys generisch nach euren gate keys, bitte anpassen):
 cfg.paradigms.myParadigm.triggerfix.phase_specific_trigger_renaming_rules.phase1.categoryA.code = "S 201";

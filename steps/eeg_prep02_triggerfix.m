@@ -19,7 +19,7 @@ function step_out = eeg_prep02_triggerfix(subj_id, cfg, paths, helpers)
 %   cfg.prep_02.run_raw_order_qc = false unless you explicitly adapt that
 %   branch for your own experiment-specific logs.
 %
-% Saskia Wilken Dez 2025/Laura Langemeyer Sept 2026
+% Saskia Wilken Dec 2025/Laura Langemeyer Sept 2026
 
 step_out = struct('ok', false, 'skipped', false, 'out_set_file', '', 'message', '');
 
@@ -236,6 +236,13 @@ try
         try
             beh_file = helpers.find_behavior_log(paths.bids_root, subj_id, session_label);
             beh = helpers.read_behavior_log(beh_file);
+            bad_idx = find(~isfinite(str2double(string(beh.Time))));
+            helpers.log_msg_default('Bad Time count=%d', numel(bad_idx));
+            helpers.log_msg_default('Bad Time raw: %s', strjoin(cellstr(string(beh.Time(bad_idx(1:min(end,10))))), ', '));
+            % bad = isnan(str2double(string(beh.Time)));
+            % helpers.log_msg_default('Behavior Time non-numeric count=%d / n=%d', sum(bad), height(beh));
+            % helpers.log_msg_default('First bad Time values: %s', strjoin(cellstr(string(beh.Time(bad(1:min(end,sum(bad)))))), ', '));
+            helpers.log_msg_default('Behavior vars: %s', strjoin(string(beh.Properties.VariableNames), ', '));
             helpers.log_msg_default('Step 02: behavior log for RAW QC: %s', beh_file);
         catch
             helpers.log_msg_default('WARNING: Step 02 RAW QC skipped (could not read behavior log).');
@@ -247,10 +254,24 @@ try
     ran_any   = false;
 
     % =====================================================================
-    % PRECOMPUTE for generic blocking (dynamic phases + cats)
+    % PRECOMPUTE for generic blocking 
     % =====================================================================
     phase_marker_tokens = struct();
     has_any_phase_marker = false;
+
+    phase_start_seen_counts = struct();
+    if isfield(step_cfg, 'phase_start_markers') && isstruct(step_cfg.phase_start_markers) && ...
+            step_cfg.use_gating_from_start_markers
+    
+        pFields = fieldnames(step_cfg.phase_start_markers);
+        for kk = 1:numel(pFields)
+            pName = char(pFields{kk});
+            tok = helpers.normalize_trigger_type(step_cfg.phase_start_markers.(pName));
+            if strlength(string(tok)) > 0
+                phase_start_seen_counts.(pName) = 0;
+            end
+        end
+    end
 
     if isfield(step_cfg, 'phase_start_markers') && isstruct(step_cfg.phase_start_markers) && ...
             step_cfg.use_gating_from_start_markers
@@ -489,7 +510,7 @@ try
         
                     phKey = char(current_phase);
                     
-                   % Optional phase-specific renaming (Zählung bleibt unverändert)
+                   % Optional phase-specific renaming 
                     new_code_phase = "";  % always initialize for this event
                     
                     use_phase_specific = logical(getfield_default(step_cfg, ...
@@ -521,7 +542,7 @@ try
 
                    
 
-                after = helpers.normalize_trigger_type(EEGp.event(x).type); % <- für Log
+                after = helpers.normalize_trigger_type(EEGp.event(x).type); 
                     % if strlength(string(new_code)) > 0
                     %     EEGp.event(x).type = char(string(new_code));
                     % else
@@ -653,7 +674,6 @@ try
             if ~qc_ok_beh
                 helpers.log_msg_default(['Step 02: WARNING Behavior-QC indicates trigger order mismatch ' ...
                     '-> KEEP trigger-based phase remapping (do not force fallback).']);
-                % trigger_primary_ok = false;  % <-- AUSKOMMENTIEREN / NICHT SETZEN
             end
         end
 
@@ -819,7 +839,7 @@ try
                     end
                 end
             else
-                % original verbose QA (FALLBACK)
+                % original verbose QA 
                 phaseKeysFB = fieldnames(n_remaps_fallback_by_phase);
                 for kk = 1:numel(phaseKeysFB)
                     ph = phaseKeysFB{kk};
@@ -844,10 +864,10 @@ try
         end
         
         % =====================================================================
-        % TRIGGER REMAP SUMMARY (before -> after)
+        % TRIGGER REMAP SUMMARY 
         % =====================================================================
         if step_cfg.log_summary_only
-            % Kompakt ausgeben: PRIMARY
+            % PRIMARY
             if n_remaps_primary_total > 0
                 helpers.log_msg_default('Step 02 SUMMARY PRIMARY trigger remaps (before->after): total=%d', n_remaps_primary_total);
                 keys = remap_counts_primary.keys();
@@ -866,26 +886,48 @@ try
                 helpers.log_msg_default('Step 02 SUMMARY PRIMARY trigger remaps: total=0');
             end
         
-            % Kompakt ausgeben: FALLBACK
+            % FALLBACK
             if exist('n_remaps_fallback_total','var') && n_remaps_fallback_total > 0
-                helpers.log_msg_default('Step 02 SUMMARY FALLBACK trigger remaps (before->after): total=%d', n_remaps_fallback_total);
-                keys = fieldnames(remap_counts_fallback);
-                for ii = 1:numel(keys)
-                    k = keys{ii};
-                    cnt = remap_counts_fallback.(k);
+            helpers.log_msg_default('Step 02 SUMMARY FALLBACK trigger remaps (before->after): total=%d', n_remaps_fallback_total);
+            keys = fieldnames(remap_counts_fallback);
+            for ii = 1:numel(keys)
+                k = keys{ii};
+                cnt = remap_counts_fallback.(k);
         
-                    parts = split(k, '|||');
+                parts = split(k, '|||');
+        
+                before = "";
+                after  = "<missing_after_from_key>";
+        
+                if numel(parts) >= 1
                     before = string(parts(1));
-                    after  = string(parts(2));
-        
-                    helpers.log_msg_default('  FALLBACK: "%s" -> "%s" : n=%d', before, after, cnt);
                 end
-            else
-                helpers.log_msg_default('Step 02 SUMMARY FALLBACK trigger remaps: total=0');
+                if numel(parts) >= 2
+                    after = string(parts(2));
+                end
+        
+                helpers.log_msg_default('  FALLBACK: "%s" -> "%s" : n=%d', before, after, cnt);
             end
         else
-            % Wenn log_summary_only=false, könntest du auch ausführlicher machen.
-            % Für minimalen Eingriff lassen wir es bei derselben Ausgabe.
+            helpers.log_msg_default('Step 02 SUMMARY FALLBACK trigger remaps: total=0');
+        end
+            % if exist('n_remaps_fallback_total','var') && n_remaps_fallback_total > 0
+            %     helpers.log_msg_default('Step 02 SUMMARY FALLBACK trigger remaps (before->after): total=%d', n_remaps_fallback_total);
+            %     keys = fieldnames(remap_counts_fallback);
+            %     for ii = 1:numel(keys)
+            %         k = keys{ii};
+            %         cnt = remap_counts_fallback.(k);
+            % 
+            %         parts = split(k, '|||');
+            %         before = string(parts(1));
+            %         after  = string(parts(2));
+            % 
+            %         helpers.log_msg_default('  FALLBACK: "%s" -> "%s" : n=%d', before, after, cnt);
+            %     end
+            % else
+            %     helpers.log_msg_default('Step 02 SUMMARY FALLBACK trigger remaps: total=0');
+            % end
+        else
             helpers.log_msg_default('Step 02 trigger remap summary (before->after) detailed mode uses same format.');
             if n_remaps_primary_total > 0
                 helpers.log_msg_default('Step 02 SUMMARY PRIMARY trigger remaps (before->after): total=%d', n_remaps_primary_total);
@@ -907,14 +949,31 @@ try
                     k = keys{ii};
                     cnt = remap_counts_fallback.(k);
                     parts = split(k, '|||');
-                    before = string(parts(1));
-                    after  = string(parts(2));
-                    helpers.log_msg_default('  FALLBACK: "%s" -> "%s" : n=%d', before, after, cnt);
-                end
-            end
-        end
-        
-        
+                    parts = split(k, '|||');
+
+                    before = "";
+                    after  = "";
+                    
+                    if numel(parts) >= 1
+                        before = string(parts(1));
+                    end
+                    if numel(parts) >= 2
+                        after = string(parts(2));
+                    else
+                        % fallback auf kompletten Key, falls Format kaputt ist
+                        after = "<missing_after_from_key>";
+                    end
+                    
+                    helpers.log_msg_default('  FALLBACK: "%s" -> "%s" : n=%d', ...
+                        before, after, cnt);
+                                        % before = string(parts(1));
+                                        % after  = string(parts(2));
+                                        % helpers.log_msg_default('  FALLBACK: "%s" -> "%s" : n=%d', before, after, cnt);
+                                    end
+                                end
+                            end
+                
+                
         % ---- PASS X: generic first-match replacements ----
         if isfield(step_cfg, 'enable_first_match_replacements')
             run_replacements = logical(step_cfg.enable_first_match_replacements);
@@ -1078,10 +1137,10 @@ step_cfg.trigger_phase_min_phases_with_remaps = 2;
 step_cfg.enable_first_match_replacements = true;
 step_cfg.use_gating_from_start_markers   = true;
 
-% Blocking default (leer)
+% Blocking default 
 step_cfg.blocking = struct();
 
-% First-match replacements default (leer)
+% First-match replacements default 
 step_cfg.first_match_replacements = {};
 
 % fallback to current block-counting if trigger-based remapping seems unreliable.
