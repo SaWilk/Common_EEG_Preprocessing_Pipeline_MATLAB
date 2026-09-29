@@ -55,7 +55,18 @@ try
             && isfield(cfg.paradigms.(paradigm_name), 'triggerfix')
 
         tf = cfg.paradigms.(paradigm_name).triggerfix;
-        if isfield(tf, 'enable_first_match_replacements')
+
+        %print raw_triggers keys and values that step_cfg uses
+        try
+            rt = step_cfg.raw_triggers;
+            rk = fieldnames(rt);
+            for ii = 1:numel(rk)
+                k = char(rk{ii});
+                helpers.log_msg_default('Step 02 raw_triggers.%s = "%s"', k, char(string(rt.(k))));
+            end
+        catch
+        end
+                if isfield(tf, 'enable_first_match_replacements')
             step_cfg.enable_first_match_replacements = logical(tf.enable_first_match_replacements);
         else
             step_cfg.enable_first_match_replacements = true; % Default
@@ -317,9 +328,33 @@ try
             cat_raw_tok.(cat) = tok;
         end
     end
+  
+    
+    %step_cfg.raw_triggers
+    try
+    rt = step_cfg.raw_triggers;
+    rk = fieldnames(rt);
+    for ii = 1:numel(rk)
+        k = char(rk{ii});
+        helpers.log_msg_default('Step 02: step_cfg.raw_triggers.%s = "%s"', k, char(string(rt.(k))));
+    end
+    catch, end
 
-    cat_counter = struct();
-    cat_counter_phase = struct();
+    % computed cat_raw_tok
+    try
+        ck = fieldnames(cat_raw_tok);
+        for ii = 1:numel(ck)
+            k = char(ck{ii});
+            %helpers.log_msg_default('Step 02 DEBUG: cat_raw_tok.%s = "%s"', k, char(string(cat_raw_tok.(k))));
+        end
+    catch, end
+    
+    
+    try
+        %helpers.log_msg_default('Step 02 DEBUG: catNames = %s', strjoin(string(catNames), ', '));
+    catch, end
+        cat_counter = struct();
+        cat_counter_phase = struct();
 
     % =====================================================================
     % MAIN LOOP over vhdr
@@ -362,6 +397,20 @@ try
         end
         EEG = eeg_checkset(EEG);
         EEG = helpers.normalize_event_types(EEG);
+
+        % Print unique normalized event types
+        try
+            types = strings(0);
+            for ii = 1:numel(EEG.event)
+                types(end+1,1) = helpers.normalize_trigger_type(EEG.event(ii).type);
+            end
+            u = unique(types);
+            helpers.log_msg_default('Step 02: unique normalized event types count=%d', numel(u));
+            helpers.log_msg_default('Step 02: unique normalized event types (first 80): %s', ...
+                strjoin(cellstr(u(1:min(80,numel(u)))), ', '));
+        catch me
+            helpers.log_msg_default('Step 02 DEBUG: could not print event types: %s', me.message);
+        end
 
         % ---- OPTIONAL RAW QC BEFORE REMAPPING ----
         if step_cfg.run_raw_order_qc && ~isempty(beh)
@@ -424,6 +473,156 @@ try
                 trigger_then_fallback = true;
         end
         
+        %global block remapping without phases
+        if ~has_any_phase_marker
+        
+            cat_counter = struct(); 
+
+            cat_total_found = struct();   
+            cat_remap_to = struct();      
+        
+            for x = 1:numel(EEG.event)
+        
+                current_type = helpers.normalize_trigger_type(EEG.event(x).type);
+        
+                % find matched category by raw token
+                matched_cat = "";
+                catKeys = fieldnames(cat_raw_tok);
+                for ci = 1:numel(catKeys)
+                    cat = catKeys{ci};
+                    if strcmp(current_type, cat_raw_tok.(cat))
+                        matched_cat = string(cat);
+                        break;
+                    end
+                end
+        
+                if strlength(matched_cat) == 0
+                    continue;
+                end
+        
+                cat = char(matched_cat);
+        
+                if ~isfield(blocking, cat) || ~isfield(blocking.(cat), 'blocks')
+                    continue;
+                end
+        
+                blocks = blocking.(cat).blocks;
+                if isempty(blocks)
+                    continue;
+                end
+        
+                % global counter
+                if ~isfield(cat_counter, cat)
+                    cat_counter.(cat) = 0;
+                end
+                % cat_counter.(cat) = cat_counter.(cat) + 1;
+                % n = cat_counter.(cat);
+                if ~isfield(cat_counter, cat); cat_counter.(cat) = 0; end
+                    cat_counter.(cat) = cat_counter.(cat) + 1;
+                    n = cat_counter.(cat);
+
+                    % track found count per category
+                    if ~isfield(cat_total_found, cat); cat_total_found.(cat) = 0; end
+                    cat_total_found.(cat) = cat_total_found.(cat) + 1;
+                    % select matching block
+                    cum = 0;
+                    new_code = "";
+                    for bi = 1:numel(blocks)
+                    bi_n = blocks{bi}.n;
+                        if isempty(bi_n); continue; end
+        
+                    cum = cum + double(bi_n);
+                        if n <= cum
+                        new_code = blocks{bi}.code;
+                        break;
+                    end
+                end
+                
+                % determine target label for reporting
+                if strlength(string(new_code)) > 0
+                    target_code = char(string(new_code));
+                else
+                    target_code = char(current_type);
+                end
+                
+                % track distribution of remap targets per category
+                catKey_log = matlab.lang.makeValidName(cat); % 
+                targetKey_log = matlab.lang.makeValidName(target_code);
+                
+                if ~isfield(cat_remap_to, catKey_log)
+                    cat_remap_to.(catKey_log) = struct();
+                end
+                if ~isfield(cat_remap_to.(catKey_log), targetKey_log)
+                    cat_remap_to.(catKey_log).(targetKey_log) = 0;
+                end
+                cat_remap_to.(catKey_log).(targetKey_log) = cat_remap_to.(catKey_log).(targetKey_log) + 1;
+
+                before = helpers.normalize_trigger_type(EEG.event(x).type);
+        
+                if strlength(string(new_code)) > 0
+                    EEG.event(x).type = char(string(new_code));
+                else
+                    EEG.event(x).type = current_type;
+                end
+        
+            end
+        
+            % -------- Summary log per category (no phases) --------
+            catKeysFound = fieldnames(cat_total_found);
+            for ii = 1:numel(catKeysFound)
+                cat = catKeysFound{ii};
+                nFound = cat_total_found.(cat);
+            
+                helpers.log_msg_default('Step 02 summary: cat="%s" found=%d', cat, nFound);
+            
+                catKey_log = matlab.lang.makeValidName(cat);
+                if isfield(cat_remap_to, catKey_log)
+                    targetKeys = fieldnames(cat_remap_to.(catKey_log));
+                    for jj = 1:numel(targetKeys)
+                        tKey = targetKeys{jj};
+                        nHere = cat_remap_to.(catKey_log).(tKey);
+                        helpers.log_msg_default('  -> remap_to="%s" n=%d', tKey, nHere);
+                    end
+                end
+            end
+            
+            EEG = helpers.append_eeg_comment(EEG, ...
+                sprintf('prep02_triggerfix: NO-PHASES -> global category blocking applied for sub-%s', subj_id));
+            EEG = eeg_checkset(EEG);
+
+            % SAVE OUTPUT and end Step 02
+            out_base = bids_base;
+            EEG.setname = sprintf('%s_triggersfixed', out_base);
+            fname = sprintf('%s_triggersfixed.set', out_base);
+            paths_out_dir = paths.prep_02_out_dir;
+            
+            EEG = helpers.safe_save_set(EEG, paths_out_dir, fname, helpers, cfg);
+            helpers.log_msg_default('Step 02: saved %s', fullfile(paths_out_dir, fname));
+            
+            out_files(end+1,1) = string(out_set_file_char);
+            
+            step_out.ok = true;
+            step_out.message = sprintf('Processed 1 trigger-fixed set for sub-%s (NO-PHASES fast path).', subj_id);
+            helpers.log_msg_default('%s', step_out.message);
+            return;
+                    
+            % PRIMARY/FALLBACK skip
+            do_trigger = false;
+            do_block   = false;
+            trigger_then_fallback = false;
+        end
+        
+        
+        % if ~has_any_phase_marker
+        %     do_trigger = false;   % PRIMARY macht eh keinen Sinn ohne Gates
+        %     do_block   = true;    % egal was phase_strategy war: global per Kategorie remappen
+        % end
+
+        skip_primary_fallback = false;
+        if ~has_any_phase_marker
+            skip_primary_fallback = true;
+        end
+
         trigger_phase_min_remaps = double(step_cfg.trigger_phase_min_remaps);
         if isempty(trigger_phase_min_remaps) || ~isfinite(trigger_phase_min_remaps)
             trigger_phase_min_remaps = 5;
@@ -678,7 +877,11 @@ try
         end
 
         %if ~trigger_primary_ok
-        if do_block && ( ~trigger_then_fallback || ~trigger_primary_ok )
+        helpers.log_msg_default('Step 02: has_any_phase_marker=%d, phase_strategy=%s, do_trigger=%d, do_block=%d, trigger_primary_ok=%d, trigger_then_fallback=%d', ...
+        logical(has_any_phase_marker), char(phase_strategy), logical(do_trigger), logical(do_block), logical(trigger_primary_ok), logical(trigger_then_fallback));
+        
+        %if do_block && ( ~trigger_then_fallback || ~trigger_primary_ok )
+        if ~skip_primary_fallback && do_block && ( ~trigger_then_fallback || ~trigger_primary_ok )
             % ---------------- Fallback: block-counting logic ----------------
             cat_counter = struct();
             cat_counter_phase = struct();
@@ -820,7 +1023,7 @@ try
             end
         
             EEG = helpers.append_eeg_comment(EEG, ...
-                sprintf('prep02_triggerfix: FALLBACK generic blocking applied for sub-%s', subj_id));
+                sprintf('prep02_triggerfix: fallback generic blocking applied for sub-%s', subj_id));
         
            helpers.log_msg_default('Step 02: fallback remaps total=%d', n_remaps_fallback_total);
 
@@ -834,7 +1037,7 @@ try
                         catKey = catKeys{cc};
                         nHere  = n_remaps_fallback_by_phase_and_cat.(ph).(catKey);
             
-                        helpers.log_msg_default('Step 02 SUMMARY FALLBACK: phase="%s" cat="%s" n=%d', ...
+                        helpers.log_msg_default('Step 02 summary fallback: phase="%s" cat="%s" n=%d', ...
                             ph, catKey, nHere);
                     end
                 end
@@ -960,7 +1163,7 @@ try
                     if numel(parts) >= 2
                         after = string(parts(2));
                     else
-                        % fallback auf kompletten Key, falls Format kaputt ist
+                        % fallback 
                         after = "<missing_after_from_key>";
                     end
                     

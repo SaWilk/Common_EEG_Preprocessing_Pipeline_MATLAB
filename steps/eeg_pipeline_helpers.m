@@ -6077,13 +6077,18 @@ end
 
 fclose(fid);
 
-try
-    opts = detectImportOptions(tmp_file, 'FileType', 'text');
-catch
-    opts = detectImportOptions(tmp_file, 'Delimiter', '\t', 'FileType', 'text');
-end
-
-T = readtable(tmp_file, opts);
+T = readtable(tmp_file, ...
+    'Delimiter','\t', ...
+    'FileType','text', ...
+    'TextType','string', ...
+    'MultipleDelimsAsOne',true);
+% try
+%     opts = detectImportOptions(tmp_file, 'FileType', 'text');
+% catch
+%     opts = detectImportOptions(tmp_file, 'Delimiter', '\t', 'FileType', 'text');
+% end
+% 
+% T = readtable(tmp_file, opts);
 delete(tmp_file);
 
 T.Properties.VariableNames = matlab.lang.makeValidName(T.Properties.VariableNames);
@@ -6662,7 +6667,9 @@ else
 end
 
 if isnan(t_num)
-    error('Behavior-log time value could not be converted to numeric seconds/ms.');
+    %error('Behavior-log time value could not be converted to numeric seconds/ms.');
+     t_s = NaN;   % statt error: fehlerhafte Zeitwerte werden übersprungen/bleiben NaN
+    return;
 end
 
 switch lower(char(string(time_unit)))
