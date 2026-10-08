@@ -1,0 +1,20 @@
+Remaining issues for JOSSS Paper:
+
+1) Include OSI License in repository
+2) Literature Research to cite comparable Tools
+3) Increase user group with test users outside the author group and outside the RU --> should engage on Github
+4) Improve README: Statement of need, installation instructions, example usage, API documentation, Community guidelines
+5) Release Pipeline
+6) Write Paper Parts (Needs to be divided into sub-issues; everyone includes own citations and references)
+	6.1) Summary
+	6.2) Statement of need
+	6.3) State of field (related to remaining issue 2)
+	6.4) Software design
+	6.5) Research Impact Statement (related to remaining issues 3 and 9) + Mention ongoing Research Projects with the Software
+	6.6) AI usage disclosure, Ackknowledgements
+7) Check Mark-down file, citations, figures and references
+8) Decide co-authorship
+9) Publish Preprint and get citations
+10) Optional: Create Metadata with JOSSS script
+11) Optional: Improve installation as package
+ 
