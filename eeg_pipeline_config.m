@@ -53,16 +53,16 @@ cfg.qc.table_delimiter = ';';
 % Project identity
 % -------------------------------------------------------------------------
 cfg.pipeline = struct();
-cfg.pipeline.name        = "aperiodic_pipeline"; % set recognizable name: project name used in cfg and logsheader
-cfg.pipeline.step_prefix = "eeg";                % step 02-06 function prefix, needed to find step-functions. Keep as "eeg" unless you have a good reason to change it.
+cfg.pipeline.name        = " "; % set recognizable name: project name used in cfg and logsheader
+cfg.pipeline.step_prefix = " ";                % step 02-06 function prefix, needed to find step-functions. Keep as "eeg" unless you have a good reason to change it.
 
 cfg.constants = struct();
-cfg.constants.log_prefix_master = "run_eeg_pipeline_aperiodic"; % master log filename prefix
+cfg.constants.log_prefix_master = " "; % master log filename prefix
 
 cfg.bids = struct();
-cfg.bids.dataset_folder_name = "baseline";   % BIDS dataset folder name (if you have multiple datasets in the same raw folder)
-cfg.bids.task_label          = "baseline";   % BIDS task label of EEG dataset
-cfg.bids.session_label       = "01";         % BIDS session label
+cfg.bids.dataset_folder_name = " ";   % BIDS dataset folder name (if you have multiple datasets in the same raw folder)
+cfg.bids.task_label          = " ";   % BIDS task label of EEG dataset
+cfg.bids.session_label       = " ";         % BIDS session label
 
 % -------------------------------------------------------------------------
 % Profile / paths
@@ -81,23 +81,9 @@ cfg.paths.profile_override = ""; % leave empty for automatic profile selection; 
 
 cfg.paths.profile_paths = struct();
 
-cfg.paths.profile_paths.pc = struct( ...
-    'source_eeg_root',  'Z:\pb\KLPSY1\KLPSY1-RTG\PROOF - Data\Real\EEG\Baseline', ...
-    'source_beh_root',  '', ...
-    'bids_root',        'Z:\pb\KPP_KPN_joined\Aperiodic\Saskia\sourcedata', ...
-    'derivatives_root', 'Z:\pb\KPP_KPN_joined\Aperiodic\Saskia\derivatives');
-
-cfg.paths.profile_paths.server_windows = struct( ...
-    'source_eeg_root',  'Z:\pb\KLPSY1\KLPSY1-RTG\PROOF - Data\Real\EEG\Baseline', ...
-    'source_beh_root',  '', ...
-    'bids_root',         'Z:\pb\KPP_KPN_joined\Aperiodic\Saskia\sourcedata', ...
-    'derivatives_root', 'Z:\pb\KPP_KPN_joined\Aperiodic\Saskia\derivatives');
-
-cfg.paths.profile_paths.hpc_hummel = struct( ...
-    'source_eeg_root',  '', ...
-    'source_beh_root',  '', ...
-    'bids_root',        fullfile('/beegfs/u/bbf7366/sourcedata', char(cfg.bids.dataset_folder_name)), ...
-    'derivatives_root', '/beegfs/u/bbf7366/derivatives/preprocessed_eeg_baseline');
+% Load local paths from separate file eeg_pipeline_local_paths.m; 
+% adjust local and HPC paths to data there
+cfg.paths.profile_paths = eeg_pipeline_local_paths();
 
 % only set these if paths deviate but you do not want to change the profile
 cfg.paths.bids_root_override        = "";
@@ -110,17 +96,21 @@ cfg.paths.source_beh_root_override  = "";
 % =========================================================================
 cfg.toolboxes = struct();
 
-cfg.toolboxes.path_eeglab_pc     = "K:\Wilken_Arbeitsordner\MATLAB\eeglab_current\eeglab2025.1.0"; % EEGLAB path on PC
-cfg.toolboxes.path_eeglab_server = "K:\Wilken_Arbeitsordner\MATLAB\eeglab_current\eeglab2025.1.0"; % EEGLAB path on server
-cfg.toolboxes.path_eeglab_hpc    = "/beegfs/u/bbf7366/toolboxes/eeglab2025.1.0";                   % EEGLAB path on HPC
+local_paths = eeg_pipeline_local_paths();   %% Load local paths from separate file eeg_pipeline_local_paths.m; 
+% adjust local and HPC paths for toolboxes there (EEGLab, FASTER, ERPLab)
 
-cfg.toolboxes.path_faster_pc     = "K:\Wilken_Arbeitsordner\MATLAB\FASTER"; % FASTER path on PC
-cfg.toolboxes.path_faster_server = "K:\Wilken_Arbeitsordner\MATLAB\FASTER"; % FASTER path on server
-cfg.toolboxes.path_faster_hpc    = "/beegfs/u/bbf7366/toolboxes/FASTER";    % FASTER path on HPC
+cfg.toolboxes.path_eeglab_pc     = string(local_paths.toolboxes.eeglab_pc);
+cfg.toolboxes.path_eeglab_server = string(local_paths.toolboxes.eeglab_server);
+cfg.toolboxes.path_eeglab_hpc    = string(local_paths.toolboxes.eeglab_hpc);
 
-cfg.toolboxes.path_erplab_pc     = "K:\Wilken_Arbeitsordner\MATLAB\erplab13.00";
-cfg.toolboxes.path_erplab_server = "K:\Wilken_Arbeitsordner\MATLAB\erplab13.00";
-cfg.toolboxes.path_erplab_hpc    = "/beegfs/u/bbf7366/toolboxes/eeglab2025.1.0/plugins/erplab";
+cfg.toolboxes.path_faster_pc     = string(local_paths.toolboxes.faster_pc);
+cfg.toolboxes.path_faster_server = string(local_paths.toolboxes.faster_server);
+cfg.toolboxes.path_faster_hpc    = string(local_paths.toolboxes.faster_hpc);
+
+cfg.toolboxes.path_erplab_pc     = string(local_paths.toolboxes.erplab_pc);
+cfg.toolboxes.path_erplab_server = string(local_paths.toolboxes.erplab_server);
+cfg.toolboxes.path_erplab_hpc    = string(local_paths.toolboxes.erplab_hpc);
+
 
 cfg.toolboxes.erplab = struct();
 cfg.toolboxes.erplab.use_genpath = true;
@@ -135,7 +125,7 @@ cfg.toolboxes.eeglab.nogui = true;                  % start EEGLAB without GUI
 % Overwrite behavior
 % -------------------------------------------------------------------------
 cfg.io = struct();
-cfg.io.overwrite_mode          = "delete"; % "skip" | "delete" | "if_older_than"
+cfg.io.overwrite_mode          = "skip"; % "skip" | "delete" | "if_older_than"
 cfg.io.overwrite_if_older_than = "";       % cutoff date for "if_older_than", 
 % either "DD.MM.YYYY" or "YYYY-MM-DD", optionally with time in 24h format: HH:MM or HH:MM:SS 
 
@@ -194,6 +184,7 @@ if ~isfield(cfg.paths.profile_paths, profile_name)
 end
 
 profile_cfg = cfg.paths.profile_paths.(profile_name);
+
 
 % -------------------------------------------------------------------------
 % Base paths from selected profile
@@ -255,7 +246,7 @@ end
 % SUBJECTS
 % =========================================================================
 cfg.subjects = struct();
-cfg.subjects.list   = []; % explicit subject list, e.g. {'211','212'}, leave 
+cfg.subjects.list   = [ ]; % explicit subject list, e.g. {'211','212'}, leave 
 % empty to autodetect from source_eeg_root using cfg.constants.valid_sub_id_regex
 cfg.subjects.min_id = []; % process all subjects with a higher ID than...
 % numeric/string ID, no lower cutoff if left empty 
