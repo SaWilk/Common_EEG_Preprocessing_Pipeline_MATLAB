@@ -709,6 +709,32 @@ try
         
                     phKey = char(current_phase);
                     
+        % increment counter within this phase+category
+        if ~isfield(cat_counter_phase_primary, phKey)
+            cat_counter_phase_primary.(phKey) = struct();
+        end
+        if ~isfield(cat_counter_phase_primary.(phKey), cat)
+            cat_counter_phase_primary.(phKey).(cat) = 0;
+        end
+        
+        cat_counter_phase_primary.(phKey).(cat) = cat_counter_phase_primary.(phKey).(cat) + 1;
+        n = cat_counter_phase_primary.(phKey).(cat);
+
+        
+        
+        cum = 0;
+        new_code = "";
+        for bi = 1:numel(blocks)
+            bi_n = blocks{bi}.n;
+            if isempty(bi_n); continue; end
+            cum = cum + double(bi_n);
+            if n <= cum
+                new_code = blocks{bi}.code;
+                break;
+            end
+        end
+
+
                    % Optional phase-specific renaming 
                     new_code_phase = "";  % always initialize for this event
                     
@@ -1091,45 +1117,50 @@ try
         
             % FALLBACK
             if exist('n_remaps_fallback_total','var') && n_remaps_fallback_total > 0
-            helpers.log_msg_default('Step 02 SUMMARY FALLBACK trigger remaps (before->after): total=%d', n_remaps_fallback_total);
-            keys = fieldnames(remap_counts_fallback);
-            for ii = 1:numel(keys)
-                k = keys{ii};
-                cnt = remap_counts_fallback.(k);
+
+            fb_keys = remap_counts_fallback.keys;   % correct for containers.Map
         
-                parts = split(k, '|||');
-        
-                before = "";
-                after  = "<missing_after_from_key>";
-        
-                if numel(parts) >= 1
-                    before = string(parts(1));
+            % check if we have any non-empty after
+            any_nonempty_after = false;
+            for ii = 1:numel(fb_keys)
+                k = fb_keys{ii};
+                parts = split(string(k), '|||');
+                if numel(parts) >= 2 && strlength(parts(2)) > 0
+                    any_nonempty_after = true;
+                    break;
                 end
-                if numel(parts) >= 2
-                    after = string(parts(2));
-                end
-        
-                helpers.log_msg_default('  FALLBACK: "%s" -> "%s" : n=%d', before, after, cnt);
             end
+        
+            if any_nonempty_after
+                helpers.log_msg_default('Step 02 SUMMARY FALLBACK trigger remaps (before->after): total=%d', n_remaps_fallback_total);
+        
+                for ii = 1:numel(fb_keys)
+                    k = fb_keys{ii};
+                    cnt = remap_counts_fallback(k);
+        
+                    parts = split(string(k), '|||');
+                    before = "";
+                    after  = "";
+        
+                    if numel(parts) >= 1, before = parts(1); end
+                    if numel(parts) >= 2, after  = parts(2); end
+        
+                    % skip entries with empty after
+                    if strlength(after) == 0
+                        continue;
+                    end
+        
+                    helpers.log_msg_default('  FALLBACK: "%s" -> "%s" : n=%d', before, after, cnt);
+                end
+            else
+                helpers.log_msg_default('Step 02 SUMMARY FALLBACK suppressed (all after-codes empty). total=%d', n_remaps_fallback_total);
+            end
+        
         else
             helpers.log_msg_default('Step 02 SUMMARY FALLBACK trigger remaps: total=0');
         end
-            % if exist('n_remaps_fallback_total','var') && n_remaps_fallback_total > 0
-            %     helpers.log_msg_default('Step 02 SUMMARY FALLBACK trigger remaps (before->after): total=%d', n_remaps_fallback_total);
-            %     keys = fieldnames(remap_counts_fallback);
-            %     for ii = 1:numel(keys)
-            %         k = keys{ii};
-            %         cnt = remap_counts_fallback.(k);
-            % 
-            %         parts = split(k, '|||');
-            %         before = string(parts(1));
-            %         after  = string(parts(2));
-            % 
-            %         helpers.log_msg_default('  FALLBACK: "%s" -> "%s" : n=%d', before, after, cnt);
-            %     end
-            % else
-            %     helpers.log_msg_default('Step 02 SUMMARY FALLBACK trigger remaps: total=0');
-            % end
+
+           
         else
             helpers.log_msg_default('Step 02 trigger remap summary (before->after) detailed mode uses same format.');
             if n_remaps_primary_total > 0
@@ -1147,32 +1178,24 @@ try
         
             if exist('n_remaps_fallback_total','var') && n_remaps_fallback_total > 0
                 helpers.log_msg_default('Step 02 SUMMARY FALLBACK trigger remaps (before->after): total=%d', n_remaps_fallback_total);
-                keys = fieldnames(remap_counts_fallback);
-                for ii = 1:numel(keys)
-                    k = keys{ii};
-                    cnt = remap_counts_fallback.(k);
-                    parts = split(k, '|||');
-                    parts = split(k, '|||');
-
-                    before = "";
-                    after  = "";
-                    
-                    if numel(parts) >= 1
-                        before = string(parts(1));
-                    end
-                    if numel(parts) >= 2
-                        after = string(parts(2));
-                    else
-                        % fallback 
-                        after = "<missing_after_from_key>";
-                    end
-                    
-                    helpers.log_msg_default('  FALLBACK: "%s" -> "%s" : n=%d', ...
-                        before, after, cnt);
-                                        % before = string(parts(1));
-                                        % after  = string(parts(2));
-                                        % helpers.log_msg_default('  FALLBACK: "%s" -> "%s" : n=%d', before, after, cnt);
-                                    end
+                fb_keys = remap_counts_fallback.keys;   % richtig für containers.Map
+            for ii = 1:numel(fb_keys)
+                k = fb_keys{ii};                    % char key: 'before|||after'
+                cnt = remap_counts_fallback(k);    % richtig: map(indexed by key)
+            
+                parts = split(string(k), '|||');
+                before = "";
+                after  = "<missing_after_from_key>";
+            
+                if numel(parts) >= 1
+                    before = parts(1);
+                end
+                if numel(parts) >= 2
+                    after = parts(2);
+                end
+            
+                helpers.log_msg_default('  FALLBACK: "%s" -> "%s" : n=%d', before, after, cnt);
+            end
                                 end
                             end
                 
@@ -1237,6 +1260,39 @@ try
 
             EEG = helpers.append_eeg_comment(EEG, ...
                 sprintf('prep02_triggerfix: generic first-match replacements applied for sub-%s', subj_id));
+            helpers.log_msg_default('Step 02 LOGBOOK first_match_replacements sub-%s:', subj_id);
+            
+            for r = 1:numel(replacements)
+                rule = replacements{r};
+        
+                % match_code & replace_code 
+                match_code = "";
+                if isfield(rule, 'match_code') && strlength(string(rule.match_code)) > 0
+                    match_code = helpers.normalize_trigger_type(rule.match_code);
+                elseif isfield(rule, 'match_code_key') && strlength(string(rule.match_code_key)) > 0
+                    match_code = helpers.get_raw_trigger_from_key(step_cfg.raw_triggers, rule.match_code_key);
+                    match_code = helpers.normalize_trigger_type(match_code);
+                end
+        
+                replace_code = "";
+                if isfield(rule, 'replace_code') && strlength(string(rule.replace_code)) > 0
+                    replace_code = helpers.normalize_trigger_type(rule.replace_code);
+                elseif isfield(rule, 'replace_code_key') && strlength(string(rule.replace_code_key)) > 0
+                    replace_code = helpers.get_raw_trigger_from_key(step_cfg.raw_triggers, rule.replace_code_key);
+                    replace_code = helpers.normalize_trigger_type(replace_code);
+                end
+        
+                if strlength(match_code) == 0
+                    match_code = "<missing_match>";
+                end
+                if strlength(replace_code) == 0
+                    replace_code = "<missing_replace>";
+                end
+        
+                helpers.log_msg_default('Step 02 LOGBOOK  - rule %d: "%s" -> "%s" applied_n=%d (max=%d)', ...
+                    r, char(match_code), char(replace_code), n_done(r), ...
+                    getfield_default(rule, 'max_replacements', 1));
+            end
         end
 
         % -----------------------------------------------------------------
@@ -1289,7 +1345,6 @@ catch ME
     helpers.log_msg_default('%s', getReport(ME, 'extended', 'hyperlinks', 'off'));
 end
 
-end % <-- function end
 
 % =========================================================================
 % LOCAL HELPERS
@@ -1354,4 +1409,5 @@ step_cfg.trigger_phase_max_phase_share = 0.80;
 % Logging
 step_cfg.log_summary_only = true; % suppress verbose QA lines, print only summary
 
+end
 end

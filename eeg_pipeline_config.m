@@ -52,16 +52,16 @@ cfg.qc.table_delimiter = ';';
 % Project identity
 % -------------------------------------------------------------------------
 cfg.pipeline = struct();
-cfg.pipeline.name        = "aperiodic_pipeline"; % set recognizable name: project name used in cfg and logsheader
+cfg.pipeline.name        = " _pipeline "; % set recognizable name: project name used in cfg and logsheader
 cfg.pipeline.step_prefix = "eeg";                % step 02-06 function prefix, needed to find step-functions. Keep as "eeg" unless you have a good reason to change it.
 
 cfg.constants = struct();
-cfg.constants.log_prefix_master = "run_eeg_pipeline_aperiodic"; % master log filename prefix
+cfg.constants.log_prefix_master = "run_eeg_pipeline_"; % master log filename prefix
 
 cfg.bids = struct();
-cfg.bids.dataset_folder_name = "baseline";   % BIDS dataset folder name (if you have multiple datasets in the same raw folder)
-cfg.bids.task_label          = "baseline";   % BIDS task label of EEG dataset
-cfg.bids.session_label       = "01";         % BIDS session label
+cfg.bids.dataset_folder_name = "eeg";   % BIDS dataset folder name (if you have multiple datasets in the same raw folder)
+cfg.bids.task_label          = " ";   % BIDS task label of EEG dataset
+cfg.bids.session_label       = " ";         % BIDS session label
 
 % -------------------------------------------------------------------------
 % Profile / paths
@@ -275,7 +275,7 @@ cfg.steps.enable_downstream_rerun = true; % if true, sets all downstream steps
 
 cfg.steps.prep_01_bids_formatting = struct( ...
     'run', true, ...                % Step 01 creates/updates cfg.paths.bids_root from source_*_root
-    'overwrite_mode', "delete", ...
+    'overwrite_mode', "skip", ...
     'overwrite_if_older_than', "");
 
 cfg.steps.prep_02_triggerfix = struct( ...
@@ -351,53 +351,85 @@ cfg.prep_01.task_label    = cfg.bids.task_label;    % get task label defined in 
 % =========================================================================
 % STEP 02: TRIGGERFIX
 % =========================================================================
+
+% This section can be adjusted to paradigms including no phase-specific
+% structure and to paradigms with specific phases:
+
+% A) PARADIGM WITHOUT PHASES (should be used when there are no specific start markers for individual phases)
+%   Settings:
+%    - use_gating_from_start_markers = false
+%    - name triggers per category 
+%    - blocking.count_scope = "global"
+%    - fill triggerfix.blocking.category to rename triggers
+%    - set enable_first_match_replacements = false
+%    - phase_strategy as trigger_only (or block_only)
+%    - phase-specific renaming empty
+%
+% B) PARADIGM WITH PHASES
+%    - use_gating_from_start_markers = true
+%    - Fill gates.start_markers. accordingly with phase numbers and start
+%       markers, e.g. 'phase1',    "S 92", ...
+%    - name triggers per category
+%    - blocking.count_scope = "phase"
+%    - adjust triggerfix.blocking.category to the right number of
+%      categories but leave new trigger names empty
+%    - optional: enable_first_match_replacements = true, and set
+%      first_match_replacements to correct phase-specific trigger
+%    - phase_strategy "trigger_then_block_fallback"
+%    - enter phase-specific new codes   
+
+
 cfg.paradigms.myParadigm.triggerfix = struct();
 
+% cfg.steps.prep_02_triggerfix.run_raw_order_qc = false; 
+% %find behavior log file (only if you want to use RAW QC triggerfix --> DO NOT USE at the moment)
+% %if false skip Raw QC block and go on with 1) Phases
+% 
+% %%% RAW QC Trigger from Behavior files 
+% % (WARNING: structure implemented, but not running yet, DO NOT USE)
+% cfg.paradigms.myParadigm.triggerfix.run_raw_order_qc = false;
+% 
+% %Enter column labels from behavioral data sets
+% cfg.paradigms.myParadigm.triggerfix.behavior_log_column_event_type = ' ';
+% cfg.paradigms.myParadigm.triggerfix.behavior_log_column_code       = ' ';
+% cfg.paradigms.myParadigm.triggerfix.behavior_log_column_time       = ' ';
+% cfg.paradigms.myParadigm.triggerfix.behavior_log_time_unit         = " ";
+% 
+% cfg.paradigms.myParadigm.triggerfix.raw_qc_keep_tokens      = [" "," "," "," "," "," "," "]; %list of trigger
+% cfg.paradigms.myParadigm.triggerfix.raw_qc_bin_size_s       = 1;
+% cfg.paradigms.myParadigm.triggerfix.raw_qc_max_rows         = 20000;
+% cfg.paradigms.myParadigm.triggerfix.raw_qc_write_csv_on_ok  = false;
+% 
+% %Event types
+% cfg.paradigms.myParadigm.triggerfix.behavior_log_map = { ...
+%     '', '',      ' '; ...
+%     ' ', ' ',  ''; ...
+% };
+% 
+% cfg.paradigms.myParadigm.triggerfix.allow_multiple_runs = false;
+% cfg.paradigms.myParadigm.triggerfix.multiple_vhdr_policy = " "; % most_recent
+% cfg.paradigms.myParadigm.triggerfix.input_vhdr_pattern = "";  
+% cfg.paradigms.myParadigm.triggerfix.use_explicit_chanlist = false;
+% cfg.paradigms.myParadigm.triggerfix.explicit_chanlist = 1:66;
+% 
+% %labels
+% cfg.paradigms.myParadigm.triggerfix.task_label = cfg.bids.task_label;
+% cfg.paradigms.myParadigm.triggerfix.session_label = cfg.bids.session_label;
+% 
+% %%% optional output QC override
+% cfg.paradigms.myParadigm.triggerfix.qc_out_dir = "";
+
+%%% 1) Phases: Enter start markers for your phases if use_gating_from_start_markers = true
+
 cfg.paradigms.myParadigm.triggerfix.use_gating_from_start_markers = false; % true if there are phases, false if there are no phases in your paradigm
+%If true, you need to enter start markers for your phases below (see point 1) Phases).
 
-cfg.steps.prep_02_triggerfix.run_raw_order_qc = false; %find behavior log file (only if you want to use RAW QC triggerfix)
-%if false skip Raw QC block and go on with 1) Phases
-
-%%% RAW QC Trigger from Behavior files (optional)
-cfg.paradigms.myParadigm.triggerfix.run_raw_order_qc = false;
-
-%Enter column labels from behavioral data sets
-cfg.paradigms.myParadigm.triggerfix.behavior_log_column_event_type = ' ';
-cfg.paradigms.myParadigm.triggerfix.behavior_log_column_code       = ' ';
-cfg.paradigms.myParadigm.triggerfix.behavior_log_column_time       = ' ';
-cfg.paradigms.myParadigm.triggerfix.behavior_log_time_unit         = " ";
-
-cfg.paradigms.myParadigm.triggerfix.raw_qc_keep_tokens      = [" "," "," "," "," "," "," "]; %list of trigger
-cfg.paradigms.myParadigm.triggerfix.raw_qc_bin_size_s       = 1;
-cfg.paradigms.myParadigm.triggerfix.raw_qc_max_rows         = 20000;
-cfg.paradigms.myParadigm.triggerfix.raw_qc_write_csv_on_ok  = false;
-
-%Event types
-cfg.paradigms.myParadigm.triggerfix.behavior_log_map = { ...
-    '', '',      ' '; ...
-    ' ', ' ',  ''; ...
-};
-
-cfg.paradigms.myParadigm.triggerfix.allow_multiple_runs = false;
-cfg.paradigms.myParadigm.triggerfix.multiple_vhdr_policy = " "; % most_recent
-cfg.paradigms.myParadigm.triggerfix.input_vhdr_pattern = "";  
-cfg.paradigms.myParadigm.triggerfix.use_explicit_chanlist = false;
-cfg.paradigms.myParadigm.triggerfix.explicit_chanlist = 1:66;
-
-%labels
-cfg.paradigms.myParadigm.triggerfix.task_label = cfg.bids.task_label;
-cfg.paradigms.myParadigm.triggerfix.session_label = cfg.bids.session_label;
-
-%%% optional output QC override
-cfg.paradigms.myParadigm.triggerfix.qc_out_dir = "";
-
-% 1) Phases: Enter start markers and names for your phases if use_gating_from_start_markers = true
 cfg.paradigms.myParadigm.triggerfix.gates = struct();
 cfg.paradigms.myParadigm.triggerfix.gates.start_markers = struct( ...
     'phase1',    " ", ...
     'phase2', " ");
 
-% 2) Name Triggers per category in your paradigm
+%%% 2) Name Triggers per category in your paradigm
 % add more blocks if necessary
 cfg.paradigms.myParadigm.triggerfix.raw_triggers = struct();
 cfg.paradigms.myParadigm.triggerfix.raw_triggers.rawA = " ";   
@@ -406,12 +438,15 @@ cfg.paradigms.myParadigm.triggerfix.raw_triggers.rawC = " ";
 cfg.paradigms.myParadigm.triggerfix.raw_triggers.rawD = " ";   
 
 
-% 3) Blocking/Counting:renaming and counting event triggers per phase
+%%% 3) Blocking/Counting:renaming and counting event triggers per phase
 cfg.paradigms.myParadigm.triggerfix.blocking = struct();
-cfg.paradigms.myParadigm.triggerfix.blocking.count_scope = " "; % global for counting across all trials (e.g. with your paradigm does not include phases); 
+cfg.paradigms.myParadigm.triggerfix.blocking.count_scope = " "; 
+% global for counting across all trials (e.g. with your paradigm does not include phases); 
 % "phase" for counting within phases if cfg.paradigms.myParadigm.triggerfix.use_gating_from_start_markers = true and if cfg.paradigms.myParadigm.triggerfix.gates.start_markers are set accordingly.
 % Starting markers themselves are not counted and not renamed;
 
+%Old and new names for trigger renaming; see phase-specific trigger
+%renaming below
 %Add more blocks if necessary!
 %'n' is the amount of triggers that should be renamed: eg. 10 means that
 %the first 10 triggers found are renamed (if counted individually for each phase, it refers to counting within the phase and not globally). 
@@ -439,17 +474,16 @@ cfg.paradigms.myParadigm.triggerfix.blocking.categoryD.blocks = { ...
     struct('n', inf, 'code', " ")  ...
 };
 
-
-cfg.paradigms.myParadigm.triggerfix.enable_first_match_replacements = false; %true if you want to replace the first accuring trigger
+cfg.paradigms.myParadigm.triggerfix.enable_first_match_replacements = false; %true if you want to replace the first accuring trigger;
+%false if the same renaming rule applies for all triggers of the same category within a phase
+%false if paradigm without phases
 
 cfg.paradigms.myParadigm.triggerfix.first_match_replacements = {
     struct('match_code'," ", 'replace_code'," ",    'max_replacements',1),
-    struct('match_code'," ", 'replace_code'," ",    'max_replacements',1),
-    struct('match_code'," ", 'replace_code'," ", 'max_replacements',1),
     struct('match_code'," ", 'replace_code'," ",'max_replacements',1)
 };
 
-cfg.paradigms.myParadigm.triggerfix.phase_strategy = "trigger_then_block_fallback"; 
+cfg.paradigms.myParadigm.triggerfix.phase_strategy = " "; 
 %"trigger_only" remapping only following start trigger; useful if triggers
 %have already been checked or corrected before pipeline
 %"block_only" remapping following counting within blocks; useful if
@@ -458,27 +492,21 @@ cfg.paradigms.myParadigm.triggerfix.phase_strategy = "trigger_then_block_fallbac
 % than min_remap switch to block counting; can also be used for paradigms
 % without phases
 
-% --- Phase-specific trigger renaming (optional) ---
-cfg.paradigms.myParadigm.triggerfix.phase_specific_trigger_renaming = false;
+%%% 4) Phase-specific trigger renaming 
+cfg.paradigms.myParadigm.triggerfix.phase_specific_trigger_renaming = false; 
 
 % Enter new codes after renaming per phase and category
 cfg.paradigms.myParadigm.triggerfix.phase_specific_trigger_renaming_rules = struct();
-% Example (keys generisch nach euren gate keys, bitte anpassen):
+
 cfg.paradigms.myParadigm.triggerfix.phase_specific_trigger_renaming_rules.phase1.categoryA.code = " ";
 cfg.paradigms.myParadigm.triggerfix.phase_specific_trigger_renaming_rules.phase1.categoryB.code = " ";
 cfg.paradigms.myParadigm.triggerfix.phase_specific_trigger_renaming_rules.phase1.categoryC.code = " ";
 cfg.paradigms.myParadigm.triggerfix.phase_specific_trigger_renaming_rules.phase1.categoryD.code = " ";
-cfg.paradigms.myParadigm.triggerfix.phase_specific_trigger_renaming_rules.phase1.categoryE.code = " ";
-cfg.paradigms.myParadigm.triggerfix.phase_specific_trigger_renaming_rules.phase1.categoryF.code = " ";
-cfg.paradigms.myParadigm.triggerfix.phase_specific_trigger_renaming_rules.phase1.categoryG.code = " ";
 
 cfg.paradigms.myParadigm.triggerfix.phase_specific_trigger_renaming_rules.phase2.categoryA.code = " ";
 cfg.paradigms.myParadigm.triggerfix.phase_specific_trigger_renaming_rules.phase2.categoryB.code = " ";
 cfg.paradigms.myParadigm.triggerfix.phase_specific_trigger_renaming_rules.phase2.categoryC.code = " ";
 cfg.paradigms.myParadigm.triggerfix.phase_specific_trigger_renaming_rules.phase2.categoryD.code = " ";
-cfg.paradigms.myParadigm.triggerfix.phase_specific_trigger_renaming_rules.phase2.categoryE.code = " ";
-cfg.paradigms.myParadigm.triggerfix.phase_specific_trigger_renaming_rules.phase2.categoryF.code = " ";
-cfg.paradigms.myParadigm.triggerfix.phase_specific_trigger_renaming_rules.phase2.categoryG.code = " ";
 
 
 cfg.paradigms.myParadigm.triggerfix.trigger_phase_min_remaps = 5; % minimal number of expected remaps in total
