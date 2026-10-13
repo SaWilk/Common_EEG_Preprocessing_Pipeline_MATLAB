@@ -2277,6 +2277,7 @@ for k = 1:numel(EEG.event)
             matches_any_prefix_impl(code, step_cfg.baseline_closed_marker_prefixes) || ...
             matches_any_exact_impl(code, step_cfg.baseline_end_markers)
     is_condition_marker = false;
+    end
     for c = 1:numel(condition_names)
         if matches_any_prefix_impl(code, marker_prefixes{c})
             is_condition_marker = true;
@@ -3180,6 +3181,7 @@ elseif contains(lower(step_cfg.line_noise_method), 'notch')
 else
     helpers.log_msg_default(sprintf('\tLine Noise Removal: ERROR removal method - %s - not recognized.', step_cfg.line_noise_method));
     return
+end
 
 if isempty(subset_indices)
     return;
