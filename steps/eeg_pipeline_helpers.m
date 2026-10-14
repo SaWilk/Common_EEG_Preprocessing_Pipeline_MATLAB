@@ -2273,11 +2273,10 @@ for k = 1:numel(EEG.event)
         continue;
     end
 
-    if matches_any_prefix_impl(code, step_cfg.baseline_open_marker_prefixes) || ...
-            matches_any_prefix_impl(code, step_cfg.baseline_closed_marker_prefixes) || ...
-            matches_any_exact_impl(code, step_cfg.baseline_end_markers)
-    is_condition_marker = false;
+    if ~matches_any_prefix_impl(code, marker_prefixes) || matches_any_exact_impl(code, end_markers)
+        is_condition_marker = false; % check if marker/trigger matches any of the configured baseline condition prefixes or end markers
     end
+
     for c = 1:numel(condition_names)
         if matches_any_prefix_impl(code, marker_prefixes{c})
             is_condition_marker = true;
@@ -2346,9 +2345,11 @@ if isempty(seg_t1)
     error('Could not derive any baseline condition segments.');
 end
 
+baseline_duration = (seg_t2(end)-seg_t1(1))/60;
+
 helpers.log_msg_default( ...
-    'prep_06_epoching: %s | derived %d baseline segments across conditions: %s', ...
-    char(string(run_base)), numel(seg_t1), strjoin(cellstr(condition_names), ', '));
+    'prep_06_epoching: %s | derived %d baseline segments across conditions: %s | total duration: %.02f minutes', ...
+    char(string(run_base)), numel(seg_t1), strjoin(cellstr(condition_names), ', '), baseline_duration);
 
 condition_parts = repmat({{}}, numel(condition_names), 1);
 epoch_len = double(step_cfg.regepoch_length_sec);
