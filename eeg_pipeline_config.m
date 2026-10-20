@@ -523,7 +523,7 @@ cfg.prep_03.crop_padding_sec = [0 0];
 %
 % Methods:
 %   "off"         = do not remove internal breaks
-%   "markers"     = use explicit break start/end markers
+%   "markers"     = use explicit break start/end markers/triggers
 %   "trial_count" = identify block boundaries from expected trial counts
 %                   and confirm them using temporal gaps
 %
@@ -544,7 +544,7 @@ cfg.prep_03.break_start_marker = {};
 cfg.prep_03.break_end_marker   = {};
 
 % -------------------------------------------------------------------------
-% Strict trial-count method
+% trial-count method
 % -------------------------------------------------------------------------
 % Used only when break_crop_method = "trial_count".
 %
