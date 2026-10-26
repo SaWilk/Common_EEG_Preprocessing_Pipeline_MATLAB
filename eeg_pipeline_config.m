@@ -524,8 +524,8 @@ cfg.prep_03.crop_padding_sec = [0 0];
 % Methods:
 %   "off"         = do not remove internal breaks
 %   "markers"     = use explicit break start/end markers/triggers
-%   "trial_count" = identify block boundaries from expected trial counts
-%                   and confirm them using temporal gaps
+%   "trial_count" = detect breaks from gaps between trial markers
+%                   and validate the expected trial/block structure
 %
 % Break cropping is applied after crop_to_task_markers and before
 % bad-channel detection.
@@ -548,13 +548,16 @@ cfg.prep_03.break_end_marker   = {};
 % -------------------------------------------------------------------------
 % Used only when break_crop_method = "trial_count".
 %
-% Marker defining the onset of one experimental trial.
+% Marker defining the onset of one experimental trial (e.g., trial onset). 
+% COUNTED to validate trial numbers and detect breaks.
 cfg.prep_03.break_trial_marker = {};
 
-% Marker expected as the first non-boundary event of the retained task data.
+% Expected FIRST trigger in the retained data (e.g., task start).
+% Used for validation only; NOT counted as a trial.
 cfg.prep_03.break_first_marker = {};
 
-% Marker expected as the last non-boundary event of the retained task data.
+% Expected LAST trigger in the retained data (e.g., task end).
+% Used for validation only; NOT counted as a trial.
 cfg.prep_03.break_last_marker = {};
 
 % Expected experimental structure.
