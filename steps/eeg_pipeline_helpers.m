@@ -2276,7 +2276,6 @@ for k = 1:numel(EEG.event)
         continue;
     end
 
-    % I had to cut a short segment here that was causing an error
 
     is_condition_marker = false;
     for c = 1:numel(condition_names)
@@ -2347,9 +2346,11 @@ if isempty(seg_t1)
     error('Could not derive any baseline condition segments.');
 end
 
+baseline_duration = (seg_t2(end)-seg_t1(1))/60;
+
 helpers.log_msg_default( ...
-    'prep_06_epoching: %s | derived %d baseline segments across conditions: %s', ...
-    char(string(run_base)), numel(seg_t1), strjoin(cellstr(condition_names), ', '));
+    'prep_06_epoching: %s | derived %d baseline segments across conditions: %s | total duration: %.02f minutes', ...
+    char(string(run_base)), numel(seg_t1), strjoin(cellstr(condition_names), ', '), baseline_duration);
 
 condition_parts = repmat({{}}, numel(condition_names), 1);
 epoch_len = double(step_cfg.regepoch_length_sec);
@@ -3864,6 +3865,7 @@ elseif contains(lower(step_cfg.line_noise_method), 'notch')
 else
     helpers.log_msg_default(sprintf('\tLine Noise Removal: ERROR removal method - %s - not recognized.', step_cfg.line_noise_method));
     return
+end
 
 end
 
