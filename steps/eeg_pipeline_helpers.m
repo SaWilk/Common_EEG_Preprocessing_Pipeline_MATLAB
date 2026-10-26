@@ -58,7 +58,7 @@ helpers.build_paths                         = @build_paths_impl;
 helpers.build_subject_plans                 = @build_subject_plans_impl;
 helpers.sort_subject_plans_by_expected_cost = @sort_subject_plans_by_expected_cost_impl;
 helpers.run_one_subject                     = @run_one_subject_impl;
-helpers.write_pipeline_status_summary       = @write_pipeline_status_summary_impl;
+helpers.write_pipeline_status_summary      = @write_pipeline_status_summary_impl;
 
 % -------------------------------------------------------------------------
 % Overwrite / rerun helpers
@@ -67,8 +67,8 @@ helpers.resolve_overwrite_mode      = @resolve_overwrite_mode_impl;
 helpers.resolve_overwrite_policy    = @resolve_overwrite_policy_impl;
 helpers.step_should_run_outputs     = @step_should_run_outputs_impl;
 helpers.step_should_run_from_folder = @step_should_run_from_folder_impl;
-helpers.resolve_step04_run_inventory = @resolve_step04_run_inventory_impl;
 helpers.get_step_subject_folder     = @get_step_subject_folder_impl;
+helpers.resolve_step04_run_inventory = @resolve_step04_run_inventory_impl;
 
 % -------------------------------------------------------------------------
 % EEG load / save / BIDS helpers
@@ -89,6 +89,28 @@ helpers.normalize_trigger_type = @normalize_trigger_type_impl;
 % -------------------------------------------------------------------------
 % EEG utility helpers used by step files
 % -------------------------------------------------------------------------
+helpers.normalize_event_types                  = @normalize_event_types_impl;
+helpers.normalize_epoching_mode_value          = @normalize_epoching_mode_value_impl;
+helpers.get_channel_indices_by_type            = @get_channel_indices_by_type_impl;
+helpers.apply_reference_mode                   = @apply_reference_mode_impl;
+helpers.build_epoching_output_paths            = @build_epoching_output_paths_impl;
+helpers.normalize_event_list                   = @normalize_event_list_impl;
+helpers.get_present_events                     = @get_present_events_impl;
+helpers.preview_event_types                    = @preview_event_types_impl;
+helpers.evaluate_min_trials_per_condition      = @evaluate_min_trials_per_condition_impl;
+helpers.build_step06_summary_row               = @build_step06_summary_row_impl;
+helpers.build_step06_summary_rows              = @build_step06_summary_rows_impl;
+helpers.build_bad_channel_qc_table             = @build_bad_channel_qc_table_impl;
+helpers.build_epoch_rejection_qc_table         = @build_epoch_rejection_qc_table_impl;
+helpers.write_qc_table                         = @write_qc_table_impl;
+helpers.resolve_qc_timestamp                   = @resolve_qc_timestamp_impl;
+helpers.collect_bad_channel_qc                 = @collect_bad_channel_qc_impl;
+helpers.collect_prep06_summary                 = @collect_prep06_summary_impl;
+helpers.build_high_epoch_rejection_warning     = @build_high_epoch_rejection_warning_impl;
+helpers.save_intermediate_set                  = @save_intermediate_set_impl;
+helpers.apply_hard_epoch_threshold_rejection   = @apply_hard_epoch_threshold_rejection_impl;
+helpers.apply_fallback_epoch_rejection         = @apply_fallback_epoch_rejection_impl;
+helpers.create_baseline_condition_datasets     = @create_baseline_condition_datasets_impl;
 helpers.normalize_event_types                 = @normalize_event_types_impl;
 helpers.normalize_epoching_mode_value         = @normalize_epoching_mode_value_impl;
 helpers.get_channel_indices_by_type           = @get_channel_indices_by_type_impl;
@@ -106,6 +128,9 @@ helpers.write_qc_table                        = @write_qc_table_impl;
 helpers.resolve_qc_timestamp                  = @resolve_qc_timestamp_impl;
 helpers.collect_bad_channel_qc                = @collect_bad_channel_qc_impl;
 helpers.collect_prep06_summary                = @collect_prep06_summary_impl;
+helpers.build_ica_training_summary            = @build_ica_training_summary_impl;
+helpers.write_ica_training_summary            = @write_ica_training_summary_impl;
+helpers.collect_prep03_summary                = @collect_prep03_summary_impl;
 helpers.build_high_epoch_rejection_warning    = @build_high_epoch_rejection_warning_impl;
 helpers.save_intermediate_set                 = @save_intermediate_set_impl;
 helpers.apply_hard_epoch_threshold_rejection  = @apply_hard_epoch_threshold_rejection_impl;
@@ -113,52 +138,53 @@ helpers.apply_fallback_epoch_rejection        = @apply_fallback_epoch_rejection_
 helpers.create_baseline_condition_datasets    = @create_baseline_condition_datasets_impl;
 helpers.resolve_baseline_condition_definitions = @resolve_baseline_condition_definitions_impl;
 helpers.build_epoching_output_stem             = @build_epoching_output_stem_impl;
-helpers.finalize_epoched_dataset              = @finalize_epoched_dataset_impl;
-helpers.save_final_epoched_outputs            = @save_final_epoched_outputs_impl;
-helpers.build_eeg_key_token_stream_with_time  = @build_eeg_key_token_stream_with_time_impl;
-helpers.find_first_event_latency              = @find_first_event_latency_impl;
-helpers.ensure_channel_types                  = @ensure_channel_types_impl;
-helpers.find_flat_or_invalid_channels         = @find_flat_or_invalid_channels_impl;
-helpers.detect_bad_channels_clean_rawdata     = @detect_bad_channels_clean_rawdata_impl;
-helpers.apply_filter_to_subset_only           = @apply_filter_to_subset_only_impl;
-helpers.apply_pop_cleanline_to_subset         = @apply_pop_cleanline_to_subset_impl;
-helpers.apply_jointprob_safely                = @apply_jointprob_safely_impl;
-helpers.apply_shared_epoch_rejection          = @apply_shared_epoch_rejection_impl;
-helpers.apply_erplab_epoch_rejection          = @apply_erplab_epoch_rejection_impl;
+helpers.finalize_epoched_dataset               = @finalize_epoched_dataset_impl;
+helpers.save_final_epoched_outputs             = @save_final_epoched_outputs_impl;
+helpers.build_eeg_key_token_stream_with_time   = @build_eeg_key_token_stream_with_time_impl;
+helpers.find_first_event_latency               = @find_first_event_latency_impl;
+helpers.ensure_channel_types                   = @ensure_channel_types_impl;
+helpers.find_flat_or_invalid_channels          = @find_flat_or_invalid_channels_impl;
+helpers.detect_bad_channels_clean_rawdata      = @detect_bad_channels_clean_rawdata_impl;
+helpers.apply_filter_to_subset_only            = @apply_filter_to_subset_only_impl;
+helpers.remove_line_noise_from_subset          = @remove_line_noise_from_subset_impl;
+helpers.apply_jointprob_safely                 = @apply_jointprob_safely_impl;
+helpers.apply_shared_epoch_rejection           = @apply_shared_epoch_rejection_impl;
+helpers.apply_erplab_epoch_rejection           = @apply_erplab_epoch_rejection_impl;
 helpers.reject_ica_prep_epochs_by_mad_variance = @reject_ica_prep_epochs_by_mad_variance_impl;
-helpers.compute_data_rank_svd                 = @compute_data_rank_svd_impl;
-helpers.make_unique_amica_tmpdir              = @make_unique_amica_tmpdir_impl;
-helpers.safe_rmdir                            = @safe_rmdir_impl;
-helpers.delete_files_matching                 = @delete_files_matching_impl;
-helpers.write_ic_topography_pngs              = @write_ic_topography_pngs_impl;
-helpers.merge_structs_recursive               = @merge_structs_recursive_impl;
+helpers.compute_data_rank_svd                  = @compute_data_rank_svd_impl;
+helpers.make_unique_amica_tmpdir               = @make_unique_amica_tmpdir_impl;
+helpers.delete_files_matching                  = @delete_files_matching_impl;
+helpers.safe_rmdir                             = @safe_rmdir_impl;
+helpers.write_ic_topography_pngs               = @write_ic_topography_pngs_impl;
+helpers.merge_structs_recursive                = @merge_structs_recursive_impl;
+
 
 % -------------------------------------------------------------------------
-% ICA QC, ICLabel, and Step-05 collection helpers
+% AMICA, ICA QC, and Step-05 ICLabel helper functions (Saskia branch)
 % -------------------------------------------------------------------------
-helpers.default_amica_qc                       = @default_amica_qc_impl;
-helpers.validate_amica_config                  = @validate_amica_config_impl;
-helpers.evaluate_amica_convergence             = @evaluate_amica_convergence_impl;
-helpers.validate_ica_matrices                  = @validate_ica_matrices_impl;
-helpers.build_step04_ica_qc_row                = @build_step04_ica_qc_row_impl;
-helpers.write_step04_run_qc                    = @write_step04_run_qc_impl;
-helpers.append_step04_qc_row                   = @append_step04_qc_row_impl;
-helpers.write_step04_subject_qc                = @write_step04_subject_qc_impl;
-helpers.validate_prep05_config                 = @validate_prep05_config_impl;
-helpers.infer_n_ic                             = @infer_n_ic_impl;
-helpers.get_iclabel_classifications            = @get_iclabel_classifications_impl;
-helpers.build_iclabel_flags                    = @build_iclabel_flags_impl;
-helpers.build_iclabel_component_table          = @build_iclabel_component_table_impl;
-helpers.empty_ica_decomposition_qc             = @empty_ica_decomposition_qc_impl;
-helpers.compute_ica_decomposition_qc           = @compute_ica_decomposition_qc_impl;
-helpers.evaluate_ic_rejection_signal_change    = @evaluate_ic_rejection_signal_change_impl;
-helpers.extract_prep04_qc_from_eeg             = @extract_prep04_qc_from_eeg_impl;
-helpers.build_prep05_summary_row               = @build_prep05_summary_row_impl;
-helpers.append_prep05_summary_row              = @append_prep05_summary_row_impl;
-helpers.write_prep05_run_summary               = @write_prep05_run_summary_impl;
-helpers.write_prep05_subject_summary           = @write_prep05_subject_summary_impl;
-helpers.collect_prep05_summary                 = @collect_prep05_summary_impl;
-helpers.log_ica_qc_overview                     = @log_ica_qc_overview_impl;
+helpers.default_amica_qc                            = @default_amica_qc_impl;
+helpers.validate_amica_config                       = @validate_amica_config_impl;
+helpers.evaluate_amica_convergence                  = @evaluate_amica_convergence_impl;
+helpers.validate_ica_matrices                       = @validate_ica_matrices_impl;
+helpers.build_step04_ica_qc_row                     = @build_step04_ica_qc_row_impl;
+helpers.write_step04_run_qc                         = @write_step04_run_qc_impl;
+helpers.append_step04_qc_row                        = @append_step04_qc_row_impl;
+helpers.write_step04_subject_qc                     = @write_step04_subject_qc_impl;
+helpers.validate_prep05_config                      = @validate_prep05_config_impl;
+helpers.infer_n_ic                                  = @infer_n_ic_impl;
+helpers.get_iclabel_classifications                 = @get_iclabel_classifications_impl;
+helpers.build_iclabel_flags                         = @build_iclabel_flags_impl;
+helpers.build_iclabel_component_table               = @build_iclabel_component_table_impl;
+helpers.empty_ica_decomposition_qc                  = @empty_ica_decomposition_qc_impl;
+helpers.compute_ica_decomposition_qc                = @compute_ica_decomposition_qc_impl;
+helpers.evaluate_ic_rejection_signal_change         = @evaluate_ic_rejection_signal_change_impl;
+helpers.extract_prep04_qc_from_eeg                  = @extract_prep04_qc_from_eeg_impl;
+helpers.build_prep05_summary_row                    = @build_prep05_summary_row_impl;
+helpers.append_prep05_summary_row                   = @append_prep05_summary_row_impl;
+helpers.write_prep05_run_summary                    = @write_prep05_run_summary_impl;
+helpers.write_prep05_subject_summary                = @write_prep05_subject_summary_impl;
+helpers.collect_prep05_summary                      = @collect_prep05_summary_impl;
+helpers.log_ica_qc_overview                         = @log_ica_qc_overview_impl;
 
 % -------------------------------------------------------------------------
 % Behavior-log helpers
@@ -372,25 +398,6 @@ fid = fopen(log_file, 'a');
 if fid >= 0
     fprintf(fid, '[%s] %s\n', timestamp, message_text);
     fclose(fid);
-end
-end
-
-function log_progress_safely_impl(progress_log, varargin)
-% Progress reporting must never abort an otherwise valid processing step.
-if isa(progress_log, 'function_handle')
-    try
-        progress_log(varargin{:});
-        return;
-    catch
-        % Fall through to the command-window fallback below.
-    end
-end
-
-try
-    fprintf('[%s] %s\n', ...
-        datestr(now, 'yyyy-mm-dd HH:MM:SS'), sprintf(varargin{:}));
-catch
-    % Logging is best-effort and must not become a pipeline failure.
 end
 end
 
@@ -642,10 +649,11 @@ else
                 strlength(string(cfg.prep_01.raw_eeg_regex)) > 0
             raw_regex = char(string(cfg.prep_01.raw_eeg_regex));
         else
-            raw_regex = '^.*?(\d{3})(?:_(\d{3}))?\.vhdr$';
+            raw_regex = '^.*?(\d{3})(?:_(\d{3}))?\.vhdr$'; %raw_regex = '^.*?(\d{3})(?:_(\d{3}))?\.vhdr$';
         end
-
-        dir_info = dir(fullfile(source_root, '*.vhdr'));
+        
+        dir_info = dir(fullfile(source_root, '**', '*.vhdr'));
+        %dir_info = dir(fullfile(source_root, '*.vhdr'));
         tmp_ids = {};
 
         for k = 1:numel(dir_info)
@@ -889,7 +897,7 @@ paths.logs_dir         = resolve_logs_dir_impl(cfg);
 
 paths.subj_label = sprintf('sub-%s', subj_id);
 
-session_label = "01";
+session_label = ""; % 01
 if isfield(cfg, 'bids') && isfield(cfg.bids, 'session_label') && strlength(string(cfg.bids.session_label)) > 0
     session_label = string(cfg.bids.session_label);
 end
@@ -949,12 +957,14 @@ paths.prep_06_out_dir           = fullfile(paths.step_06_root, paths.subj_label)
 paths.qc_root = fullfile(paths.derivatives_root, 'qc');
 ensure_dir_impl(paths.qc_root);
 
-paths.qc_ica_components_root = fullfile(paths.qc_root, 'ica_comps');
-paths.qc_bad_chans_root       = fullfile(paths.qc_root, 'bad_chans');
-paths.qc_epoch_rej_root       = fullfile(paths.qc_root, 'epoch_rej');
+paths.qc_ica_training_root   = fullfile(paths.qc_root, '03_ica_training');
+paths.qc_bad_chans_root      = fullfile(paths.qc_root, '03_bad_chans');
+paths.qc_ica_components_root = fullfile(paths.qc_root, '05_ica_comps');
+paths.qc_epoch_rej_root      = fullfile(paths.qc_root, '06_epoch_rej');
 
-ensure_dir_impl(paths.qc_ica_components_root);
+ensure_dir_impl(paths.qc_ica_training_root);
 ensure_dir_impl(paths.qc_bad_chans_root);
+ensure_dir_impl(paths.qc_ica_components_root);
 ensure_dir_impl(paths.qc_epoch_rej_root);
 
 paths.qc_ica_components_subj_dir = fullfile(paths.qc_ica_components_root, paths.subj_label);
@@ -962,7 +972,7 @@ paths.qc_bad_chans_subj_dir       = fullfile(paths.qc_bad_chans_root, paths.subj
 paths.qc_epoch_rej_subj_dir       = fullfile(paths.qc_epoch_rej_root, paths.subj_label);
 
 % Backward-compatible aliases for Step 05 and older callers. Their values
-% now point into qc/ica_comps; no new derivatives/checks tree is created.
+% now point into qc/05_ica_comps; no new derivatives/checks tree is created.
 paths.checks_root = paths.qc_root;
 paths.checks_ica_components_root = paths.qc_ica_components_root;
 paths.checks_ica_components_subj_dir = paths.qc_ica_components_subj_dir;
@@ -1261,85 +1271,6 @@ catch me
     catch
     end
 end
-end
-
-function out_path = write_pipeline_status_summary_impl(status, cfg)
-% One compact machine-readable index for parallel runs. The subject logs
-% retain the full trace; this table exposes the final outcome and action
-% without requiring users to open hundreds of log files.
-out_path = "";
-if isempty(status)
-    return;
-end
-
-n_rows = numel(status);
-subject_id = strings(n_rows, 1);
-pipeline_status = strings(n_rows, 1);
-failure_reason = strings(n_rows, 1);
-recommended_action = strings(n_rows, 1);
-subject_log = strings(n_rows, 1);
-
-for si = 1:n_rows
-    subject_id(si) = "sub-" + string(status(si).subj);
-    subject_log(si) = string(status(si).logfile);
-    if logical(status(si).ok)
-        pipeline_status(si) = "pass";
-        continue;
-    end
-
-    pipeline_status(si) = "fail";
-    message_text = char(string(status(si).message));
-    action_marker = 'Recommended action:';
-    marker_pos = strfind(message_text, action_marker);
-    if isempty(marker_pos)
-        failure_reason(si) = string(message_text);
-        message_lower = lower(string(message_text));
-        if contains(message_lower, "step03") || ...
-                contains(message_lower, "task-matched") || ...
-                contains(message_lower, "no matching preica")
-            recommended_action(si) = ...
-                ['Verify cfg.bids.task_label and restore or regenerate the ' ...
-                 'matching Step-03 *_forica.set and *_preica.set files, then ' ...
-                 'rerun this subject.'];
-        elseif contains(message_lower, "iclabel") && ...
-                contains(message_lower, "not")
-            recommended_action(si) = ...
-                "Install or add ICLabel to the EEGLAB path, then rerun this subject.";
-        elseif contains(message_lower, "amica requested") || ...
-                contains(message_lower, "runamica15")
-            recommended_action(si) = ...
-                ['Check the AMICA installation/path and its Windows path ' ...
-                 'requirements; if the installation cannot be repaired, use RUNICA.'];
-        else
-            recommended_action(si) = ...
-                "Open the linked subject log, correct the reported processing step, and rerun that subject.";
-        end
-    else
-        marker_pos = marker_pos(1);
-        failure_reason(si) = string(strtrim(message_text(1:(marker_pos - 1))));
-        action_start = marker_pos + numel(action_marker);
-        recommended_action(si) = string(strtrim(message_text(action_start:end)));
-    end
-end
-
-summary_table = table( ...
-    subject_id, pipeline_status, failure_reason, recommended_action, ...
-    subject_log, ...
-    'VariableNames', {'subject_id','pipeline_status','failure_reason', ...
-    'recommended_action','subject_log'});
-
-logs_dir = resolve_logs_dir_impl(cfg);
-ensure_dir_impl(logs_dir);
-timestamp = resolve_qc_timestamp_impl(cfg);
-out_path = string(fullfile(logs_dir, sprintf( ...
-    '%s_pipeline_subject_status.csv', char(timestamp))));
-
-delimiter = ';';
-if isfield(cfg, 'qc') && isstruct(cfg.qc) && ...
-        isfield(cfg.qc, 'table_delimiter')
-    delimiter = char(string(cfg.qc.table_delimiter));
-end
-writetable(summary_table, char(out_path), 'Delimiter', delimiter);
 end
 
 function run_step_with_logging_impl(step_name, step_label, subject_plan, cfg, paths, helpers, log_file, subj_id)
@@ -1711,179 +1642,6 @@ switch policy.mode
         do_run = true;
         reason = "unknown policy -> regenerate";
 end
-end
-
-function inventory = resolve_step04_run_inventory_impl(paths, cfg)
-% Resolve exact Step-03 training/application pairs for the configured task.
-% The task label is read dynamically from cfg.bids.task_label (or the
-% equivalent value already stored in paths); no task name is hard-coded.
-required_fields = { ...
-    'prep_03_out_dir_for_ica', 'prep_03_out_dir_until_ica', ...
-    'prep_04_out_dir'};
-for ri = 1:numel(required_fields)
-    field_name = required_fields{ri};
-    if ~isfield(paths, field_name) || ...
-            strlength(string(paths.(field_name))) == 0
-        error('eeg_pipeline_helpers:Step04PathMissing', ...
-            'paths.%s is missing or empty.', field_name);
-    end
-end
-
-task_label = "";
-if isfield(paths, 'bids_task_label') && ...
-        strlength(string(paths.bids_task_label)) > 0
-    task_label = string(paths.bids_task_label);
-elseif isfield(cfg, 'bids') && isstruct(cfg.bids) && ...
-        isfield(cfg.bids, 'task_label') && ...
-        strlength(string(cfg.bids.task_label)) > 0
-    task_label = string(cfg.bids.task_label);
-end
-task_label = strip(task_label);
-
-forica_dir = char(string(paths.prep_03_out_dir_for_ica));
-preica_dir = char(string(paths.prep_03_out_dir_until_ica));
-out_dir = char(string(paths.prep_04_out_dir));
-
-forica_info = dir(fullfile(forica_dir, '*_forica.set'));
-preica_info = dir(fullfile(preica_dir, '*_preica.set'));
-forica_names = string({forica_info.name})';
-preica_names = string({preica_info.name})';
-
-if strlength(task_label) > 0
-    task_token = lower("_task-" + task_label + "_");
-    forica_names = forica_names(contains(lower(forica_names), task_token));
-    preica_names = preica_names(contains(lower(preica_names), task_token));
-end
-
-forica_names = sort(forica_names);
-preica_names = sort(preica_names);
-forica_bases = erase(forica_names, "_forica.set");
-preica_bases = erase(preica_names, "_preica.set");
-
-[matched_bases, forica_idx, preica_idx] = intersect( ...
-    forica_bases, preica_bases, 'stable');
-missing_preica = setdiff(forica_bases, preica_bases, 'stable');
-missing_forica = setdiff(preica_bases, forica_bases, 'stable');
-
-matched_forica_names = forica_names(forica_idx);
-matched_preica_names = preica_names(preica_idx);
-expected_output_names = matched_bases + "_ica_applied.set";
-expected_output_paths = cell(numel(expected_output_names), 1);
-for oi = 1:numel(expected_output_names)
-    expected_output_paths{oi} = fullfile( ...
-        out_dir, char(expected_output_names(oi)));
-end
-
-inventory = struct();
-inventory.task_label = task_label;
-inventory.forica_dir = string(forica_dir);
-inventory.preica_dir = string(preica_dir);
-inventory.output_dir = string(out_dir);
-inventory.forica_names = forica_names;
-inventory.preica_names = preica_names;
-inventory.matched_run_bases = matched_bases;
-inventory.matched_forica_names = matched_forica_names;
-inventory.matched_preica_names = matched_preica_names;
-inventory.missing_preica_run_bases = missing_preica;
-inventory.missing_forica_run_bases = missing_forica;
-inventory.expected_output_names = expected_output_names;
-inventory.expected_output_paths = expected_output_paths;
-inventory.valid = true;
-inventory.issue_code = "";
-inventory.issue_message = "";
-
-task_display = task_label;
-if strlength(task_display) == 0
-    task_display = "<all tasks>";
-end
-
-if ~isempty(missing_preica) || ~isempty(missing_forica)
-    inventory.valid = false;
-    inventory.issue_code = "STEP03_RUN_PAIR_MISMATCH";
-    missing_preica_text = strjoin(missing_preica, ', ');
-    missing_forica_text = strjoin(missing_forica, ', ');
-    if strlength(missing_preica_text) == 0
-        missing_preica_text = "none";
-    end
-    if strlength(missing_forica_text) == 0
-        missing_forica_text = "none";
-    end
-    inventory.issue_message = sprintf( ...
-        ['Step-03 run pairs are incomplete for configured task "%s". ' ...
-         'Missing *_preica.set for: %s. Missing *_forica.set for: %s. ' ...
-         'Checked forica=%s and preica=%s.'], ...
-        char(task_display), char(missing_preica_text), ...
-        char(missing_forica_text), forica_dir, preica_dir);
-elseif isempty(matched_bases)
-    inventory.valid = false;
-    inventory.issue_code = "NO_MATCHING_STEP03_RUNS";
-    inventory.issue_message = sprintf( ...
-        ['No matching *_forica.set / *_preica.set pair was found for ' ...
-         'configured task "%s". Checked forica=%s and preica=%s. ' ...
-         'Verify cfg.bids.task_label and rerun Step 03 if necessary.'], ...
-        char(task_display), forica_dir, preica_dir);
-end
-end
-
-function [do_run, reason, info] = step04_should_run_from_inventory_impl( ...
-    paths, cfg, policy)
-step_folder = get_step_subject_folder_impl(paths, 'prep_04_ica');
-[~, ~, info] = step_should_run_from_folder_impl(step_folder, policy);
-inventory = resolve_step04_run_inventory_impl(paths, cfg);
-info.run_inventory = inventory;
-info.expected_run_count = numel(inventory.matched_run_bases);
-
-if ~inventory.valid
-    do_run = true;
-    reason = "run-level input check requires Step 04: " + ...
-        string(inventory.issue_message);
-    return;
-end
-
-cfg_for_policy = cfg;
-if ~isfield(cfg_for_policy, 'io') || ~isstruct(cfg_for_policy.io)
-    cfg_for_policy.io = struct();
-end
-cfg_for_policy.io.overwrite_if_older_than = policy.cutoff_raw;
-[do_run, output_reason] = step_should_run_outputs_impl( ...
-    inventory.expected_output_paths, policy.mode, cfg_for_policy);
-reason = sprintf( ...
-    'run-level Step-04 check for %d task-matched run(s): %s', ...
-    numel(inventory.matched_run_bases), char(string(output_reason)));
-end
-
-function [do_run, reason, info] = step05_should_run_from_inventory_impl( ...
-    paths, cfg, policy)
-step_folder = get_step_subject_folder_impl(paths, 'prep_05_after_ica');
-[~, ~, info] = step_should_run_from_folder_impl(step_folder, policy);
-inventory = resolve_step04_run_inventory_impl(paths, cfg);
-info.run_inventory = inventory;
-info.expected_run_count = numel(inventory.matched_run_bases);
-
-if ~inventory.valid
-    do_run = true;
-    reason = "run-level input check requires Step 05: " + ...
-        string(inventory.issue_message);
-    return;
-end
-
-expected_output_paths = cell(numel(inventory.matched_run_bases), 1);
-for oi = 1:numel(inventory.matched_run_bases)
-    expected_output_paths{oi} = fullfile( ...
-        char(string(paths.prep_05_out_dir)), ...
-        char(inventory.matched_run_bases(oi) + "_until_epoching.set"));
-end
-
-cfg_for_policy = cfg;
-if ~isfield(cfg_for_policy, 'io') || ~isstruct(cfg_for_policy.io)
-    cfg_for_policy.io = struct();
-end
-cfg_for_policy.io.overwrite_if_older_than = policy.cutoff_raw;
-[do_run, output_reason] = step_should_run_outputs_impl( ...
-    expected_output_paths, policy.mode, cfg_for_policy);
-reason = sprintf( ...
-    'run-level Step-05 check for %d task-matched run(s): %s', ...
-    numel(inventory.matched_run_bases), char(string(output_reason)));
 end
 
 function step_folder = get_step_subject_folder_impl(paths, step_name)
@@ -2559,11 +2317,15 @@ event_codes = strings(0,1);
 
 for k = 1:numel(EEG.event)
     code = normalize_trigger_type_impl(EEG.event(k).type);
+
     if strcmpi(code, 'boundary')
         continue;
     end
 
-    is_condition_marker = false;
+    if ~matches_any_prefix_impl(code, marker_prefixes) || matches_any_exact_impl(code, end_markers)
+        is_condition_marker = false; % check if marker/trigger matches any of the configured baseline condition prefixes or end markers
+    end
+
     for c = 1:numel(condition_names)
         if matches_any_prefix_impl(code, marker_prefixes{c})
             is_condition_marker = true;
@@ -2632,9 +2394,11 @@ if isempty(seg_t1)
     error('Could not derive any baseline condition segments.');
 end
 
+baseline_duration = (seg_t2(end)-seg_t1(1))/60;
+
 helpers.log_msg_default( ...
-    'prep_06_epoching: %s | derived %d baseline segments across conditions: %s', ...
-    char(string(run_base)), numel(seg_t1), strjoin(cellstr(condition_names), ', '));
+    'prep_06_epoching: %s | derived %d baseline segments across conditions: %s | total duration: %.02f minutes', ...
+    char(string(run_base)), numel(seg_t1), strjoin(cellstr(condition_names), ', '), baseline_duration);
 
 condition_parts = repmat({{}}, numel(condition_names), 1);
 epoch_len = double(step_cfg.regepoch_length_sec);
@@ -2657,11 +2421,18 @@ for s = 1:numel(seg_t1)
 
     EEG_seg = pop_select(EEG, 'time', [t1, t2 - sample_eps]);
     EEG_seg = eeg_checkset(EEG_seg);
-    EEG_ep = eeg_regepochs( ...
-        EEG_seg, ...
-        'recurrence', epoch_step, ...
-        'limits', [0 epoch_len], ...
-        'eventtype', 'regepoch');
+    try
+        EEG_ep = eeg_regepochs( ...
+            EEG_seg, ...
+            'recurrence', epoch_step, ...
+            'limits', [0 epoch_len], ...
+            'eventtype', 'regepoch');
+    catch ME
+        EEG_ep = append_eeg_comment_impl(EEG_ep, sprintf( ...
+        'prep_06_epoching: regepoch failed for segment %d | chunk=[%.3f %.3f] s | regepoch_length=%.1f s | regepoch_step=%.1f s', ...
+        s, t1, t2, epoch_len, epoch_step));
+        continue
+    end
     EEG_ep = eeg_checkset(EEG_ep);
     EEG_ep.etc.baseline_condition = char(condition_names(condition_ix));
     EEG_ep = append_eeg_comment_impl(EEG_ep, sprintf( ...
@@ -3203,19 +2974,27 @@ for k = 1:n
 end
 end
 
-function latency = find_first_event_latency_impl(EEG, event_type)
+function [marker, latency] = find_first_event_latency_impl(EEG, event_type)
 latency = [];
+marker = [];
 
 if ~isfield(EEG, 'event') || isempty(EEG.event)
     return;
 end
 
-target = normalize_trigger_type_impl(event_type);
+if ischar(event_type) || isstring(event_type)
+    event_type = cellstr(string(event_type));
+end
+
+target_types = cellfun(@normalize_trigger_type_impl, ...
+    event_type, 'UniformOutput', false);
 
 for k = 1:numel(EEG.event)
     current_type = normalize_trigger_type_impl(EEG.event(k).type);
-    if strcmp(current_type, target)
+
+    if any(strcmp(current_type, target_types))
         latency = EEG.event(k).latency;
+        marker = current_type;
         return;
     end
 end
@@ -3232,26 +3011,21 @@ for k = 1:numel(EEG.chanlocs)
     EEG.chanlocs(k).type = 'EEG';
 end
 
-EEG = set_channel_types_by_labels_impl( ...
-    EEG, labels, step_cfg.eog_channel_labels, 'EOG');
-EEG = set_channel_types_by_labels_impl( ...
-    EEG, labels, step_cfg.scr_channel_labels, 'SCR');
-EEG = set_channel_types_by_labels_impl( ...
-    EEG, labels, step_cfg.startle_channel_labels, 'Startle');
-EEG = set_channel_types_by_labels_impl( ...
-    EEG, labels, step_cfg.ekg_channel_labels, 'EKG');
+set_type_by_labels_local(step_cfg.eog_channel_labels,     'EOG');
+set_type_by_labels_local(step_cfg.scr_channel_labels,     'SCR');
+set_type_by_labels_local(step_cfg.startle_channel_labels, 'Startle');
+set_type_by_labels_local(step_cfg.ekg_channel_labels,     'EKG');
 
 EEG = eeg_checkset(EEG);
-end
 
-function EEG = set_channel_types_by_labels_impl( ...
-        EEG, labels, label_list, type_name)
-for i = 1:numel(label_list)
-    idx = find(strcmpi(labels, label_list{i}));
-    for j = 1:numel(idx)
-        EEG.chanlocs(idx(j)).type = type_name;
+    function set_type_by_labels_local(label_list, type_name)
+        for i = 1:numel(label_list)
+            idx = find(strcmpi(labels, label_list{i}));
+            for j = 1:numel(idx)
+                EEG.chanlocs(idx(j)).type = type_name;
+            end
+        end
     end
-end
 end
 
 function [flat_indices, flat_labels, info] = find_flat_or_invalid_channels_impl(EEG, candidate_indices, detection_cfg)
@@ -3444,20 +3218,44 @@ if nargin >= 5 && ~isempty(label_for_log)
 end
 end
 
-function [EEG, did_apply] = apply_pop_cleanline_to_subset_impl(EEG, subset_indices, step_cfg)
+function [EEG, did_apply, clean_log] = remove_line_noise_from_subset_impl(EEG, subset_indices, step_cfg, plugin_path, helpers)
 did_apply = false;
+clean_log = struct();
+
+if contains(lower(step_cfg.line_noise_method), 'zap')
+    method = 'zapline';
+elseif contains(lower(step_cfg.line_noise_method), 'clean')
+    method = 'cleanline';
+elseif contains(lower(step_cfg.line_noise_method), 'notch')
+    method = 'notch';
+else
+    helpers.log_msg_default(sprintf('\tLine Noise Removal: ERROR removal method - %s - not recognized.', step_cfg.line_noise_method));
+    return
+end
 
 if isempty(subset_indices)
-    helpers.log_msg_default('prep03_untilica: WARNING no channel indices available for pop_cleanline.');
     return;
 end
 
 if exist('pop_cleanline', 'file') ~= 2
-    helpers.log_msg_default('prep03_untilica: WARNING pop_cleanline was not found on path.');
     return;
 end
 
+plugs = dir(fullfile(plugin_path, '*line*'));
 original_data = EEG.data;
+
+% Backward-compatible fallbacks in case older configs are used
+bandwidth_hz      = getfield_safe_impl(step_cfg, 'pop_cleanline_bandwidth_hz', 2);
+p_value           = getfield_safe_impl(step_cfg, 'pop_cleanline_p_value', 0.01);
+scanforlines      = getfield_safe_impl(step_cfg, 'pop_cleanline_scanforlines', false);
+winsize_sec       = getfield_safe_impl(step_cfg, 'pop_cleanline_winsize_sec', 4);
+winstep_sec       = getfield_safe_impl(step_cfg, 'pop_cleanline_winstep_sec', 1);
+tau_val           = getfield_safe_impl(step_cfg, 'pop_cleanline_tau', 100);
+pad_val           = getfield_safe_impl(step_cfg, 'pop_cleanline_pad', 2);
+taperbandwidth_hz = getfield_safe_impl(step_cfg, 'pop_cleanline_taperbandwidth_hz', 2);
+norm_spectrum     = getfield_safe_impl(step_cfg, 'pop_cleanline_norm_spectrum', 0);
+compute_power     = getfield_safe_impl(step_cfg, 'pop_cleanline_computepower', 0);
+verbose_flag      = getfield_safe_impl(step_cfg, 'pop_cleanline_verbose', false);
 
 try
     EEG_tmp = pop_select(EEG, 'channel', subset_indices);
@@ -3465,50 +3263,127 @@ try
 
     fs = EEG_tmp.srate;
     freqs = step_cfg.line_noise_frequencies_hz;
-    freqs = freqs(freqs < fs / 2);
+    freqs = freqs(freqs < fs / 2); % only keep frequencies below Nyquist, as that is also the highest frequency for the lowpass filter.
+
+    clean_log.freqs = freqs;
 
     if isempty(freqs)
         did_apply = true;
+        log_msg_default_impl('\tLine Noise Removal: WARNING Specified frequencies below nyquist.');
         return;
     end
+    
+    if strcmp(method, "zapline")  
+        if ~any(cellfun(@(x) contains(x, 'zapline'), {plugs.name})) % check if zapline plugin installed, otherwise use cleanline
+            helpers.log_msg_default('prep03_untilica: WARNING zapline-plus was not found on path, continuing with cleanline.');
+            method = 'cleanline';
+        else
+            clean_log.zapline = struct();
+            [EEG_tmp.data, clean_log.zapline.config, clean_log.zapline.analytics] = ...
+                clean_data_with_zapline_plus(EEG_tmp.data, fs, struct('noisefreqs', freqs, 'plotResults', false, 'saveSpectra', true));
+            clean_log.zapline.applied = true;
+            
+            if clean_log.zapline.analytics.ratioNoiseClean > step_cfg.line_noise_ratio % check if noise ratio above acceptable threshold
+                if step_cfg.line_noise_fb_cleanline % check if fallback to cleanline allowed
+                    clean_log.fallback_to_cleanline = true;
+                    method = 'cleanline';
+                    helpers.log_msg_default('\tLine Noise Removal: Zapline did not work optimally, using cleanline in next step.');
+                else
+                    helpers.log_msg_default(sprintf('\tLine Noise Removal: WARNING Zapline applied, remaining noise ratio %s.', clean_log.zapline.analytics.ratioNoiseClean));
+                end
+            else
+                helpers.log_msg_default(sprintf('\tLine Noise Removal: Zapline applied succesfully. Noise ratio %s.', clean_log.zapline.analytics.ratioNoiseClean));
+            end
+        end
+    end
+   
+    if strcmp(method, "cleanline")
+        if ~any(cellfun(@(x) contains(lower(x), 'cleanline'),{plugs.name})) % check if cleanline plugin installed
+            if step_cfg.line_noise_fb_notch
+                clean_log.fallback_to_cleanline = false;
+                clean_log.fallback_to_notch     = true;
+                method = 'notch';
+                helpers.log_msg_default('\tLine Noise Removal: WARNING cleanline was not found on path. Using Notch filter as fallback.');
+            else
+                helpers.log_msg_default('\tLine Noise Removal: WARNING cleanline was not found on path. Continuing without removing line noise.');
+                return
+            end
+        else
+            clean_log.cleanline = struct();
+            clean_log.cleanline.analytics = struct();
 
-    % Backward-compatible fallbacks in case older configs are used
-    bandwidth_hz      = getfield_safe_impl(step_cfg, 'pop_cleanline_bandwidth_hz', 2);
-    p_value           = getfield_safe_impl(step_cfg, 'pop_cleanline_p_value', 0.01);
-    scanforlines      = getfield_safe_impl(step_cfg, 'pop_cleanline_scanforlines', false);
-    winsize_sec       = getfield_safe_impl(step_cfg, 'pop_cleanline_winsize_sec', 4);
-    winstep_sec       = getfield_safe_impl(step_cfg, 'pop_cleanline_winstep_sec', 1);
-    tau_val           = getfield_safe_impl(step_cfg, 'pop_cleanline_tau', 100);
-    pad_val           = getfield_safe_impl(step_cfg, 'pop_cleanline_pad', 2);
-    taperbandwidth_hz = getfield_safe_impl(step_cfg, 'pop_cleanline_taperbandwidth_hz', 2);
-    norm_spectrum     = getfield_safe_impl(step_cfg, 'pop_cleanline_norm_spectrum', 0);
-    compute_power     = getfield_safe_impl(step_cfg, 'pop_cleanline_computepower', 0);
-    verbose_flag      = getfield_safe_impl(step_cfg, 'pop_cleanline_verbose', false);
+            if isfield(clean_log, 'zapline') && isfield(clean_log.zapline, 'config')
+                % if zapline was applied, take parameters for noise ratio calculation from there
+                winSize = clean_log.zapline.config.winSizeCompleteSpectrum;
+                detect_winSize = clean_log.zapline.config.detectionWinsize;
+                pxx_log_before = clean_log.zapline.analytics.cleanSpectrumLog;
+                psd_freqs = clean_log.zapline.analytics.frequencies;
+            else
+                % otherwise use the same logic to calculate the noise ratio as in zapline
+                winSize = floor(length(EEG_tmp.data)/8/fs);
+                detect_winSize = 6;
+                [pxx_log_before, psd_freqs] = pwelch(EEG_tmp.data',hanning(winSize*fs),[],[],fs);
+                pxx_log_before = 10*log10(pxx_log_before);
+                clean_log.cleanline.analytics.rawSpectrumLog = pxx_log_before;
+                clean_log.cleanline.analytics.frequencies = psd_freqs;
+            end
 
-    EEG_tmp = pop_cleanline(EEG_tmp, ...
-        'bandwidth',        bandwidth_hz, ...
-        'chanlist',         1:size(EEG_tmp.data, 1), ...
-        'computepower',     compute_power, ...
-        'linefreqs',        freqs, ...
-        'normSpectrum',     norm_spectrum, ...
-        'p',                p_value, ...
-        'pad',              pad_val, ...
-        'plotfigures',      0, ...
-        'scanforlines',     double(scanforlines), ...
-        'sigtype',          'Channels', ...
-        'taperbandwidth',   taperbandwidth_hz, ...
-        'tau',              tau_val, ...
-        'verb',             double(verbose_flag), ...
-        'winsize',          winsize_sec, ...
-        'winstep',          winstep_sec);
+            % make sure cleanline calls functions from own path
+            cleanline_dir = fullfile(plugin_path, plugs(find(cellfun(@(x) contains(lower(x), 'cleanline'),{plugs.name}))).name);
+            addpath(genpath(cleanline_dir), '-begin');   % puts it first on matlab paths
+
+            EEG_tmp = pop_cleanline(EEG_tmp, ...
+                'bandwidth',        bandwidth_hz, ...
+                'chanlist',         1:size(EEG_tmp.data, 1), ...
+                'computepower',     compute_power, ...
+                'linefreqs',        freqs, ...
+                'normSpectrum',     norm_spectrum, ...
+                'p',                p_value, ...
+                'pad',              pad_val, ...
+                'plotfigures',      0, ...
+                'scanforlines',     double(scanforlines), ...
+                'sigtype',          'Channels', ...
+                'taperbandwidth',   taperbandwidth_hz, ...
+                'tau',              tau_val, ...
+                'verb',             double(verbose_flag), ...
+                'winsize',          winsize_sec, ...
+                'winstep',          winstep_sec);
+            
+            clean_log.cleanline.applied = true;
+
+            % calculate power spectrum after cleanline
+            pxx_log_after = pwelch(single(EEG_tmp.data)',hanning(winSize*fs),[],[],fs);
+            pxx_log_after = 10*log10(pxx_log_after);
+
+            clean_log.cleanline.analytics.cleanSpectrumLog = pxx_log_after;
+            clean_log.cleanline.analytics.ratioNoiseBefore = [];
+            clean_log.cleanline.analytics.ratioNoiseAfter = [];
+
+            for f = freqs % calculate noise ratio for each frequency and append to log
+                clean_log.cleanline.analytics.ratioNoiseAfter(end+1)  = 10^((mean(mean(pxx_log_after(noise_idx,:),2)) - mean(pxx_log_after(surround_idx,:),'all'))/10);
+            end
+
+            % if noise ratio still above acceptable threshold, apply notch filter
+            % filter
+            if clean_log.cleanline.analytics.ratioNoiseAfter > step_cfg.line_noise_ratio && step_cfg.line_noise_fb_notch
+                clean_log.fallback_to_notch = true;
+                method = 'notch';
+                helpers.log_msg_default(sprintf('\tLine Noise Removal: After Zap-/Cleanline 50 Hz noise ratio at %d. Applying notch filter.', clean_log.cleanline.analytics.ratioNoiseAfter(1)));
+            end
+        end
+    end
+    if strcmp(method, "notch")
+        % use EEGLab notch filter?
+    end
 
     EEG.data(subset_indices, :) = EEG_tmp.data;
     did_apply = true;
 
-catch me
+catch ME
     EEG.data = original_data;
     did_apply = false;
-    warning('apply_pop_cleanline_to_subset failed: %s', me.message);
+    helpers.log_msg_default(sprintf('remove_line_noise_from_subset failed: %s (function: %s, line: %d)', ME.message, ME.stack(1).name, ME.stack(1).line));
+    return
 end
 
 EEG = eeg_checkset(EEG);
@@ -3925,6 +3800,21 @@ end
 EEG_work = EEG_in;
 EEG_work = ensure_erplab_epoch_eventlist_compat_impl(EEG_work);
 
+%% LL: add-on to save original trial number for trial-wise analysis combined with behavioral data
+% --- store original trial index per epoch (before pop_rejepoch removes trials) ---
+try
+    if isfield(EEG_work,'epoch') && ~isempty(EEG_work.epoch) && isfield(EEG_work,'trials')
+        nT = EEG_work.trials;
+        nE = numel(EEG_work.epoch);
+        for e = 1:min(nT, nE)
+            EEG_work.epoch(e).orig_trial_index = e; % 1..nTrials before rejection
+        end
+    end
+catch
+    % If metadata write fails, continue preprocessing
+end
+%% LL add-on end
+
 if ~isfield(EEG_work, 'reject') || ~isstruct(EEG_work.reject)
     EEG_work.reject = struct();
 end
@@ -4064,10 +3954,14 @@ if isempty(bad_epochs)
     return;
 end
 
-EEG_work = pop_rejepoch(EEG_work, bad_epochs, 0);
-EEG_work = eeg_checkset(EEG_work);
-
-info.n_kept = EEG_work.trials;
+if numel(bad_epochs) == EEG_work.trials
+    info.n_kept = 0;
+    EEG_work.trials = 0;
+else
+    EEG_work = pop_rejepoch(EEG_work, bad_epochs, 0);
+    EEG_work = eeg_checkset(EEG_work);
+    info.n_kept = EEG_work.trials;
+end
 
 if ~isfield(EEG_work, 'etc') || isempty(EEG_work.etc)
     EEG_work.etc = struct();
@@ -4435,24 +4329,6 @@ if exist(folder_path, 'dir') == 7
 end
 end
 
-function delete_files_matching_impl(folder_path, file_pattern)
-% Delete only files matching one explicit run-level pattern. This avoids
-% removing QA artifacts that belong to other tasks/runs in the same folder.
-folder_path = char(string(folder_path));
-file_pattern = char(string(file_pattern));
-if isempty(folder_path) || isempty(file_pattern) || ...
-        exist(folder_path, 'dir') ~= 7
-    return;
-end
-
-matches = dir(fullfile(folder_path, file_pattern));
-for mi = 1:numel(matches)
-    if ~matches(mi).isdir
-        delete(fullfile(matches(mi).folder, matches(mi).name));
-    end
-end
-end
-
 function s = sanitize_filename_impl(s)
 s = char(string(s));
 s = strtrim(s);
@@ -4465,10 +4341,7 @@ end
 s = regexprep(s, '[^\w\-]', '_');
 end
 
-function write_ic_topography_pngs_impl(EEG, ic_list, out_dir, file_prefix, tag, topo_cfg, classif, progress_log)
-if nargin < 8
-    progress_log = [];
-end
+function write_ic_topography_pngs_impl(EEG, ic_list, out_dir, file_prefix, tag, topo_cfg, classif, varargin)
 if isempty(ic_list)
     return;
 end
@@ -4483,12 +4356,6 @@ end
 
 for ii = 1:numel(ic_list)
     ic = ic_list(ii);
-
-    png_name = sprintf('%s_IC%03d_%s.png', file_prefix, ic, tag);
-    png_path = fullfile(out_dir, png_name);
-    log_progress_safely_impl(progress_log, ...
-        'IC-topography export: %d/%d | IC=%d | target=%s', ...
-        ii, numel(ic_list), ic, png_path);
 
     fig = figure('Visible', 'off', 'Color', 'w');
     ax = axes(fig); %#ok<LAXES>
@@ -4519,21 +4386,15 @@ for ii = 1:numel(ic_list)
             'Interpreter', 'none');
     end
 
+    png_name = sprintf('%s_IC%03d_%s.png', file_prefix, ic, tag);
+    png_path = fullfile(out_dir, png_name);
+
     set(fig, ...
         'PaperUnits', 'centimeters', ...
         'PaperPosition', topo_cfg.ic_topo_fig_cm);
 
-    try
-        print(fig, png_path, '-dpng', sprintf('-r%d', topo_cfg.ic_topo_dpi));
-        close(fig);
-    catch me_print
-        if isgraphics(fig)
-            close(fig);
-        end
-        error('prep05_after_ica:ICTopographyExportFailed', ...
-            'Could not export IC %d topography to %s: %s', ...
-            ic, png_path, me_print.message);
-    end
+    print(fig, png_path, '-dpng', sprintf('-r%d', topo_cfg.ic_topo_dpi));
+    close(fig);
 end
 end
 
@@ -5544,7 +5405,7 @@ end
 
 function [t_all, t_by_reason, output_paths] = collect_bad_channel_qc_impl(cfg_or_qc_root)
 [qc_root, timestamp, delimiter] = resolve_qc_collection_context_impl(cfg_or_qc_root);
-bad_root = fullfile(qc_root, 'bad_chans');
+bad_root = fullfile(qc_root, '03_bad_chans');
 t_all = table();
 t_by_reason = table();
 output_paths = {};
@@ -5584,7 +5445,7 @@ end
 
 function [t_all, t_by_method, t_pair, t_reasons, output_paths] = collect_prep06_summary_impl(cfg_or_qc_root)
 [qc_root, timestamp, delimiter] = resolve_qc_collection_context_impl(cfg_or_qc_root);
-epoch_root = fullfile(qc_root, 'epoch_rej');
+epoch_root = fullfile(qc_root, '06_epoch_rej');
 t_all = table();
 t_by_method = table();
 t_pair = table();
@@ -5738,7 +5599,7 @@ for r = 1:height(warning_table)
         round(warning_table.n_epochs_total(r)), ...
         100 * warning_table.prop_rejected_total(r)));
 end
-lines(end) = "Review the timestamped tables under qc/epoch_rej/.";
+lines(end) = "Review the timestamped tables under qc/06_epoch_rej/.";
 warning_message = strjoin(lines, newline);
 end
 
@@ -5921,10 +5782,6 @@ else
     out = string(x);
 end
 out = out(:);
-out = strip(out);
-empty_token = ismissing(out) | lower(out) == "nan" | ...
-    lower(out) == "<missing>";
-out(empty_token) = "";
 end
 
 
@@ -5996,7 +5853,8 @@ function step_cfg = default_prep03_cfg_impl()
 step_cfg = struct();
 
 % Crop
-step_cfg.crop_to_task_markers = true;
+step_cfg.crop_to_task_markers = false;
+step_cfg.substitute_crop_markers = true;
 step_cfg.crop_start_marker    = 'S 91';
 step_cfg.crop_end_marker      = 'S 97';
 step_cfg.crop_padding_sec     = [0 0];
@@ -6151,6 +6009,10 @@ step_cfg.ica_prep_faster_ptp_epoch_rejection.ptp_uV_thresh = 100;
 % 1.00 means disabled. Example: 0.50 stops Step 03 if >50% of ICA-prep
 % epochs are removed.
 step_cfg.ica_prep_faster_ptp_epoch_rejection.max_reject_prop = 1.00;
+
+% ICA-training summary CSV; metadata/logging are retained when disabled.
+% The timestamp and delimiter use the shared cfg.qc settings.
+step_cfg.write_run_summary_table = true;
 
 % Overwrite override
 step_cfg.overwrite_mode = "";
@@ -6756,9 +6618,432 @@ else
 end
 end
 
+function summary = build_ica_training_summary_impl( ...
+    EEG, n_before, is_epoched, subj_id, run_base, method, rejection_status, ...
+    status, output_set_path, cfg, step_cfg)
+% Summarize rejected and remaining epochs in one ICA training dataset.
+
+% Count the remaining epochs.
+% Use NaN when epoch counts do not apply to continuous data.
+n_kept = NaN;
+
+if is_epoched
+    n_kept = EEG.trials;
+
+    if isempty(EEG.data)
+        n_kept = 0;
+    end
+else
+    n_before = NaN;
+end
+
+% Calculate how many epochs were removed.
+n_rejected = n_before - n_kept;
+
+% Calculate the rejected fraction: 0.05 means 5%.
+% Leave it undefined when there were no epochs to begin with.
+prop_rejected = NaN;
+
+if n_before > 0
+    prop_rejected = n_rejected / n_before;
+end
+
+% Store the counts together with the dataset name and settings.
+summary = struct( ...
+    'qc_timestamp', resolve_qc_timestamp_impl(cfg), ...
+    'subject_id', string(sprintf('sub-%s', subj_id)), ...
+    'run_base', string(run_base), ...
+    'rejection_method', string(method), ...
+    'rejection_status', string(rejection_status), ...
+    'status', string(status), ...
+    'data_is_epoched', logical(is_epoched), ...
+    'n_epochs_total', n_before, ...
+    'n_rejected_total', n_rejected, ...
+    'n_epochs_kept', n_kept, ...
+    'prop_rejected_total', prop_rejected, ...
+    'output_set_path', string(output_set_path), ...
+    'settings_json', string(jsonencode(step_cfg)));
+end
+
+function out_path = write_ica_training_summary_impl(summary, cfg, step_cfg, helpers)
+% Write the training summary to the log and, if enabled, to a CSV file.
+
+out_path = '';
+
+% Report the counts in the pipeline log.
+helpers.log_msg_default( ...
+    ['prep03_untilica: %s | %s | training summary | method=%s | ' ...
+     'rejected=%g/%g | kept=%g | prop_rejected=%g | rejection_status=%s | status=%s'], ...
+    char(summary.subject_id), char(summary.run_base), ...
+    char(summary.rejection_method), summary.n_rejected_total, ...
+    summary.n_epochs_total, summary.n_epochs_kept, ...
+    summary.prop_rejected_total, char(summary.rejection_status), char(summary.status));
+
+% Stop here if CSV output is switched off.
+if ~getfield_safe_impl(step_cfg, 'write_run_summary_table', true)
+    return;
+end
+
+% Use the pipeline's QC folder and CSV separator.
+[qc_root, ~, delimiter] = resolve_qc_collection_context_impl(cfg);
+
+% Include the timestamp and dataset name in the filename.
+out_path = fullfile(qc_root, '03_ica_training', sprintf( ...
+    '%s_%s_prep03_run_summary.csv', ...
+    char(summary.qc_timestamp), char(summary.run_base)));
+
+% Save the summary using the existing QC writer.
+write_qc_table_impl(struct2table(summary), out_path, delimiter);
+end
+
+function [t_all, output_paths] = collect_prep03_summary_impl(cfg_or_qc_root)
+% Combine the latest available training summaries across subjects and runs.
+
+if nargin < 1
+    cfg_or_qc_root = [];
+end
+
+% Find the QC folder and use the pipeline's CSV settings.
+[qc_root, timestamp, delimiter] = ...
+    resolve_qc_collection_context_impl(cfg_or_qc_root);
+
+training_root = fullfile(qc_root, '03_ica_training');
+
+t_all = table();
+output_paths = {};
+
+% Return empty outputs if no training-summary folder exists.
+if exist(training_root, 'dir') ~= 7
+    return;
+end
+
+% Find the individual run summaries.
+files = dir(fullfile(training_root, '**', '*_prep03_run_summary.csv'));
+
+% Use the most recently modified readable file for each subject and run.
+t_all = read_latest_qc_tables_impl( ...
+    files, {'subject_id','run_base'}, delimiter);
+
+if isempty(t_all)
+    return;
+end
+
+% Check that the required summary columns are present.
+required = { ...
+    'subject_id', 'run_base', 'rejection_method', 'rejection_status', ...
+    'status', 'n_epochs_total', 'n_rejected_total', ...
+    'n_epochs_kept', 'prop_rejected_total'};
+
+if ~all(ismember(required, t_all.Properties.VariableNames))
+    error('prep03_summary:InvalidSchema', ...
+        'Selected Step-03 summaries are missing required columns below: %s', ...
+        training_root);
+end
+
+% Sort the results by subject and run.
+t_all = sortrows(t_all, {'subject_id','run_base'});
+
+% Save the combined table.
+out_path = fullfile(training_root, sprintf( ...
+    '%s_prep03_ica_training_all_subjects.csv', char(timestamp)));
+
+write_qc_table_impl(t_all, out_path, delimiter);
+
+output_paths = {out_path};
+end
+
 % =========================================================================
-% ICA CONVERGENCE AND STEP-04 QC HELPERS
+% SASKIA BRANCH: ADDITIONAL STEP-04/05 AND ICA-QC IMPLEMENTATIONS
 % =========================================================================
+function log_progress_safely_impl(progress_log, varargin)
+% Progress reporting must never abort an otherwise valid processing step.
+if isa(progress_log, 'function_handle')
+    try
+        progress_log(varargin{:});
+        return;
+    catch
+        % Fall through to the command-window fallback below.
+    end
+end
+
+try
+    fprintf('[%s] %s\n', ...
+        datestr(now, 'yyyy-mm-dd HH:MM:SS'), sprintf(varargin{:}));
+catch
+    % Logging is best-effort and must not become a pipeline failure.
+end
+end
+
+function out_path = write_pipeline_status_summary_impl(status, cfg)
+% One compact machine-readable index for parallel runs. The subject logs
+% retain the full trace; this table exposes the final outcome and action
+% without requiring users to open hundreds of log files.
+out_path = "";
+if isempty(status)
+    return;
+end
+
+n_rows = numel(status);
+subject_id = strings(n_rows, 1);
+pipeline_status = strings(n_rows, 1);
+failure_reason = strings(n_rows, 1);
+recommended_action = strings(n_rows, 1);
+subject_log = strings(n_rows, 1);
+
+for si = 1:n_rows
+    subject_id(si) = "sub-" + string(status(si).subj);
+    subject_log(si) = string(status(si).logfile);
+    if logical(status(si).ok)
+        pipeline_status(si) = "pass";
+        continue;
+    end
+
+    pipeline_status(si) = "fail";
+    message_text = char(string(status(si).message));
+    action_marker = 'Recommended action:';
+    marker_pos = strfind(message_text, action_marker);
+    if isempty(marker_pos)
+        failure_reason(si) = string(message_text);
+        message_lower = lower(string(message_text));
+        if contains(message_lower, "step03") || ...
+                contains(message_lower, "task-matched") || ...
+                contains(message_lower, "no matching preica")
+            recommended_action(si) = ...
+                ['Verify cfg.bids.task_label and restore or regenerate the ' ...
+                 'matching Step-03 *_forica.set and *_preica.set files, then ' ...
+                 'rerun this subject.'];
+        elseif contains(message_lower, "iclabel") && ...
+                contains(message_lower, "not")
+            recommended_action(si) = ...
+                "Install or add ICLabel to the EEGLAB path, then rerun this subject.";
+        elseif contains(message_lower, "amica requested") || ...
+                contains(message_lower, "runamica15")
+            recommended_action(si) = ...
+                ['Check the AMICA installation/path and its Windows path ' ...
+                 'requirements; if the installation cannot be repaired, use RUNICA.'];
+        else
+            recommended_action(si) = ...
+                "Open the linked subject log, correct the reported processing step, and rerun that subject.";
+        end
+    else
+        marker_pos = marker_pos(1);
+        failure_reason(si) = string(strtrim(message_text(1:(marker_pos - 1))));
+        action_start = marker_pos + numel(action_marker);
+        recommended_action(si) = string(strtrim(message_text(action_start:end)));
+    end
+end
+
+summary_table = table( ...
+    subject_id, pipeline_status, failure_reason, recommended_action, ...
+    subject_log, ...
+    'VariableNames', {'subject_id','pipeline_status','failure_reason', ...
+    'recommended_action','subject_log'});
+
+logs_dir = resolve_logs_dir_impl(cfg);
+ensure_dir_impl(logs_dir);
+timestamp = resolve_qc_timestamp_impl(cfg);
+out_path = string(fullfile(logs_dir, sprintf( ...
+    '%s_pipeline_subject_status.csv', char(timestamp))));
+
+delimiter = ';';
+if isfield(cfg, 'qc') && isstruct(cfg.qc) && ...
+        isfield(cfg.qc, 'table_delimiter')
+    delimiter = char(string(cfg.qc.table_delimiter));
+end
+writetable(summary_table, char(out_path), 'Delimiter', delimiter);
+end
+
+function inventory = resolve_step04_run_inventory_impl(paths, cfg)
+% Resolve exact Step-03 training/application pairs for the configured task.
+% The task label is read dynamically from cfg.bids.task_label (or the
+% equivalent value already stored in paths); no task name is hard-coded.
+required_fields = { ...
+    'prep_03_out_dir_for_ica', 'prep_03_out_dir_until_ica', ...
+    'prep_04_out_dir'};
+for ri = 1:numel(required_fields)
+    field_name = required_fields{ri};
+    if ~isfield(paths, field_name) || ...
+            strlength(string(paths.(field_name))) == 0
+        error('eeg_pipeline_helpers:Step04PathMissing', ...
+            'paths.%s is missing or empty.', field_name);
+    end
+end
+
+task_label = "";
+if isfield(paths, 'bids_task_label') && ...
+        strlength(string(paths.bids_task_label)) > 0
+    task_label = string(paths.bids_task_label);
+elseif isfield(cfg, 'bids') && isstruct(cfg.bids) && ...
+        isfield(cfg.bids, 'task_label') && ...
+        strlength(string(cfg.bids.task_label)) > 0
+    task_label = string(cfg.bids.task_label);
+end
+task_label = strip(task_label);
+
+forica_dir = char(string(paths.prep_03_out_dir_for_ica));
+preica_dir = char(string(paths.prep_03_out_dir_until_ica));
+out_dir = char(string(paths.prep_04_out_dir));
+
+forica_info = dir(fullfile(forica_dir, '*_forica.set'));
+preica_info = dir(fullfile(preica_dir, '*_preica.set'));
+forica_names = string({forica_info.name})';
+preica_names = string({preica_info.name})';
+
+if strlength(task_label) > 0
+    task_token = lower("_task-" + task_label + "_");
+    forica_names = forica_names(contains(lower(forica_names), task_token));
+    preica_names = preica_names(contains(lower(preica_names), task_token));
+end
+
+forica_names = sort(forica_names);
+preica_names = sort(preica_names);
+forica_bases = erase(forica_names, "_forica.set");
+preica_bases = erase(preica_names, "_preica.set");
+
+[matched_bases, forica_idx, preica_idx] = intersect( ...
+    forica_bases, preica_bases, 'stable');
+missing_preica = setdiff(forica_bases, preica_bases, 'stable');
+missing_forica = setdiff(preica_bases, forica_bases, 'stable');
+
+matched_forica_names = forica_names(forica_idx);
+matched_preica_names = preica_names(preica_idx);
+expected_output_names = matched_bases + "_ica_applied.set";
+expected_output_paths = cell(numel(expected_output_names), 1);
+for oi = 1:numel(expected_output_names)
+    expected_output_paths{oi} = fullfile( ...
+        out_dir, char(expected_output_names(oi)));
+end
+
+inventory = struct();
+inventory.task_label = task_label;
+inventory.forica_dir = string(forica_dir);
+inventory.preica_dir = string(preica_dir);
+inventory.output_dir = string(out_dir);
+inventory.forica_names = forica_names;
+inventory.preica_names = preica_names;
+inventory.matched_run_bases = matched_bases;
+inventory.matched_forica_names = matched_forica_names;
+inventory.matched_preica_names = matched_preica_names;
+inventory.missing_preica_run_bases = missing_preica;
+inventory.missing_forica_run_bases = missing_forica;
+inventory.expected_output_names = expected_output_names;
+inventory.expected_output_paths = expected_output_paths;
+inventory.valid = true;
+inventory.issue_code = "";
+inventory.issue_message = "";
+
+task_display = task_label;
+if strlength(task_display) == 0
+    task_display = "<all tasks>";
+end
+
+if ~isempty(missing_preica) || ~isempty(missing_forica)
+    inventory.valid = false;
+    inventory.issue_code = "STEP03_RUN_PAIR_MISMATCH";
+    missing_preica_text = strjoin(missing_preica, ', ');
+    missing_forica_text = strjoin(missing_forica, ', ');
+    if strlength(missing_preica_text) == 0
+        missing_preica_text = "none";
+    end
+    if strlength(missing_forica_text) == 0
+        missing_forica_text = "none";
+    end
+    inventory.issue_message = sprintf( ...
+        ['Step-03 run pairs are incomplete for configured task "%s". ' ...
+         'Missing *_preica.set for: %s. Missing *_forica.set for: %s. ' ...
+         'Checked forica=%s and preica=%s.'], ...
+        char(task_display), char(missing_preica_text), ...
+        char(missing_forica_text), forica_dir, preica_dir);
+elseif isempty(matched_bases)
+    inventory.valid = false;
+    inventory.issue_code = "NO_MATCHING_STEP03_RUNS";
+    inventory.issue_message = sprintf( ...
+        ['No matching *_forica.set / *_preica.set pair was found for ' ...
+         'configured task "%s". Checked forica=%s and preica=%s. ' ...
+         'Verify cfg.bids.task_label and rerun Step 03 if necessary.'], ...
+        char(task_display), forica_dir, preica_dir);
+end
+end
+
+function [do_run, reason, info] = step04_should_run_from_inventory_impl( ...
+    paths, cfg, policy)
+step_folder = get_step_subject_folder_impl(paths, 'prep_04_ica');
+[~, ~, info] = step_should_run_from_folder_impl(step_folder, policy);
+inventory = resolve_step04_run_inventory_impl(paths, cfg);
+info.run_inventory = inventory;
+info.expected_run_count = numel(inventory.matched_run_bases);
+
+if ~inventory.valid
+    do_run = true;
+    reason = "run-level input check requires Step 04: " + ...
+        string(inventory.issue_message);
+    return;
+end
+
+cfg_for_policy = cfg;
+if ~isfield(cfg_for_policy, 'io') || ~isstruct(cfg_for_policy.io)
+    cfg_for_policy.io = struct();
+end
+cfg_for_policy.io.overwrite_if_older_than = policy.cutoff_raw;
+[do_run, output_reason] = step_should_run_outputs_impl( ...
+    inventory.expected_output_paths, policy.mode, cfg_for_policy);
+reason = sprintf( ...
+    'run-level Step-04 check for %d task-matched run(s): %s', ...
+    numel(inventory.matched_run_bases), char(string(output_reason)));
+end
+
+function [do_run, reason, info] = step05_should_run_from_inventory_impl( ...
+    paths, cfg, policy)
+step_folder = get_step_subject_folder_impl(paths, 'prep_05_after_ica');
+[~, ~, info] = step_should_run_from_folder_impl(step_folder, policy);
+inventory = resolve_step04_run_inventory_impl(paths, cfg);
+info.run_inventory = inventory;
+info.expected_run_count = numel(inventory.matched_run_bases);
+
+if ~inventory.valid
+    do_run = true;
+    reason = "run-level input check requires Step 05: " + ...
+        string(inventory.issue_message);
+    return;
+end
+
+expected_output_paths = cell(numel(inventory.matched_run_bases), 1);
+for oi = 1:numel(inventory.matched_run_bases)
+    expected_output_paths{oi} = fullfile( ...
+        char(string(paths.prep_05_out_dir)), ...
+        char(inventory.matched_run_bases(oi) + "_until_epoching.set"));
+end
+
+cfg_for_policy = cfg;
+if ~isfield(cfg_for_policy, 'io') || ~isstruct(cfg_for_policy.io)
+    cfg_for_policy.io = struct();
+end
+cfg_for_policy.io.overwrite_if_older_than = policy.cutoff_raw;
+[do_run, output_reason] = step_should_run_outputs_impl( ...
+    expected_output_paths, policy.mode, cfg_for_policy);
+reason = sprintf( ...
+    'run-level Step-05 check for %d task-matched run(s): %s', ...
+    numel(inventory.matched_run_bases), char(string(output_reason)));
+end
+
+function delete_files_matching_impl(folder_path, file_pattern)
+% Delete only files matching one explicit run-level pattern. This avoids
+% removing QA artifacts that belong to other tasks/runs in the same folder.
+folder_path = char(string(folder_path));
+file_pattern = char(string(file_pattern));
+if isempty(folder_path) || isempty(file_pattern) || ...
+        exist(folder_path, 'dir') ~= 7
+    return;
+end
+
+matches = dir(fullfile(folder_path, file_pattern));
+for mi = 1:numel(matches)
+    if ~matches(mi).isdir
+        delete(fullfile(matches(mi).folder, matches(mi).name));
+    end
+end
+end
+
 function qc = default_amica_qc_impl()
 qc = struct( ...
     'passed', true, ...
@@ -6822,9 +7107,10 @@ warning_reasons = strings(0, 1);
 
 try
     validate_ica_matrices_impl(weights, sphere, expected_rank, n_channels, "amica");
-catch me
+catch
     failure_codes(end+1, 1) = "AMICA_OUTPUT_INVALID"; %#ok<AGROW>
-    failure_reasons(end+1, 1) = string(me.message); %#ok<AGROW>
+    failure_reasons(end+1, 1) = ...
+        "AMICA ICA matrices failed validation."; %#ok<AGROW>
 end
 
 if ~isstruct(mods) || ~isfield(mods, 'num_models') || mods.num_models ~= 1
@@ -8293,10 +8579,10 @@ for fi = 1:numel(files)
     else
         try
             t_all = append_compatible_tables_impl(t_all, t);
-        catch append_me
+        catch
             warning('collect_prep05_summary_impl:SchemaMismatch', ...
-                'Skipping incompatible QC file %s: %s', ...
-                this_path, append_me.message);
+                'Skipping incompatible QC file %s: tables could not be combined.', ...
+                this_path);
         end
     end
 end

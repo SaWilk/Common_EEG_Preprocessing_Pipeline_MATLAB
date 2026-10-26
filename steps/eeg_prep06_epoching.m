@@ -114,7 +114,7 @@ OUT_DIR       = paths.prep_06_out_dir;
 if isfield(paths, 'qc_epoch_rej_root') && strlength(string(paths.qc_epoch_rej_root)) > 0
     QC_METHOD_DIR = fullfile(paths.qc_epoch_rej_root, ica_method_tag);
 else
-    QC_METHOD_DIR = fullfile(paths.derivatives_root, 'qc', 'epoch_rej', ica_method_tag);
+    QC_METHOD_DIR = fullfile(paths.derivatives_root, 'qc', '06_epoch_rej', ica_method_tag);
 end
 
 helpers.ensure_dir(OUT_DIR);

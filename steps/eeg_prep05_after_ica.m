@@ -7,6 +7,23 @@ function step_out = eeg_prep05_after_ica(subj_id, cfg, paths, helpers)
 % handing the data to epoching. Warning-level signal changes are retained
 % and documented; hard signal-QC failures prevent the cleaned .set file
 % from being written and remain documented in the normal QC files.
+%
+% PURPOSE
+%   Load ICA-applied datasets, classify components with ICLabel, remove
+%   selected artifact ICs, export optional QA PNGs, and save datasets for
+%   the epoching step.
+%
+% INPUT
+%   paths.prep_04_out_dir
+%       *_ica_applied.set
+%
+% OUTPUT
+%   paths.prep_05_out_dir
+%       *_until_epoching.set
+%
+% OPTIONAL QA OUTPUT
+%   Method-specific QC subfolders below:
+%       paths.checks_ica_components_subj_dir/<ica_method>/
 
 step_out = struct('ok', false, 'message', '', 'outputs', {{}});
 
@@ -133,11 +150,12 @@ for pi = 1:numel(required_path_fields)
     end
 end
 
+
 in_dir  = paths.prep_04_out_dir;
 out_dir = paths.prep_05_out_dir;
 
-qc_method_dir     = fullfile(paths.qc_dir, ica_method_tag);
 checks_method_dir = fullfile(paths.checks_ica_components_subj_dir, ica_method_tag);
+qc_method_dir     = checks_method_dir;
 checks_rej_dir    = fullfile(checks_method_dir, REJECTED_TAG);
 checks_edge_dir   = fullfile(checks_method_dir, EDGE_TAG);
 
@@ -339,6 +357,28 @@ try
                 EEG.icaact = [];
             end
             EEG = eeg_checkset(EEG, 'ica');
+
+                helpers.log_msg_default( ...
+        ['prep05_after_ica: %s | %s | ICA dims before subcomp: ' ...
+         'nbchan=%d, icachansind=%d, icaweights=%s, icawinv=%s'], ...
+        subj_label, run_base_c, EEG.nbchan, numel(EEG.icachansind), ...
+        mat2str(size(EEG.icaweights)), mat2str(size(EEG.icawinv)));
+
+    x = double(EEG.data);
+    bad_nonfinite = find(any(~isfinite(x), 2));
+    bad_flat      = find(std(x, 0, 2) < 1e-6);
+    bad_range     = find((max(x, [], 2) - min(x, [], 2)) < 1e-5);
+    bad_diag      = unique([bad_nonfinite; bad_flat; bad_range]);
+
+    if ~isempty(bad_diag)
+        try
+            bad_labels = {EEG.chanlocs(bad_diag).labels};
+            helpers.log_msg_default( ...
+                'prep05_after_ica: %s | %s | suspicious channels before subcomp: %s', ...
+                subj_label, run_base_c, strjoin(string(bad_labels), ', '));
+        catch
+        end
+    end
 
             if exist('pop_subcomp', 'file') == 2
                 EEG = pop_subcomp(EEG, ic_to_remove, 0);

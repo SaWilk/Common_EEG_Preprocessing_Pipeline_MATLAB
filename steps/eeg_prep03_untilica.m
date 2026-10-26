@@ -8,6 +8,9 @@ function step_out = eeg_prep03_untilica(subj_id, cfg, paths, helpers)
 % Outputs:
 %   (1) *_preica.set : continuous pipeline dataset for downstream steps
 %   (2) *_forica.set : ICA-training-only dataset
+
+%       Also stores a summary of rejected and remaining training epochs.
+%   (3) Summary CSV under qc/03_ica_training/, if enabled in the config.
 %
 % Input preference:
 %   A) Step 02 output: *_triggersfixed.set
@@ -84,7 +87,7 @@ helpers.ensure_dir(prep03_out_dir_forica);
 if isfield(paths, 'qc_bad_chans_root') && strlength(string(paths.qc_bad_chans_root)) > 0
     bad_chan_qc_dir = paths.qc_bad_chans_root;
 else
-    bad_chan_qc_dir = fullfile(paths.derivatives_root, 'qc', 'bad_chans');
+    bad_chan_qc_dir = fullfile(paths.derivatives_root, 'qc', '03_bad_chans');
 end
 helpers.ensure_dir(bad_chan_qc_dir);
 
@@ -191,21 +194,44 @@ EEG = helpers.append_eeg_comment(EEG, sprintf( ...
 %  CROP TO TASK WINDOW
 % ========================================================================
 if step_cfg.crop_to_task_markers
-    start_latency = helpers.find_first_event_latency(EEG, step_cfg.crop_start_marker);
-    end_latency   = helpers.find_first_event_latency(EEG, step_cfg.crop_end_marker);
+    [start_marker, start_latency] = helpers.find_first_event_latency(EEG, step_cfg.crop_start_marker);
+    [end_marker, end_latency]   = helpers.find_first_event_latency(EEG, step_cfg.crop_end_marker);
 
     if isempty(start_latency) || isempty(end_latency)
+    if isfield(step_cfg, 'substitute_crop_markers') && ...
+            step_cfg.substitute_crop_markers
+
+        helpers.log_msg_default( ...
+            'prep03_untilica: WARNING missing crop marker(s); using the corresponding recording boundary.');
+
+        if isempty(start_latency)
+            start_latency = 1;
+            start_marker = 'first_sample';
+        end
+
+        if isempty(end_latency)
+            end_latency = EEG.pnts;
+            end_marker = 'last_sample';
+        end
+
+    else
         msg = sprintf( ...
             'prep03_untilica: missing task markers start(%s)=%d end(%s)=%d -> cannot continue', ...
-            step_cfg.crop_start_marker, isempty(start_latency), ...
-            step_cfg.crop_end_marker, isempty(end_latency));
+            start_marker, isempty(start_latency), ...
+            end_marker, isempty(end_latency));
+
         helpers.log_msg_default('%s', msg);
         step_out.message = msg;
         return;
     end
+end
 
-    t_start = (double(start_latency) / EEG.srate) - step_cfg.crop_padding_sec(1);
-    t_end   = (double(end_latency)   / EEG.srate) + step_cfg.crop_padding_sec(2);
+    % Sample 1 corresponds to time zero. Add padding before the start and after the end.
+    t_start = ((double(start_latency) - 1) / EEG.srate) ...
+        - step_cfg.crop_padding_sec(1);
+    
+    t_end = ((double(end_latency) - 1) / EEG.srate) ...
+        + step_cfg.crop_padding_sec(2);
 
     t_start = max(t_start, 0);
     t_end   = min(t_end, (EEG.pnts - 1) / EEG.srate);
@@ -224,7 +250,7 @@ if step_cfg.crop_to_task_markers
 
     EEG = helpers.append_eeg_comment(EEG, sprintf( ...
         'prep03_untilica: cropped %s..%s padding=[%.2f %.2f] t=[%.3f %.3f]', ...
-        step_cfg.crop_start_marker, step_cfg.crop_end_marker, ...
+        start_marker, end_marker, ...
         step_cfg.crop_padding_sec(1), step_cfg.crop_padding_sec(2), ...
         t_start, t_end));
 end
@@ -613,12 +639,19 @@ end
 [eeg_idx, eog_idx, ~] = helpers.get_channel_indices_by_type(EEG);
 filter_idx = sort(unique([eeg_idx(:); eog_idx(:)]));
 
+if isempty(filter_idx) % messages might need to be passed to prep03 script, not written here
+    filter_idx = EEG.chanlocs;
+    helpers.log_msg_default('prep03_untilica: WARNING channel indices not available, continuing with all channels.');
+end
 
 line_noise_applied = false;
-if string(step_cfg.line_noise_method) == "pop_cleanline"
-    [EEG, line_noise_applied] = helpers.apply_pop_cleanline_to_subset(EEG, filter_idx, step_cfg);
+
+if string(step_cfg.line_noise_method) ~= "none"
+    plugin_path = fullfile(cfg.toolboxes.("path_eeglab_"+cfg.env.mode), 'plugins');
+
+    [EEG, line_noise_applied, line_noise_log] = helpers.remove_line_noise_from_subset(EEG, filter_idx, step_cfg, plugin_path, helpers);
     if ~line_noise_applied
-        helpers.log_msg_default('prep03_untilica: WARNING pop_cleanline did not apply successfully.');
+        helpers.log_msg_default('prep03_untilica: WARNING line noise removal incomplete or failed.');
     end
 end
 
@@ -707,17 +740,47 @@ if isfield(step_cfg, 'ica_prep_epoch_rejection_method') && ...
     ica_rej_method = lower(strtrim(string(step_cfg.ica_prep_epoch_rejection_method)));
 end
 
+% Check whether the training data contain epochs.
+summary_is_epoched = step_cfg.ica_prep_use_regepochs || ...
+    ica_prep_eeg.trials > 1 || ...
+    (isfield(ica_prep_eeg, 'epoch') && ~isempty(ica_prep_eeg.epoch));
+
+% Remember how many epochs are available before rejection.
+% Use NaN when the data are continuous.
+summary_n_before = NaN;
+
+if summary_is_epoched
+    summary_n_before = ica_prep_eeg.trials;
+
+    % An empty dataset contains no epochs.
+    if isempty(ica_prep_eeg.data)
+        summary_n_before = 0;
+    end
+end
+
+% Record whether rejection is performed or skipped.
+summary_rejection_status = "called";
+
+
 switch ica_rej_method
 
     case {"none","off","disabled"}
+        % Rejection is switched off.
+            ica_rej_method = "none";
+            summary_rejection_status = "disabled";
+
         ica_prep_eeg = helpers.append_eeg_comment(ica_prep_eeg, ...
             'prep03_untilica: ICA-prep epoch rejection skipped by config');
+        
 
         helpers.log_msg_default( ...
             'prep03_untilica: sub-%s | ICA-prep epoch rejection skipped backend=none', ...
             subj_id);
 
     case {"erplab","erplab_artifact","erplab_epoch_rejection"}
+        % Use one method name in the summary.
+        ica_rej_method = "erplab";
+
         if ~isfield(step_cfg, 'ica_prep_erplab_epoch_rejection') || ...
                 ~isstruct(step_cfg.ica_prep_erplab_epoch_rejection)
             error('cfg.prep_03.ica_prep_erplab_epoch_rejection is missing, but ica_prep_epoch_rejection_backend="erplab".');
@@ -726,6 +789,10 @@ switch ica_rej_method
         [ica_eeg_idx, ~, ~] = helpers.get_channel_indices_by_type(ica_prep_eeg);
 
         if isempty(ica_eeg_idx)
+
+            % No EEG channels are available for rejection.
+            summary_rejection_status = "skipped_no_eeg_channels";
+
             ica_prep_eeg = helpers.append_eeg_comment(ica_prep_eeg, ...
                 'prep03_untilica: ICA-prep ERPLAB rejection skipped because no EEG channels were found');
 
@@ -734,6 +801,10 @@ switch ica_rej_method
                 subj_id);
 
         elseif ~isfield(ica_prep_eeg, 'trials') || ica_prep_eeg.trials < 1
+
+            % No epochs are available for rejection.
+            summary_rejection_status = "skipped_no_epochs";
+
             ica_prep_eeg = helpers.append_eeg_comment(ica_prep_eeg, ...
                 'prep03_untilica: ICA-prep ERPLAB rejection skipped because no epochs were found');
 
@@ -777,9 +848,21 @@ switch ica_rej_method
 
               case {"mad","mad_variance","mad_epoch_rejection"}
 
+                  % Use one method name in the summary.
+                    ica_rej_method = "mad_variance";
+                    
+                    % MAD needs at least two epochs.
+                    if ica_prep_eeg.trials < 2
+                        summary_rejection_status = "skipped_fewer_than_two_epochs";
+                    end
+
         [ica_eeg_idx, ~, ~] = helpers.get_channel_indices_by_type(ica_prep_eeg);
 
         if isempty(ica_eeg_idx)
+
+            % No EEG channels are available for rejection.
+            summary_rejection_status = "skipped_no_eeg_channels";
+
             ica_prep_eeg = helpers.append_eeg_comment(ica_prep_eeg, ...
                 'prep03_untilica: ICA-prep MAD rejection skipped because no EEG channels were found');
 
@@ -788,6 +871,10 @@ switch ica_rej_method
                 subj_id);
 
         elseif ~isfield(ica_prep_eeg, 'trials') || ica_prep_eeg.trials < 1
+
+            % No epochs are available for rejection.
+            summary_rejection_status = "skipped_no_epochs";
+
             ica_prep_eeg = helpers.append_eeg_comment(ica_prep_eeg, ...
                 'prep03_untilica: ICA-prep MAD rejection skipped because no epochs were found');
 
@@ -844,12 +931,31 @@ switch ica_rej_method
                         100 * reject_prop, 100 * step_cfg.ica_prep_max_reject_prop);
                     helpers.log_msg_default('%s', msg);
                     step_out.message = msg;
+
+                    % Save the rejection counts even when this dataset is excluded.
+                    summary = helpers.build_ica_training_summary( ...
+                        ica_prep_eeg, summary_n_before, summary_is_epoched, ...
+                        subj_id, run_base_name, ica_rej_method, ...
+                        summary_rejection_status, "excluded_by_max_reject_prop", ...
+                        out_forica, cfg, step_cfg);
+                    
+                    summary_path = helpers.write_ica_training_summary( ...
+                        summary, cfg, step_cfg, helpers);
+                    
+                    % Add the summary file to the list of QC outputs.
+                    if ~isempty(summary_path)
+                        step_out.qc_files{end+1} = summary_path;
+                    end
+
                     return;
                 end
             end
         end
 
         case {"faster","faster_ptp"}
+
+            % Use one method name in the summary.
+            ica_rej_method = "faster_ptp";
 
         if ~isfield(step_cfg, 'ica_prep_faster_ptp_epoch_rejection') || ...
                 ~isstruct(step_cfg.ica_prep_faster_ptp_epoch_rejection)
@@ -859,6 +965,10 @@ switch ica_rej_method
         [ica_eeg_idx, ~, ~] = helpers.get_channel_indices_by_type(ica_prep_eeg);
 
         if isempty(ica_eeg_idx)
+            
+            % No EEG channels are available for rejection.
+            summary_rejection_status = "skipped_no_eeg_channels";
+            
             ica_prep_eeg = helpers.append_eeg_comment(ica_prep_eeg, ...
                 'prep03_untilica: ICA-prep FASTER/PTP rejection skipped because no EEG channels were found');
 
@@ -867,6 +977,10 @@ switch ica_rej_method
                 subj_id);
 
         elseif ~isfield(ica_prep_eeg, 'trials') || ica_prep_eeg.trials < 1
+
+            % No epochs are available for rejection.
+            summary_rejection_status = "skipped_no_epochs";
+
             ica_prep_eeg = helpers.append_eeg_comment(ica_prep_eeg, ...
                 'prep03_untilica: ICA-prep FASTER/PTP rejection skipped because no epochs were found');
 
@@ -925,6 +1039,22 @@ switch ica_rej_method
                         100 * reject_prop, 100 * reject_cfg.max_reject_prop);
                     helpers.log_msg_default('%s', msg);
                     step_out.message = msg;
+
+                    % Save the rejection counts even when this dataset is excluded.
+                    summary = helpers.build_ica_training_summary( ...
+                        ica_prep_eeg, summary_n_before, summary_is_epoched, ...
+                        subj_id, run_base_name, ica_rej_method, ...
+                        summary_rejection_status, "excluded_by_max_reject_prop", ...
+                        out_forica, cfg, step_cfg);
+                    
+                    summary_path = helpers.write_ica_training_summary( ...
+                        summary, cfg, step_cfg, helpers);
+                    
+                    % Add the summary file to the list of QC outputs.
+                    if ~isempty(summary_path)
+                        step_out.qc_files{end+1} = summary_path;
+                    end
+
                     return;
                 end
             end
@@ -939,6 +1069,20 @@ end
 %% ========================================================================
 %  SAVE FORICA
 % ========================================================================
+
+% Summarize how many training epochs were rejected and retained.
+summary = helpers.build_ica_training_summary( ...
+    ica_prep_eeg, summary_n_before, summary_is_epoched, ...
+    subj_id, run_base_name, ica_rej_method, summary_rejection_status, ...
+    "saved", out_forica, cfg, step_cfg);
+
+% Store the summary in the training dataset.
+if ~isfield(ica_prep_eeg, 'etc') || isempty(ica_prep_eeg.etc)
+    ica_prep_eeg.etc = struct();
+end
+
+ica_prep_eeg.etc.prep03_ica_training_summary = summary;
+
 ica_prep_eeg = helpers.append_eeg_comment(ica_prep_eeg, sprintf( ...
     'prep03_untilica: saved forica: %s', out_forica));
 
@@ -952,6 +1096,16 @@ ica_prep_eeg = helpers.safe_save_set( ...
 helpers.log_msg_default( ...
     'prep03_untilica: saved forica: %s', ...
     out_forica);
+
+% Write the summary CSV after the training dataset has been saved.
+summary_path = helpers.write_ica_training_summary( ...
+    summary, cfg, step_cfg, helpers);
+
+% Add the summary file to the list of QC outputs.
+if ~isempty(summary_path)
+    step_out.qc_files{end+1} = summary_path;
+end
+
 
 helpers.log_msg_default('prep03_untilica: DONE sub-%s | %s', subj_id, run_base_name);
 
