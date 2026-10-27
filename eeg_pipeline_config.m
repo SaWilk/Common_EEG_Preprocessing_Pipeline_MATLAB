@@ -680,26 +680,52 @@ cfg.prep_03.ica_prep_faster_ptp_epoch_rejection.max_reject_prop = 1.00;
 % =========================================================================
 cfg.prep_04 = struct();
 
-cfg.prep_04.ica_method                   = "runica"; %"runica" | "amica" -CURRENTLY BROKEN DO NOT USE WILL BE FIXED
+cfg.prep_04.ica_method                   = "runica"; % "runica" | "amica"
 cfg.prep_04.use_extended_infomax         = true;
 cfg.prep_04.interrupt_ica                = 'off';
 cfg.prep_04.use_pca_rank_if_interpolated = true;
 cfg.prep_04.amica_require_no_spaces_on_windows = true;
 cfg.prep_04.ica_channel_scope = "eeg_eog";
+% Step 04 derives the task filter from cfg.bids.task_label and requires an
+% exact *_forica.set / *_preica.set pair for every processed run.
+
+% AMICA is intentionally fixed to one model in Step 04. Increasing the
+% mixture-model count is not exposed here. 
+% max_iter is an upper bound. Reaching it with otherwise valid output creates
+% a warning rather than rejection. Raising it increases worst-case runtime;
+% invalid/non-finite output remains a hard failure.
+cfg.prep_04.amica_max_iter = 2000;
+cfg.prep_04.amica_write_update_norm_history = false;
+cfg.prep_04.amica_check_convergence = true;
+cfg.prep_04.amica_fail_on_nonconvergence = true;
+cfg.prep_04.amica_convergence_min_iterations = 50;
+cfg.prep_04.amica_convergence_tail_window = 20;
+cfg.prep_04.amica_keep_tmp_on_qc_failure = false;
+cfg.prep_04.write_run_qc_table = false;
+cfg.prep_04.write_subject_qc_table = true;
+cfg.prep_04.qc_table_delimiter = ';';
 
 % =========================================================================
 % STEP 05: AFTER ICA / ICLABEL
 % =========================================================================
 cfg.prep_05 = struct();
 
-cfg.prep_05.clear_subject_ica_comps_dir = true; % delete existing ICA components 
-% directory for subject before saving new one, to avoid confusion from old ICA results
+cfg.prep_05.clear_subject_ica_comps_dir = true; % remove existing QA PNGs only
+% for the current subject/task/run before exporting replacements
 
-% settings for ICLabel rejection
-% NOTE: In the handout we only agreed on ICLabel for eye artifact
-% rejection. However, why not use it for removing other artifacts as well?
-% It is a well-validated algorithm and if thresholds are set
-% conservatively, no harm is done
+% Every named ICLabel artifact class is independently configurable. "Other"
+% and low-Brain are broader rules and therefore remain opt-in. A HIGHER
+% probability threshold removes FEWER components; a lower threshold removes
+% more. Inspect validation-sample component tables and topographies before
+% changing values for a cohort.
+cfg.prep_05.iclabel_remove_eye           = true;
+cfg.prep_05.iclabel_remove_muscle        = true;
+cfg.prep_05.iclabel_remove_heart         = true;
+cfg.prep_05.iclabel_remove_linenoise     = true;
+cfg.prep_05.iclabel_remove_channoise     = true;
+cfg.prep_05.iclabel_remove_other         = false;
+cfg.prep_05.iclabel_remove_low_brain     = false;
+
 cfg.prep_05.iclabel_eye_remove_thr       = 0.85;
 cfg.prep_05.iclabel_muscle_remove_thr    = 0.85;
 cfg.prep_05.iclabel_heart_remove_thr     = 0.85;
@@ -724,13 +750,40 @@ cfg.prep_05.ic_topo_electrodes = 'off';
 % and which rejection criteria were responsible. All-subject summaries are
 % refreshed automatically after all subjects have finished.
 
+% Two-level before/after signal QC. Warnings retain the cleaned dataset.
+% Extreme metrics are deliberately very broad; one extreme metric still only
+% warns. A signal-QC failure requires at least two simultaneous extreme
+% metrics. Invalid/non-finite output remains an immediate technical failure.
+% "eeg" excludes EOG from the comparison.
+cfg.prep_05.signal_qc_enable = true;
+cfg.prep_05.signal_qc_fail_on_violation = true;
+cfg.prep_05.signal_qc_channel_scope = "eeg"; % "eeg" | "all"
+cfg.prep_05.signal_qc_max_prop_ic_removed = 0.95;
+cfg.prep_05.signal_qc_min_remaining_components = 2;
+cfg.prep_05.signal_qc_min_median_channel_correlation = 0.80;
+cfg.prep_05.signal_qc_max_relative_change_rms = 0.75;
+cfg.prep_05.signal_qc_min_rms_ratio = 0.50;
+cfg.prep_05.signal_qc_max_rms_ratio = 1.10;
+cfg.prep_05.signal_qc_hard_min_median_channel_correlation = 0.10;
+cfg.prep_05.signal_qc_hard_max_relative_change_rms = 10.00;
+cfg.prep_05.signal_qc_hard_min_rms_ratio = 0.10;
+cfg.prep_05.signal_qc_hard_max_rms_ratio = 10.00;
+cfg.prep_05.signal_qc_min_extreme_metrics_to_fail = 2; % independent problem domains, not correlated raw metrics
+cfg.prep_05.signal_qc_fail_on_nonfinite = true;
+cfg.prep_05.signal_qc_fail_on_flat_channels = true;
+cfg.prep_05.signal_qc_flat_std_epsilon = 1e-8;
+
+% Optional validation-sample diagnostic for RUNICA and AMICA. MI is disabled
+% in routine runs because it has no universal decision threshold.
+cfg.prep_05.compute_decomposition_qc = false;
+cfg.prep_05.decomposition_qc_max_samples = 5000;
+cfg.prep_05.decomposition_qc_mi_bins = 20;
+
 cfg.prep_05.write_component_table       = true; % table with one row per ICA 
 % component: ICLabel probabilities and remove/keep decision
-cfg.prep_05.write_run_summary_table     = true; % one summary file per 
-% run/input file: number of ICs removed and counts per rejection criterion
+cfg.prep_05.write_run_summary_table     = true; % optional duplicate per-run summary
 cfg.prep_05.write_subject_summary_table = true; % one subject-level summary 
-% file combining all run summaries for this subject; may look identical if 
-% there is only one run
+% file combining all run summaries for this subject
 cfg.prep_05.qc_table_delimiter          = ';';
 
 % =========================================================================
