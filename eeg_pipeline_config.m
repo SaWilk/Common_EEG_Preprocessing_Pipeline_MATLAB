@@ -60,7 +60,6 @@ cfg.constants.log_prefix_master = " "; % master log filename prefix
 
 cfg.bids = struct();
 cfg.bids.dataset_folder_name = " ";   % BIDS dataset folder name (if you have multiple datasets in the same raw folder)
-
 cfg.bids.task_label          = " ";   % BIDS task label of EEG dataset
 cfg.bids.session_label       = " ";         % BIDS session label
 
