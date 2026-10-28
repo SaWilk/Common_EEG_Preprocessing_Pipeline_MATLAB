@@ -1211,8 +1211,7 @@ end
                     n_remaps_fallback_by_phase_and_cat.(phKey).(catKey) = ...
                         n_remaps_fallback_by_phase_and_cat.(phKey).(catKey) + 1;
                 end
-            end
->>>>>>> Stashed changes
+               end
             end
         
             EEG = helpers.append_eeg_comment(EEG, ...
@@ -1381,8 +1380,7 @@ end
             if ~iscell(replacements)
                 replacements = {replacements};
             end
-
->>>>>>> Stashed changes
+            
             n_done = zeros(numel(replacements), 1);
 
             for x = 1:numel(EEG.event)
