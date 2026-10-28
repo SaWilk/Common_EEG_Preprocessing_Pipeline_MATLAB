@@ -52,16 +52,18 @@ cfg.qc.table_delimiter = ';';
 % Project identity
 % -------------------------------------------------------------------------
 cfg.pipeline = struct();
-cfg.pipeline.name        = " _pipeline "; % set recognizable name: project name used in cfg and logsheader
-cfg.pipeline.step_prefix = "eeg";                % step 02-06 function prefix, needed to find step-functions. Keep as "eeg" unless you have a good reason to change it.
+cfg.pipeline.name        = " "; % set recognizable name: project name used in cfg and logsheader
+cfg.pipeline.step_prefix = " ";                % step 02-06 function prefix, needed to find step-functions. Keep as "eeg" unless you have a good reason to change it.
 
 cfg.constants = struct();
-cfg.constants.log_prefix_master = "run_eeg_pipeline_"; % master log filename prefix
+cfg.constants.log_prefix_master = " "; % master log filename prefix
 
 cfg.bids = struct();
-cfg.bids.dataset_folder_name = "eeg";   % BIDS dataset folder name (if you have multiple datasets in the same raw folder)
+cfg.bids.dataset_folder_name = " ";   % BIDS dataset folder name (if you have multiple datasets in the same raw folder)
+
 cfg.bids.task_label          = " ";   % BIDS task label of EEG dataset
 cfg.bids.session_label       = " ";         % BIDS session label
+
 
 % -------------------------------------------------------------------------
 % Profile / paths
@@ -80,27 +82,9 @@ cfg.paths.profile_override = ""; % leave empty for automatic profile selection; 
 
 cfg.paths.profile_paths = struct();
 
-cfg.paths.profile_paths.pc = struct( ...
-    'source_eeg_root',  'Z:\pb\KLPSY1\KLPSY1-RTG\PROOF - Data\Real\EEG\Baseline', ...
-    'source_beh_root',  '', ...
-    'bids_root',        'Z:\pb\KPP_KPN_joined\Aperiodic\Saskia\sourcedata', ...
-    'derivatives_root', 'Z:\pb\KPP_KPN_joined\Aperiodic\Saskia\derivatives');
-
-<<<<<<< Updated upstream
-=======
-
->>>>>>> Stashed changes
-cfg.paths.profile_paths.server_windows = struct( ...
-    'source_eeg_root',  'Z:\pb\KLPSY1\KLPSY1-RTG\PROOF - Data\Real\EEG\Baseline', ...
-    'source_beh_root',  '', ...
-    'bids_root',         'Z:\pb\KPP_KPN_joined\Aperiodic\Saskia\sourcedata', ...
-    'derivatives_root', 'Z:\pb\KPP_KPN_joined\Aperiodic\Saskia\derivatives');
-
-cfg.paths.profile_paths.hpc_hummel = struct( ...
-    'source_eeg_root',  '', ...
-    'source_beh_root',  '', ...
-    'bids_root',        fullfile('/beegfs/u/bbf7366/sourcedata', char(cfg.bids.dataset_folder_name)), ...
-    'derivatives_root', '/beegfs/u/bbf7366/derivatives/preprocessed_eeg_baseline');
+% Load local paths from separate file eeg_pipeline_local_paths.m; 
+% adjust local and HPC paths to data there
+cfg.paths.profile_paths = eeg_pipeline_local_paths();
 
 % only set these if paths deviate but you do not want to change the profile
 cfg.paths.bids_root_override        = "";
@@ -278,12 +262,8 @@ cfg.steps.enable_downstream_rerun = true; % if true, sets all downstream steps
 % automatically also be set to run
 
 cfg.steps.prep_01_bids_formatting = struct( ...
-<<<<<<< Updated upstream
     'run', true, ...                % Step 01 creates/updates cfg.paths.bids_root from source_*_root
-=======
-    'run', false, ...                % Step 01 creates/updates cfg.paths.bids_root from source_*_root
->>>>>>> Stashed changes
-    'overwrite_mode', "skip", ...
+    'overwrite_mode', "delete", ...
     'overwrite_if_older_than', "");
 
 cfg.steps.prep_02_triggerfix = struct( ...
@@ -434,14 +414,8 @@ cfg.paradigms.myParadigm.triggerfix.use_gating_from_start_markers = false; % tru
 
 cfg.paradigms.myParadigm.triggerfix.gates = struct();
 cfg.paradigms.myParadigm.triggerfix.gates.start_markers = struct( ...
-<<<<<<< Updated upstream
     'phase1',    " ", ...
     'phase2', " ");
-=======
-    'phase1', " ", ...
-    'phase2', " ", ...
-    'phase3', " ");
->>>>>>> Stashed changes
 
 %%% 2) Name Triggers per category in your paradigm
 % add more blocks if necessary
@@ -522,20 +496,8 @@ cfg.paradigms.myParadigm.triggerfix.phase_specific_trigger_renaming_rules.phase2
 cfg.paradigms.myParadigm.triggerfix.phase_specific_trigger_renaming_rules.phase2.categoryC.code = " ";
 cfg.paradigms.myParadigm.triggerfix.phase_specific_trigger_renaming_rules.phase2.categoryD.code = " ";
 
-<<<<<<< Updated upstream
-
 cfg.paradigms.myParadigm.triggerfix.trigger_phase_min_remaps = 5; % minimal number of expected remaps in total
 cfg.paradigms.myParadigm.triggerfix.trigger_phase_min_phases_with_remaps = 2; %minimal number of extpected remaps per phase
-=======
-cfg.paradigms.myParadigm.triggerfix.phase_specific_trigger_renaming_rules.phase3.categoryA.code = " ";
-cfg.paradigms.myParadigm.triggerfix.phase_specific_trigger_renaming_rules.phase3.categoryB.code = " ";
-cfg.paradigms.myParadigm.triggerfix.phase_specific_trigger_renaming_rules.phase3.categoryC.code = " ";
-cfg.paradigms.myParadigm.triggerfix.phase_specific_trigger_renaming_rules.phase3.categoryD.code = " ";
-
-
-cfg.paradigms.myParadigm.triggerfix.trigger_phase_min_remaps = 5; % minimal number of expected remaps in total
-cfg.paradigms.myParadigm.triggerfix.trigger_phase_min_phases_with_remaps = 2; %minimal number of extpected phases with at least 1 remap
->>>>>>> Stashed changes
 cfg.paradigms.myParadigm.triggerfix.trigger_phase_max_phase_share = 0.80; % max percentage of remaps in phase, if higher start triggers not plausible and fallback to blocks
 
 
