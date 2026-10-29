@@ -742,94 +742,6 @@ try
                 break;
             end
         end
-            n_remaps_primary_by_phase_only = struct();
-            
-            for kk = 1:numel(phase_marker_names)
-                phName = char(phase_marker_names{kk});
-                n_remaps_primary_by_phase_only.(phName) = 0;
-            end
-            
-            if ~isempty(phase_marker_names)
-                EEGp = EEG_primary_backup;
-                current_phase = "";
-        
-                cat_counter_phase_primary = struct();
-        
-                for x = 1:numel(EEGp.event)
-                    current_type = helpers.normalize_trigger_type(EEGp.event(x).type);
-        
-                    % --- phase update from trigger ---
-                    hitPhase = false;
-                    for kk = 1:numel(phase_marker_names)
-                        pName = char(phase_marker_names{kk});
-                        if strcmp(current_type, phase_marker_tokens.(pName))
-                            current_phase = string(pName);
-                            hitPhase = true;
-                            break;
-                        end
-                    end
-                    if hitPhase
-                        phase_start_seen_counts.(char(current_phase)) = phase_start_seen_counts.(char(current_phase)) + 1;
-                    continue;
-                    end
-        
-                    % find matched category by raw token
-                    matched_cat = "";
-                    catKeys = fieldnames(cat_raw_tok);
-                    for ci = 1:numel(catKeys)
-                        cat = catKeys{ci};
-                        if strcmp(current_type, cat_raw_tok.(cat))
-                            matched_cat = string(cat);
-                            break;
-                        end
-                    end
-        
-                    if strlength(matched_cat) == 0
-                        EEGp.event(x).type = current_type;
-                        continue;
-                    end
-        
-                    cat = char(matched_cat);
-        
-                    if ~isfield(blocking, cat) || ~isfield(blocking.(cat),'blocks')
-                        continue;
-                    end
-        
-                    blocks = blocking.(cat).blocks;
-                    if isempty(blocks); continue; end
-        
-                    if strlength(current_phase) == 0
-                        continue;
-                    end
-        
-                    phKey = char(current_phase);
-                    
-        % increment counter within this phase+category
-        if ~isfield(cat_counter_phase_primary, phKey)
-            cat_counter_phase_primary.(phKey) = struct();
-        end
-        if ~isfield(cat_counter_phase_primary.(phKey), cat)
-            cat_counter_phase_primary.(phKey).(cat) = 0;
-        end
-        
-        cat_counter_phase_primary.(phKey).(cat) = cat_counter_phase_primary.(phKey).(cat) + 1;
-        n = cat_counter_phase_primary.(phKey).(cat);
-
-        
-        
-        cum = 0;
-        new_code = "";
-        for bi = 1:numel(blocks)
-            bi_n = blocks{bi}.n;
-            if isempty(bi_n); continue; end
-            cum = cum + double(bi_n);
-            if n <= cum
-                new_code = blocks{bi}.code;
-                break;
-            end
-        end
-
-
                    % Optional phase-specific renaming 
                     new_code_phase = "";  % always initialize for this event
                     
@@ -1007,13 +919,6 @@ if do_trigger && ~do_block && has_any_phase_marker
         helpers.log_msg_default( ...
             'Step 02: trigger_only primary did not pass QA -> no remaps committed. Marking step as skipped for %s.', ...
             bids_base);
-
-        % Mark as skipped for this run (do not save)
-        out_files(end+1,1) = string(""); %#ok<AGROW>
-        % Remove placeholder later by not saving:
-        % Easiest: jump to next file without saving:
-        % (use continue by moving into the for-loop scope)
-
         continue; % go to next vhdr/run
     end
 end
