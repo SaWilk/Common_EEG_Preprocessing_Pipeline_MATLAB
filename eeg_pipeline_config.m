@@ -20,6 +20,7 @@ function cfg = eeg_pipeline_config()
 %   - FASTER
 %   - (AMICA - optional)
 %   - (cleanline - optional)
+%   - (zapline-plus - optional) https://eeglab.org/plugins/zapline-plus/ 
 
 % Saskia Wilken Dec 2025
 
@@ -96,17 +97,21 @@ cfg.paths.source_beh_root_override  = "";
 % =========================================================================
 cfg.toolboxes = struct();
 
-cfg.toolboxes.path_eeglab_pc     = "K:\Wilken_Arbeitsordner\MATLAB\eeglab_current\eeglab2025.1.0"; % EEGLAB path on PC
-cfg.toolboxes.path_eeglab_server = "K:\Wilken_Arbeitsordner\MATLAB\eeglab_current\eeglab2025.1.0"; % EEGLAB path on server
-cfg.toolboxes.path_eeglab_hpc    = "/beegfs/u/bbf7366/toolboxes/eeglab2025.1.0";                   % EEGLAB path on HPC
+local_paths = eeg_pipeline_local_paths();   %% Load local paths from separate file eeg_pipeline_local_paths.m; 
+% adjust local and HPC paths for toolboxes there (EEGLab, FASTER, ERPLab)
 
-cfg.toolboxes.path_faster_pc     = "K:\Wilken_Arbeitsordner\MATLAB\FASTER"; % FASTER path on PC
-cfg.toolboxes.path_faster_server = "K:\Wilken_Arbeitsordner\MATLAB\FASTER"; % FASTER path on server
-cfg.toolboxes.path_faster_hpc    = "/beegfs/u/bbf7366/toolboxes/FASTER";    % FASTER path on HPC
+cfg.toolboxes.path_eeglab_pc     = string(local_paths.toolboxes.eeglab_pc);
+cfg.toolboxes.path_eeglab_server = string(local_paths.toolboxes.eeglab_server);
+cfg.toolboxes.path_eeglab_hpc    = string(local_paths.toolboxes.eeglab_hpc);
 
-cfg.toolboxes.path_erplab_pc     = "K:\Wilken_Arbeitsordner\MATLAB\erplab13.00";
-cfg.toolboxes.path_erplab_server = "K:\Wilken_Arbeitsordner\MATLAB\erplab13.00";
-cfg.toolboxes.path_erplab_hpc    = "/beegfs/u/bbf7366/toolboxes/eeglab2025.1.0/plugins/erplab";
+cfg.toolboxes.path_faster_pc     = string(local_paths.toolboxes.faster_pc);
+cfg.toolboxes.path_faster_server = string(local_paths.toolboxes.faster_server);
+cfg.toolboxes.path_faster_hpc    = string(local_paths.toolboxes.faster_hpc);
+
+cfg.toolboxes.path_erplab_pc     = string(local_paths.toolboxes.erplab_pc);
+cfg.toolboxes.path_erplab_server = string(local_paths.toolboxes.erplab_server);
+cfg.toolboxes.path_erplab_hpc    = string(local_paths.toolboxes.erplab_hpc);
+
 
 cfg.toolboxes.erplab = struct();
 cfg.toolboxes.erplab.use_genpath = true;
@@ -121,7 +126,7 @@ cfg.toolboxes.eeglab.nogui = true;                  % start EEGLAB without GUI
 % Overwrite behavior
 % -------------------------------------------------------------------------
 cfg.io = struct();
-cfg.io.overwrite_mode          = "delete"; % "skip" | "delete" | "if_older_than"
+cfg.io.overwrite_mode          = "skip"; % "skip" | "delete" | "if_older_than"
 cfg.io.overwrite_if_older_than = "";       % cutoff date for "if_older_than", 
 % either "DD.MM.YYYY" or "YYYY-MM-DD", optionally with time in 24h format: HH:MM or HH:MM:SS 
 
@@ -153,8 +158,12 @@ cfg.env.hostname     = helpers.get_hostname();         % host name
 cfg.env.is_slurm      = ~isempty(getenv('SLURM_JOB_ID')); % true if running under SLURM
 cfg.env.slurm_job_id  = string(helpers.get_env_first_nonempty({'SLURM_JOB_ID'}));       % SLURM job id
 cfg.env.slurm_cluster = string(helpers.get_env_first_nonempty({'SLURM_CLUSTER_NAME'})); % SLURM cluster name
-% Note: since MATLAB does not run with SLURM on hummel hpc currently
-% (22.05.2026), these functions are not tested.
+
+% SLURM execution was tested on the University of Leipzig HPC with MATLAB R2024b.
+% The pipeline was submitted through an external sbatch script and executed
+% successfully on a compute node. The fields above record the SLURM context
+% (job ID and cluster name: is_slurm = 1, cluster sc) in the pipeline log.
+% Job submission and resource requests were handled outside MATLAB.
 
 % =========================================================================
 % RESOLVED PATHS -- do not edit, will be resolved at runtime based on profile and environment
@@ -176,6 +185,7 @@ if ~isfield(cfg.paths.profile_paths, profile_name)
 end
 
 profile_cfg = cfg.paths.profile_paths.(profile_name);
+
 
 % -------------------------------------------------------------------------
 % Base paths from selected profile
@@ -237,7 +247,7 @@ end
 % SUBJECTS
 % =========================================================================
 cfg.subjects = struct();
-cfg.subjects.list   = []; % explicit subject list, e.g. {'211','212'}, leave 
+cfg.subjects.list   = [ ]; % explicit subject list, e.g. {'211','212'}, leave 
 % empty to autodetect from source_eeg_root using cfg.constants.valid_sub_id_regex
 cfg.subjects.min_id = []; % process all subjects with a higher ID than...
 % numeric/string ID, no lower cutoff if left empty 
@@ -505,19 +515,43 @@ cfg.paradigms.myParadigm.triggerfix.trigger_phase_max_phase_share = 0.80; % max 
 % =========================================================================
 cfg.prep_03 = struct();
 
+% -------------------------------------------------------------------------
+% SUMMARY OPTION
+% -------------------------------------------------------------------------
 % ICA-training QC: Save a summary of how many epochs were rejected from the ICA training
 % dataset and how many remain.
 cfg.prep_03.write_run_summary_table = true;
 
-% crop dataset around specifically defined triggers, e.g. exp start and exp
-% end
-cfg.prep_03.crop_to_task_markers = false; %if this is set to false, the following lines are irrelevant
-cfg.prep_03.substitute_crop_markers = true; % if true, the crop_start_marker and crop_end_marker will be replaced by the first and last sample of the task, respectively
-cfg.prep_03.crop_start_marker    = 'S 91'; % beginning of cropping area, can also handly multiple markers, e.g. {'S 91','S 92'} to crop from first occurence of either marker
-cfg.prep_03.crop_end_marker      = 'S 97'; % end of cropping area
-cfg.prep_03.crop_padding_sec     = [0 0];
+% -------------------------------------------------------------------------
+% CROP DATASET (OPTIONAL)
+% -------------------------------------------------------------------------
+% Keep one continuous section between a start and an end marker.
+% Remove data before and after this section.
+% Pauses within the section are kept.
 
+% Enable cropping. When false, the crop settings below are ignored.
+cfg.prep_03.crop_to_task_markers = false;
+
+% If a marker is missing, use the corresponding recording boundary:
+% first sample for a missing start, last sample for a missing end.
+% Existing markers are kept. If both are missing, keep the full recording.
+% If false, stop Step 03 when either marker is missing.
+cfg.prep_03.substitute_crop_markers = true;
+
+% Event codes defining the section to keep.
+% For each boundary, use the first matching entry in EEG.event.
+% Multiple alternative codes are supported, e.g. {'S 91', 'S 92'}, to crop from first occurence of either marker.
+% The end must occur after the selected start.
+cfg.prep_03.crop_start_marker = 'S 91';
+cfg.prep_03.crop_end_marker   = 'S 97';
+
+% Additional seconds to keep [before start, after end].
+% The window is limited to the available recording.
+cfg.prep_03.crop_padding_sec = [0 0];
+
+% -------------------------------------------------------------------------
 % IMPORTANT make sure these include your channel labels for AUX/EOG, otherwise channels will be included as EEG in ICA
+% -------------------------------------------------------------------------
 cfg.prep_03.eog_channel_labels     = {'IO1','IO2','LO1','LO2'}; % ocular channels (detecting eye movements/blinks)
 cfg.prep_03.scr_channel_labels     = {'EDA', 'SCR', 'GSR_MR_100_xx'}; % skin conductance response channels
 cfg.prep_03.startle_channel_labels = {'Startle'}; % Startle response channels
@@ -599,10 +633,11 @@ cfg.prep_03.mastoid_channel_labels    = {'T9','T10'};
 % Line Noise Filtering
 % -------------------------------------------------------------------------
 
-cfg.prep_03.line_noise_method         = "pop_cleanline"; % "pop_cleanline" | "off"
-cfg.prep_03.line_noise_frequencies_hz = [50 100]; % [50 100] in europe, set to [60 120] in US
-
-cfg.prep_03.ica_prep_epoch_rejection_method = "erplab"; % "erplab" | "faster_ptp" | "mad_variance" | "none"
+cfg.prep_03.line_noise_method         = "zapline"; % "zapline" | "pop_cleanline" | "notch" | "off"
+cfg.prep_03.line_noise_frequencies_hz = [50 100]; % in europe, set to [60 120] in US
+cfg.prep_03.line_noise_ratio          = 1;
+cfg.prep_03.line_noise_fb_cleanline   = true; % use cleanline if zapline fails to remove line noise (# TODO: criterion to be determined)
+cfg.prep_03.line_noise_fb_notch       = false; % if fallback is used, apply notch filter to line noise frequencies if both zapline and cleanline fail
 
 cfg.prep_03.pop_cleanline_bandwidth_hz      = 4;
 cfg.prep_03.pop_cleanline_p_value           = 0.01;
@@ -616,6 +651,7 @@ cfg.prep_03.pop_cleanline_norm_spectrum     = 0;
 cfg.prep_03.pop_cleanline_computepower      = 0;
 cfg.prep_03.pop_cleanline_verbose           = false;
 
+cfg.prep_03.ica_prep_epoch_rejection_method = "erplab"; % "erplab" | "faster_ptp" | "mad_variance" | "none"
 % ERPLAB ICA-prep rejection.
 % Same criteria as final Step 06 rejection, but more lenient:
 %   final:     +/-200 uV, 50 uV step, 100 ms flatline
@@ -686,26 +722,52 @@ cfg.prep_03.ica_prep_faster_ptp_epoch_rejection.max_reject_prop = 1.00;
 % =========================================================================
 cfg.prep_04 = struct();
 
-cfg.prep_04.ica_method                   = "runica"; %"runica" | "amica" -CURRENTLY BROKEN DO NOT USE WILL BE FIXED
+cfg.prep_04.ica_method                   = "runica"; % "runica" | "amica"
 cfg.prep_04.use_extended_infomax         = true;
 cfg.prep_04.interrupt_ica                = 'off';
 cfg.prep_04.use_pca_rank_if_interpolated = true;
 cfg.prep_04.amica_require_no_spaces_on_windows = true;
 cfg.prep_04.ica_channel_scope = "eeg_eog";
+% Step 04 derives the task filter from cfg.bids.task_label and requires an
+% exact *_forica.set / *_preica.set pair for every processed run.
+
+% AMICA is intentionally fixed to one model in Step 04. Increasing the
+% mixture-model count is not exposed here. 
+% max_iter is an upper bound. Reaching it with otherwise valid output creates
+% a warning rather than rejection. Raising it increases worst-case runtime;
+% invalid/non-finite output remains a hard failure.
+cfg.prep_04.amica_max_iter = 2000;
+cfg.prep_04.amica_write_update_norm_history = false;
+cfg.prep_04.amica_check_convergence = true;
+cfg.prep_04.amica_fail_on_nonconvergence = true;
+cfg.prep_04.amica_convergence_min_iterations = 50;
+cfg.prep_04.amica_convergence_tail_window = 20;
+cfg.prep_04.amica_keep_tmp_on_qc_failure = false;
+cfg.prep_04.write_run_qc_table = false;
+cfg.prep_04.write_subject_qc_table = true;
+cfg.prep_04.qc_table_delimiter = ';';
 
 % =========================================================================
 % STEP 05: AFTER ICA / ICLABEL
 % =========================================================================
 cfg.prep_05 = struct();
 
-cfg.prep_05.clear_subject_ica_comps_dir = true; % delete existing ICA components 
-% directory for subject before saving new one, to avoid confusion from old ICA results
+cfg.prep_05.clear_subject_ica_comps_dir = true; % remove existing QA PNGs only
+% for the current subject/task/run before exporting replacements
 
-% settings for ICLabel rejection
-% NOTE: In the handout we only agreed on ICLabel for eye artifact
-% rejection. However, why not use it for removing other artifacts as well?
-% It is a well-validated algorithm and if thresholds are set
-% conservatively, no harm is done
+% Every named ICLabel artifact class is independently configurable. "Other"
+% and low-Brain are broader rules and therefore remain opt-in. A HIGHER
+% probability threshold removes FEWER components; a lower threshold removes
+% more. Inspect validation-sample component tables and topographies before
+% changing values for a cohort.
+cfg.prep_05.iclabel_remove_eye           = true;
+cfg.prep_05.iclabel_remove_muscle        = true;
+cfg.prep_05.iclabel_remove_heart         = true;
+cfg.prep_05.iclabel_remove_linenoise     = true;
+cfg.prep_05.iclabel_remove_channoise     = true;
+cfg.prep_05.iclabel_remove_other         = false;
+cfg.prep_05.iclabel_remove_low_brain     = false;
+
 cfg.prep_05.iclabel_eye_remove_thr       = 0.85;
 cfg.prep_05.iclabel_muscle_remove_thr    = 0.85;
 cfg.prep_05.iclabel_heart_remove_thr     = 0.85;
@@ -721,13 +783,49 @@ cfg.prep_05.ic_topo_dpi        = 300;
 cfg.prep_05.ic_topo_fig_cm     = [0 0 18 18];
 cfg.prep_05.ic_topo_electrodes = 'off';
 
+%--------------------------------------------------------------------------
+% SUMMARY OPTION
+%--------------------------------------------------------------------------
+% Save QC tables for ICA component rejection. The component table contains
+% ICLabel probabilities and the remove/keep decision for each component.
+% Run- and subject-level summaries report how many components were removed
+% and which rejection criteria were responsible. All-subject summaries are
+% refreshed automatically after all subjects have finished.
+
+% Two-level before/after signal QC. Warnings retain the cleaned dataset.
+% Extreme metrics are deliberately very broad; one extreme metric still only
+% warns. A signal-QC failure requires at least two simultaneous extreme
+% metrics. Invalid/non-finite output remains an immediate technical failure.
+% "eeg" excludes EOG from the comparison.
+cfg.prep_05.signal_qc_enable = true;
+cfg.prep_05.signal_qc_fail_on_violation = true;
+cfg.prep_05.signal_qc_channel_scope = "eeg"; % "eeg" | "all"
+cfg.prep_05.signal_qc_max_prop_ic_removed = 0.95;
+cfg.prep_05.signal_qc_min_remaining_components = 2;
+cfg.prep_05.signal_qc_min_median_channel_correlation = 0.80;
+cfg.prep_05.signal_qc_max_relative_change_rms = 0.75;
+cfg.prep_05.signal_qc_min_rms_ratio = 0.50;
+cfg.prep_05.signal_qc_max_rms_ratio = 1.10;
+cfg.prep_05.signal_qc_hard_min_median_channel_correlation = 0.10;
+cfg.prep_05.signal_qc_hard_max_relative_change_rms = 10.00;
+cfg.prep_05.signal_qc_hard_min_rms_ratio = 0.10;
+cfg.prep_05.signal_qc_hard_max_rms_ratio = 10.00;
+cfg.prep_05.signal_qc_min_extreme_metrics_to_fail = 2; % independent problem domains, not correlated raw metrics
+cfg.prep_05.signal_qc_fail_on_nonfinite = true;
+cfg.prep_05.signal_qc_fail_on_flat_channels = true;
+cfg.prep_05.signal_qc_flat_std_epsilon = 1e-8;
+
+% Optional validation-sample diagnostic for RUNICA and AMICA. MI is disabled
+% in routine runs because it has no universal decision threshold.
+cfg.prep_05.compute_decomposition_qc = false;
+cfg.prep_05.decomposition_qc_max_samples = 5000;
+cfg.prep_05.decomposition_qc_mi_bins = 20;
+
 cfg.prep_05.write_component_table       = true; % table with one row per ICA 
 % component: ICLabel probabilities and remove/keep decision
-cfg.prep_05.write_run_summary_table     = true; % one summary file per 
-% run/input file: number of ICs removed and counts per rejection criterion
+cfg.prep_05.write_run_summary_table     = true; % optional duplicate per-run summary
 cfg.prep_05.write_subject_summary_table = true; % one subject-level summary 
-% file combining all run summaries for this subject; may look identical if 
-% there is only one run
+% file combining all run summaries for this subject
 cfg.prep_05.qc_table_delimiter          = ';';
 
 % =========================================================================
@@ -911,9 +1009,14 @@ cfg.prep_06.min_trials_per_condition_codes = {}; % adjust this to conditions
 %    }
 
 % -------------------------------------------------------------------------
-% Summary tables
+% SUMMARY OPTION
 % -------------------------------------------------------------------------
-% These are fixed QC outputs. Step 06 also refreshes all-subject summaries.
+% Save QC summaries for final epoch rejection. The tables report the number
+% of total, rejected and remaining epochs, including the rejection method
+% and individual rejection reasons. Subject- and all-subject summaries are
+% created automatically to provide an overview across runs and subjects.
+
+% Step 06 also refreshes the corresponding all-subject summaries automatically.
 cfg.prep_06.write_run_summary_table     = true;
 cfg.prep_06.write_subject_summary_table = true;
 cfg.prep_06.qc_table_delimiter          = ';';

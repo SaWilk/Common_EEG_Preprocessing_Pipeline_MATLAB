@@ -58,6 +58,7 @@ helpers.build_paths                         = @build_paths_impl;
 helpers.build_subject_plans                 = @build_subject_plans_impl;
 helpers.sort_subject_plans_by_expected_cost = @sort_subject_plans_by_expected_cost_impl;
 helpers.run_one_subject                     = @run_one_subject_impl;
+helpers.write_pipeline_status_summary      = @write_pipeline_status_summary_impl;
 
 % -------------------------------------------------------------------------
 % Overwrite / rerun helpers
@@ -67,6 +68,7 @@ helpers.resolve_overwrite_policy    = @resolve_overwrite_policy_impl;
 helpers.step_should_run_outputs     = @step_should_run_outputs_impl;
 helpers.step_should_run_from_folder = @step_should_run_from_folder_impl;
 helpers.get_step_subject_folder     = @get_step_subject_folder_impl;
+helpers.resolve_step04_run_inventory = @resolve_step04_run_inventory_impl;
 
 % -------------------------------------------------------------------------
 % EEG load / save / BIDS helpers
@@ -87,6 +89,28 @@ helpers.normalize_trigger_type = @normalize_trigger_type_impl;
 % -------------------------------------------------------------------------
 % EEG utility helpers used by step files
 % -------------------------------------------------------------------------
+helpers.normalize_event_types                  = @normalize_event_types_impl;
+helpers.normalize_epoching_mode_value          = @normalize_epoching_mode_value_impl;
+helpers.get_channel_indices_by_type            = @get_channel_indices_by_type_impl;
+helpers.apply_reference_mode                   = @apply_reference_mode_impl;
+helpers.build_epoching_output_paths            = @build_epoching_output_paths_impl;
+helpers.normalize_event_list                   = @normalize_event_list_impl;
+helpers.get_present_events                     = @get_present_events_impl;
+helpers.preview_event_types                    = @preview_event_types_impl;
+helpers.evaluate_min_trials_per_condition      = @evaluate_min_trials_per_condition_impl;
+helpers.build_step06_summary_row               = @build_step06_summary_row_impl;
+helpers.build_step06_summary_rows              = @build_step06_summary_rows_impl;
+helpers.build_bad_channel_qc_table             = @build_bad_channel_qc_table_impl;
+helpers.build_epoch_rejection_qc_table         = @build_epoch_rejection_qc_table_impl;
+helpers.write_qc_table                         = @write_qc_table_impl;
+helpers.resolve_qc_timestamp                   = @resolve_qc_timestamp_impl;
+helpers.collect_bad_channel_qc                 = @collect_bad_channel_qc_impl;
+helpers.collect_prep06_summary                 = @collect_prep06_summary_impl;
+helpers.build_high_epoch_rejection_warning     = @build_high_epoch_rejection_warning_impl;
+helpers.save_intermediate_set                  = @save_intermediate_set_impl;
+helpers.apply_hard_epoch_threshold_rejection   = @apply_hard_epoch_threshold_rejection_impl;
+helpers.apply_fallback_epoch_rejection         = @apply_fallback_epoch_rejection_impl;
+helpers.create_baseline_condition_datasets     = @create_baseline_condition_datasets_impl;
 helpers.normalize_event_types                 = @normalize_event_types_impl;
 helpers.normalize_epoching_mode_value         = @normalize_epoching_mode_value_impl;
 helpers.get_channel_indices_by_type           = @get_channel_indices_by_type_impl;
@@ -114,27 +138,55 @@ helpers.apply_fallback_epoch_rejection        = @apply_fallback_epoch_rejection_
 helpers.create_baseline_condition_datasets    = @create_baseline_condition_datasets_impl;
 helpers.resolve_baseline_condition_definitions = @resolve_baseline_condition_definitions_impl;
 helpers.build_epoching_output_stem             = @build_epoching_output_stem_impl;
-helpers.finalize_epoched_dataset              = @finalize_epoched_dataset_impl;
-helpers.save_final_epoched_outputs            = @save_final_epoched_outputs_impl;
-helpers.build_eeg_key_token_stream_with_time  = @build_eeg_key_token_stream_with_time_impl;
-helpers.find_first_event_latency              = @find_first_event_latency_impl;
-helpers.ensure_channel_types                  = @ensure_channel_types_impl;
-helpers.find_flat_or_invalid_channels         = @find_flat_or_invalid_channels_impl;
-helpers.detect_bad_channels_clean_rawdata     = @detect_bad_channels_clean_rawdata_impl;
-helpers.apply_filter_to_subset_only           = @apply_filter_to_subset_only_impl;
-helpers.apply_pop_cleanline_to_subset         = @apply_pop_cleanline_to_subset_impl;
-helpers.apply_jointprob_safely                = @apply_jointprob_safely_impl;
-helpers.apply_shared_epoch_rejection          = @apply_shared_epoch_rejection_impl;
-helpers.apply_erplab_epoch_rejection          = @apply_erplab_epoch_rejection_impl;
+helpers.finalize_epoched_dataset               = @finalize_epoched_dataset_impl;
+helpers.save_final_epoched_outputs             = @save_final_epoched_outputs_impl;
+helpers.build_eeg_key_token_stream_with_time   = @build_eeg_key_token_stream_with_time_impl;
+helpers.find_first_event_latency               = @find_first_event_latency_impl;
+helpers.ensure_channel_types                   = @ensure_channel_types_impl;
+helpers.find_flat_or_invalid_channels          = @find_flat_or_invalid_channels_impl;
+helpers.detect_bad_channels_clean_rawdata      = @detect_bad_channels_clean_rawdata_impl;
+helpers.apply_filter_to_subset_only            = @apply_filter_to_subset_only_impl;
+helpers.remove_line_noise_from_subset          = @remove_line_noise_from_subset_impl;
+helpers.apply_jointprob_safely                 = @apply_jointprob_safely_impl;
+helpers.apply_shared_epoch_rejection           = @apply_shared_epoch_rejection_impl;
+helpers.apply_erplab_epoch_rejection           = @apply_erplab_epoch_rejection_impl;
 helpers.reject_ica_prep_epochs_by_mad_variance = @reject_ica_prep_epochs_by_mad_variance_impl;
-helpers.compute_data_rank_svd                 = @compute_data_rank_svd_impl;
-helpers.make_unique_amica_tmpdir              = @make_unique_amica_tmpdir_impl;
-helpers.safe_rmdir                            = @safe_rmdir_impl;
-helpers.write_ic_topography_pngs              = @write_ic_topography_pngs_impl;
-helpers.merge_structs_recursive               = @merge_structs_recursive_impl;
+helpers.compute_data_rank_svd                  = @compute_data_rank_svd_impl;
+helpers.make_unique_amica_tmpdir               = @make_unique_amica_tmpdir_impl;
+helpers.delete_files_matching                  = @delete_files_matching_impl;
+helpers.safe_rmdir                             = @safe_rmdir_impl;
+helpers.write_ic_topography_pngs               = @write_ic_topography_pngs_impl;
+helpers.merge_structs_recursive                = @merge_structs_recursive_impl;
 
 %helpers.apply_triggerfix_rules_from_cfg_rules = @apply_triggerfix_rules_from_cfg_rules_impl;
 %Rules not implemented in current config
+
+% -------------------------------------------------------------------------
+% AMICA, ICA QC, and Step-05 ICLabel helper functions (Saskia branch)
+% -------------------------------------------------------------------------
+helpers.default_amica_qc                            = @default_amica_qc_impl;
+helpers.validate_amica_config                       = @validate_amica_config_impl;
+helpers.evaluate_amica_convergence                  = @evaluate_amica_convergence_impl;
+helpers.validate_ica_matrices                       = @validate_ica_matrices_impl;
+helpers.build_step04_ica_qc_row                     = @build_step04_ica_qc_row_impl;
+helpers.write_step04_run_qc                         = @write_step04_run_qc_impl;
+helpers.append_step04_qc_row                        = @append_step04_qc_row_impl;
+helpers.write_step04_subject_qc                     = @write_step04_subject_qc_impl;
+helpers.validate_prep05_config                      = @validate_prep05_config_impl;
+helpers.infer_n_ic                                  = @infer_n_ic_impl;
+helpers.get_iclabel_classifications                 = @get_iclabel_classifications_impl;
+helpers.build_iclabel_flags                         = @build_iclabel_flags_impl;
+helpers.build_iclabel_component_table               = @build_iclabel_component_table_impl;
+helpers.empty_ica_decomposition_qc                  = @empty_ica_decomposition_qc_impl;
+helpers.compute_ica_decomposition_qc                = @compute_ica_decomposition_qc_impl;
+helpers.evaluate_ic_rejection_signal_change         = @evaluate_ic_rejection_signal_change_impl;
+helpers.extract_prep04_qc_from_eeg                  = @extract_prep04_qc_from_eeg_impl;
+helpers.build_prep05_summary_row                    = @build_prep05_summary_row_impl;
+helpers.append_prep05_summary_row                   = @append_prep05_summary_row_impl;
+helpers.write_prep05_run_summary                    = @write_prep05_run_summary_impl;
+helpers.write_prep05_subject_summary                = @write_prep05_subject_summary_impl;
+helpers.collect_prep05_summary                      = @collect_prep05_summary_impl;
+helpers.log_ica_qc_overview                         = @log_ica_qc_overview_impl;
 
 % -------------------------------------------------------------------------
 % Behavior-log helpers
@@ -599,10 +651,11 @@ else
                 strlength(string(cfg.prep_01.raw_eeg_regex)) > 0
             raw_regex = char(string(cfg.prep_01.raw_eeg_regex));
         else
-            raw_regex = '^.*?(\d{3})(?:_(\d{3}))?\.vhdr$';
+            raw_regex = '^.*?(\d{3})(?:_(\d{3}))?\.vhdr$'; %raw_regex = '^.*?(\d{3})(?:_(\d{3}))?\.vhdr$';
         end
-
-        dir_info = dir(fullfile(source_root, '*.vhdr'));
+        
+        dir_info = dir(fullfile(source_root, '**', '*.vhdr'));
+        %dir_info = dir(fullfile(source_root, '*.vhdr'));
         tmp_ids = {};
 
         for k = 1:numel(dir_info)
@@ -846,7 +899,7 @@ paths.logs_dir         = resolve_logs_dir_impl(cfg);
 
 paths.subj_label = sprintf('sub-%s', subj_id);
 
-session_label = "01";
+session_label = ""; % 01
 if isfield(cfg, 'bids') && isfield(cfg.bids, 'session_label') && strlength(string(cfg.bids.session_label)) > 0
     session_label = string(cfg.bids.session_label);
 end
@@ -906,12 +959,14 @@ paths.prep_06_out_dir           = fullfile(paths.step_06_root, paths.subj_label)
 paths.qc_root = fullfile(paths.derivatives_root, 'qc');
 ensure_dir_impl(paths.qc_root);
 
-paths.qc_ica_components_root = fullfile(paths.qc_root, 'ica_comps');
-paths.qc_bad_chans_root       = fullfile(paths.qc_root, 'bad_chans');
-paths.qc_epoch_rej_root       = fullfile(paths.qc_root, 'epoch_rej');
+paths.qc_ica_training_root   = fullfile(paths.qc_root, '03_ica_training');
+paths.qc_bad_chans_root      = fullfile(paths.qc_root, '03_bad_chans');
+paths.qc_ica_components_root = fullfile(paths.qc_root, '05_ica_comps');
+paths.qc_epoch_rej_root      = fullfile(paths.qc_root, '06_epoch_rej');
 
-ensure_dir_impl(paths.qc_ica_components_root);
+ensure_dir_impl(paths.qc_ica_training_root);
 ensure_dir_impl(paths.qc_bad_chans_root);
+ensure_dir_impl(paths.qc_ica_components_root);
 ensure_dir_impl(paths.qc_epoch_rej_root);
 
 paths.qc_ica_components_subj_dir = fullfile(paths.qc_ica_components_root, paths.subj_label);
@@ -919,7 +974,7 @@ paths.qc_bad_chans_subj_dir       = fullfile(paths.qc_bad_chans_root, paths.subj
 paths.qc_epoch_rej_subj_dir       = fullfile(paths.qc_epoch_rej_root, paths.subj_label);
 
 % Backward-compatible aliases for Step 05 and older callers. Their values
-% now point into qc/ica_comps; no new derivatives/checks tree is created.
+% now point into qc/05_ica_comps; no new derivatives/checks tree is created.
 paths.checks_root = paths.qc_root;
 paths.checks_ica_components_root = paths.qc_ica_components_root;
 paths.checks_ica_components_subj_dir = paths.qc_ica_components_subj_dir;
@@ -971,14 +1026,31 @@ for i = 1:numel(sub_ids)
 
         policy = resolve_overwrite_policy_impl(cfg, step_cfg);
         step_folder = get_step_subject_folder_impl(paths, step_name);
-        [do_run, reason, folder_info] = step_should_run_from_folder_impl(step_folder, policy);
+        if strcmp(step_name, 'prep_04_ica')
+            [do_run, reason, folder_info] = ...
+                step04_should_run_from_inventory_impl(paths, cfg, policy);
+        elseif strcmp(step_name, 'prep_05_after_ica')
+            [do_run, reason, folder_info] = ...
+                step05_should_run_from_inventory_impl(paths, cfg, policy);
+        else
+            [do_run, reason, folder_info] = ...
+                step_should_run_from_folder_impl(step_folder, policy);
+        end
 
         info.run = do_run;
         info.reason = reason;
         info.step_folder = step_folder;
         info.folder_info = folder_info;
         info.policy = policy;
-        info.delete_before_run = do_run && folder_info.exists && ~folder_info.is_empty;
+        % Steps 04 and 05 manage exact run-level outputs themselves. Never
+        % clear their complete subject folders here: those folders may also
+        % contain valid outputs from a different configured BIDS task.
+        if ismember(step_name, {'prep_04_ica', 'prep_05_after_ica'})
+            info.delete_before_run = false;
+        else
+            info.delete_before_run = do_run && folder_info.exists && ...
+                ~folder_info.is_empty;
+        end
 
         plan.steps.(step_name) = info;
     end
@@ -1037,7 +1109,9 @@ for s = 1:numel(step_names)
                     plan.steps.prep_06_epoching.run);
             end
 
-            if isfield(info, 'folder_info') && isstruct(info.folder_info) && ...
+            if ismember(step_name, {'prep_04_ica', 'prep_05_after_ica'})
+                info.delete_before_run = false;
+            elseif isfield(info, 'folder_info') && isstruct(info.folder_info) && ...
                     isfield(info.folder_info, 'exists') && isfield(info.folder_info, 'is_empty')
                 info.delete_before_run = info.folder_info.exists && ~info.folder_info.is_empty;
             else
@@ -2245,11 +2319,15 @@ event_codes = strings(0,1);
 
 for k = 1:numel(EEG.event)
     code = normalize_trigger_type_impl(EEG.event(k).type);
+
     if strcmpi(code, 'boundary')
         continue;
     end
 
-    is_condition_marker = false;
+    if ~matches_any_prefix_impl(code, marker_prefixes) || matches_any_exact_impl(code, end_markers)
+        is_condition_marker = false; % check if marker/trigger matches any of the configured baseline condition prefixes or end markers
+    end
+
     for c = 1:numel(condition_names)
         if matches_any_prefix_impl(code, marker_prefixes{c})
             is_condition_marker = true;
@@ -2318,9 +2396,11 @@ if isempty(seg_t1)
     error('Could not derive any baseline condition segments.');
 end
 
+baseline_duration = (seg_t2(end)-seg_t1(1))/60;
+
 helpers.log_msg_default( ...
-    'prep_06_epoching: %s | derived %d baseline segments across conditions: %s', ...
-    char(string(run_base)), numel(seg_t1), strjoin(cellstr(condition_names), ', '));
+    'prep_06_epoching: %s | derived %d baseline segments across conditions: %s | total duration: %.02f minutes', ...
+    char(string(run_base)), numel(seg_t1), strjoin(cellstr(condition_names), ', '), baseline_duration);
 
 condition_parts = repmat({{}}, numel(condition_names), 1);
 epoch_len = double(step_cfg.regepoch_length_sec);
@@ -3140,20 +3220,44 @@ if nargin >= 5 && ~isempty(label_for_log)
 end
 end
 
-function [EEG, did_apply] = apply_pop_cleanline_to_subset_impl(EEG, subset_indices, step_cfg)
+function [EEG, did_apply, clean_log] = remove_line_noise_from_subset_impl(EEG, subset_indices, step_cfg, plugin_path, helpers)
 did_apply = false;
+clean_log = struct();
+
+if contains(lower(step_cfg.line_noise_method), 'zap')
+    method = 'zapline';
+elseif contains(lower(step_cfg.line_noise_method), 'clean')
+    method = 'cleanline';
+elseif contains(lower(step_cfg.line_noise_method), 'notch')
+    method = 'notch';
+else
+    helpers.log_msg_default(sprintf('\tLine Noise Removal: ERROR removal method - %s - not recognized.', step_cfg.line_noise_method));
+    return
+end
 
 if isempty(subset_indices)
-    helpers.log_msg_default('prep03_untilica: WARNING no channel indices available for pop_cleanline.');
     return;
 end
 
 if exist('pop_cleanline', 'file') ~= 2
-    helpers.log_msg_default('prep03_untilica: WARNING pop_cleanline was not found on path.');
     return;
 end
 
+plugs = dir(fullfile(plugin_path, '*line*'));
 original_data = EEG.data;
+
+% Backward-compatible fallbacks in case older configs are used
+bandwidth_hz      = getfield_safe_impl(step_cfg, 'pop_cleanline_bandwidth_hz', 2);
+p_value           = getfield_safe_impl(step_cfg, 'pop_cleanline_p_value', 0.01);
+scanforlines      = getfield_safe_impl(step_cfg, 'pop_cleanline_scanforlines', false);
+winsize_sec       = getfield_safe_impl(step_cfg, 'pop_cleanline_winsize_sec', 4);
+winstep_sec       = getfield_safe_impl(step_cfg, 'pop_cleanline_winstep_sec', 1);
+tau_val           = getfield_safe_impl(step_cfg, 'pop_cleanline_tau', 100);
+pad_val           = getfield_safe_impl(step_cfg, 'pop_cleanline_pad', 2);
+taperbandwidth_hz = getfield_safe_impl(step_cfg, 'pop_cleanline_taperbandwidth_hz', 2);
+norm_spectrum     = getfield_safe_impl(step_cfg, 'pop_cleanline_norm_spectrum', 0);
+compute_power     = getfield_safe_impl(step_cfg, 'pop_cleanline_computepower', 0);
+verbose_flag      = getfield_safe_impl(step_cfg, 'pop_cleanline_verbose', false);
 
 try
     EEG_tmp = pop_select(EEG, 'channel', subset_indices);
@@ -3161,50 +3265,127 @@ try
 
     fs = EEG_tmp.srate;
     freqs = step_cfg.line_noise_frequencies_hz;
-    freqs = freqs(freqs < fs / 2);
+    freqs = freqs(freqs < fs / 2); % only keep frequencies below Nyquist, as that is also the highest frequency for the lowpass filter.
+
+    clean_log.freqs = freqs;
 
     if isempty(freqs)
         did_apply = true;
+        log_msg_default_impl('\tLine Noise Removal: WARNING Specified frequencies below nyquist.');
         return;
     end
+    
+    if strcmp(method, "zapline")  
+        if ~any(cellfun(@(x) contains(x, 'zapline'), {plugs.name})) % check if zapline plugin installed, otherwise use cleanline
+            helpers.log_msg_default('prep03_untilica: WARNING zapline-plus was not found on path, continuing with cleanline.');
+            method = 'cleanline';
+        else
+            clean_log.zapline = struct();
+            [EEG_tmp.data, clean_log.zapline.config, clean_log.zapline.analytics] = ...
+                clean_data_with_zapline_plus(EEG_tmp.data, fs, struct('noisefreqs', freqs, 'plotResults', false, 'saveSpectra', true));
+            clean_log.zapline.applied = true;
+            
+            if clean_log.zapline.analytics.ratioNoiseClean > step_cfg.line_noise_ratio % check if noise ratio above acceptable threshold
+                if step_cfg.line_noise_fb_cleanline % check if fallback to cleanline allowed
+                    clean_log.fallback_to_cleanline = true;
+                    method = 'cleanline';
+                    helpers.log_msg_default('\tLine Noise Removal: Zapline did not work optimally, using cleanline in next step.');
+                else
+                    helpers.log_msg_default(sprintf('\tLine Noise Removal: WARNING Zapline applied, remaining noise ratio %s.', clean_log.zapline.analytics.ratioNoiseClean));
+                end
+            else
+                helpers.log_msg_default(sprintf('\tLine Noise Removal: Zapline applied succesfully. Noise ratio %s.', clean_log.zapline.analytics.ratioNoiseClean));
+            end
+        end
+    end
+   
+    if strcmp(method, "cleanline")
+        if ~any(cellfun(@(x) contains(lower(x), 'cleanline'),{plugs.name})) % check if cleanline plugin installed
+            if step_cfg.line_noise_fb_notch
+                clean_log.fallback_to_cleanline = false;
+                clean_log.fallback_to_notch     = true;
+                method = 'notch';
+                helpers.log_msg_default('\tLine Noise Removal: WARNING cleanline was not found on path. Using Notch filter as fallback.');
+            else
+                helpers.log_msg_default('\tLine Noise Removal: WARNING cleanline was not found on path. Continuing without removing line noise.');
+                return
+            end
+        else
+            clean_log.cleanline = struct();
+            clean_log.cleanline.analytics = struct();
 
-    % Backward-compatible fallbacks in case older configs are used
-    bandwidth_hz      = getfield_safe_impl(step_cfg, 'pop_cleanline_bandwidth_hz', 2);
-    p_value           = getfield_safe_impl(step_cfg, 'pop_cleanline_p_value', 0.01);
-    scanforlines      = getfield_safe_impl(step_cfg, 'pop_cleanline_scanforlines', false);
-    winsize_sec       = getfield_safe_impl(step_cfg, 'pop_cleanline_winsize_sec', 4);
-    winstep_sec       = getfield_safe_impl(step_cfg, 'pop_cleanline_winstep_sec', 1);
-    tau_val           = getfield_safe_impl(step_cfg, 'pop_cleanline_tau', 100);
-    pad_val           = getfield_safe_impl(step_cfg, 'pop_cleanline_pad', 2);
-    taperbandwidth_hz = getfield_safe_impl(step_cfg, 'pop_cleanline_taperbandwidth_hz', 2);
-    norm_spectrum     = getfield_safe_impl(step_cfg, 'pop_cleanline_norm_spectrum', 0);
-    compute_power     = getfield_safe_impl(step_cfg, 'pop_cleanline_computepower', 0);
-    verbose_flag      = getfield_safe_impl(step_cfg, 'pop_cleanline_verbose', false);
+            if isfield(clean_log, 'zapline') && isfield(clean_log.zapline, 'config')
+                % if zapline was applied, take parameters for noise ratio calculation from there
+                winSize = clean_log.zapline.config.winSizeCompleteSpectrum;
+                detect_winSize = clean_log.zapline.config.detectionWinsize;
+                pxx_log_before = clean_log.zapline.analytics.cleanSpectrumLog;
+                psd_freqs = clean_log.zapline.analytics.frequencies;
+            else
+                % otherwise use the same logic to calculate the noise ratio as in zapline
+                winSize = floor(length(EEG_tmp.data)/8/fs);
+                detect_winSize = 6;
+                [pxx_log_before, psd_freqs] = pwelch(EEG_tmp.data',hanning(winSize*fs),[],[],fs);
+                pxx_log_before = 10*log10(pxx_log_before);
+                clean_log.cleanline.analytics.rawSpectrumLog = pxx_log_before;
+                clean_log.cleanline.analytics.frequencies = psd_freqs;
+            end
 
-    EEG_tmp = pop_cleanline(EEG_tmp, ...
-        'bandwidth',        bandwidth_hz, ...
-        'chanlist',         1:size(EEG_tmp.data, 1), ...
-        'computepower',     compute_power, ...
-        'linefreqs',        freqs, ...
-        'normSpectrum',     norm_spectrum, ...
-        'p',                p_value, ...
-        'pad',              pad_val, ...
-        'plotfigures',      0, ...
-        'scanforlines',     double(scanforlines), ...
-        'sigtype',          'Channels', ...
-        'taperbandwidth',   taperbandwidth_hz, ...
-        'tau',              tau_val, ...
-        'verb',             double(verbose_flag), ...
-        'winsize',          winsize_sec, ...
-        'winstep',          winstep_sec);
+            % make sure cleanline calls functions from own path
+            cleanline_dir = fullfile(plugin_path, plugs(find(cellfun(@(x) contains(lower(x), 'cleanline'),{plugs.name}))).name);
+            addpath(genpath(cleanline_dir), '-begin');   % puts it first on matlab paths
+
+            EEG_tmp = pop_cleanline(EEG_tmp, ...
+                'bandwidth',        bandwidth_hz, ...
+                'chanlist',         1:size(EEG_tmp.data, 1), ...
+                'computepower',     compute_power, ...
+                'linefreqs',        freqs, ...
+                'normSpectrum',     norm_spectrum, ...
+                'p',                p_value, ...
+                'pad',              pad_val, ...
+                'plotfigures',      0, ...
+                'scanforlines',     double(scanforlines), ...
+                'sigtype',          'Channels', ...
+                'taperbandwidth',   taperbandwidth_hz, ...
+                'tau',              tau_val, ...
+                'verb',             double(verbose_flag), ...
+                'winsize',          winsize_sec, ...
+                'winstep',          winstep_sec);
+            
+            clean_log.cleanline.applied = true;
+
+            % calculate power spectrum after cleanline
+            pxx_log_after = pwelch(single(EEG_tmp.data)',hanning(winSize*fs),[],[],fs);
+            pxx_log_after = 10*log10(pxx_log_after);
+
+            clean_log.cleanline.analytics.cleanSpectrumLog = pxx_log_after;
+            clean_log.cleanline.analytics.ratioNoiseBefore = [];
+            clean_log.cleanline.analytics.ratioNoiseAfter = [];
+
+            for f = freqs % calculate noise ratio for each frequency and append to log
+                clean_log.cleanline.analytics.ratioNoiseAfter(end+1)  = 10^((mean(mean(pxx_log_after(noise_idx,:),2)) - mean(pxx_log_after(surround_idx,:),'all'))/10);
+            end
+
+            % if noise ratio still above acceptable threshold, apply notch filter
+            % filter
+            if clean_log.cleanline.analytics.ratioNoiseAfter > step_cfg.line_noise_ratio && step_cfg.line_noise_fb_notch
+                clean_log.fallback_to_notch = true;
+                method = 'notch';
+                helpers.log_msg_default(sprintf('\tLine Noise Removal: After Zap-/Cleanline 50 Hz noise ratio at %d. Applying notch filter.', clean_log.cleanline.analytics.ratioNoiseAfter(1)));
+            end
+        end
+    end
+    if strcmp(method, "notch")
+        % use EEGLab notch filter?
+    end
 
     EEG.data(subset_indices, :) = EEG_tmp.data;
     did_apply = true;
 
-catch me
+catch ME
     EEG.data = original_data;
     did_apply = false;
-    warning('apply_pop_cleanline_to_subset failed: %s', me.message);
+    helpers.log_msg_default(sprintf('remove_line_noise_from_subset failed: %s (function: %s, line: %d)', ME.message, ME.stack(1).name, ME.stack(1).line));
+    return
 end
 
 EEG = eeg_checkset(EEG);
@@ -3620,6 +3801,21 @@ end
 
 EEG_work = EEG_in;
 EEG_work = ensure_erplab_epoch_eventlist_compat_impl(EEG_work);
+
+%% LL: add-on to save original trial number for trial-wise analysis combined with behavioral data
+% --- store original trial index per epoch (before pop_rejepoch removes trials) ---
+try
+    if isfield(EEG_work,'epoch') && ~isempty(EEG_work.epoch) && isfield(EEG_work,'trials')
+        nT = EEG_work.trials;
+        nE = numel(EEG_work.epoch);
+        for e = 1:min(nT, nE)
+            EEG_work.epoch(e).orig_trial_index = e; % 1..nTrials before rejection
+        end
+    end
+catch
+    % If metadata write fails, continue preprocessing
+end
+%% LL add-on end
 
 if ~isfield(EEG_work, 'reject') || ~isstruct(EEG_work.reject)
     EEG_work.reject = struct();
@@ -4147,7 +4343,7 @@ end
 s = regexprep(s, '[^\w\-]', '_');
 end
 
-function write_ic_topography_pngs_impl(EEG, ic_list, out_dir, file_prefix, tag, topo_cfg, classif)
+function write_ic_topography_pngs_impl(EEG, ic_list, out_dir, file_prefix, tag, topo_cfg, classif, varargin)
 if isempty(ic_list)
     return;
 end
@@ -5211,7 +5407,7 @@ end
 
 function [t_all, t_by_reason, output_paths] = collect_bad_channel_qc_impl(cfg_or_qc_root)
 [qc_root, timestamp, delimiter] = resolve_qc_collection_context_impl(cfg_or_qc_root);
-bad_root = fullfile(qc_root, 'bad_chans');
+bad_root = fullfile(qc_root, '03_bad_chans');
 t_all = table();
 t_by_reason = table();
 output_paths = {};
@@ -5251,7 +5447,7 @@ end
 
 function [t_all, t_by_method, t_pair, t_reasons, output_paths] = collect_prep06_summary_impl(cfg_or_qc_root)
 [qc_root, timestamp, delimiter] = resolve_qc_collection_context_impl(cfg_or_qc_root);
-epoch_root = fullfile(qc_root, 'epoch_rej');
+epoch_root = fullfile(qc_root, '06_epoch_rej');
 t_all = table();
 t_by_method = table();
 t_pair = table();
@@ -5405,7 +5601,7 @@ for r = 1:height(warning_table)
         round(warning_table.n_epochs_total(r)), ...
         100 * warning_table.prop_rejected_total(r)));
 end
-lines(end) = "Review the timestamped tables under qc/epoch_rej/.";
+lines(end) = "Review the timestamped tables under qc/06_epoch_rej/.";
 warning_message = strjoin(lines, newline);
 end
 
@@ -5659,7 +5855,8 @@ function step_cfg = default_prep03_cfg_impl()
 step_cfg = struct();
 
 % Crop
-step_cfg.crop_to_task_markers = true;
+step_cfg.crop_to_task_markers = false;
+step_cfg.substitute_crop_markers = true;
 step_cfg.crop_start_marker    = 'S 91';
 step_cfg.crop_end_marker      = 'S 97';
 step_cfg.crop_padding_sec     = [0 0];
@@ -6461,7 +6658,7 @@ end
 [qc_root, ~, delimiter] = resolve_qc_collection_context_impl(cfg);
 
 % Include the timestamp and dataset name in the filename.
-out_path = fullfile(qc_root, 'ica_training', sprintf( ...
+out_path = fullfile(qc_root, '03_ica_training', sprintf( ...
     '%s_%s_prep03_run_summary.csv', ...
     char(summary.qc_timestamp), char(summary.run_base)));
 
@@ -6480,7 +6677,7 @@ end
 [qc_root, timestamp, delimiter] = ...
     resolve_qc_collection_context_impl(cfg_or_qc_root);
 
-training_root = fullfile(qc_root, 'ica_training');
+training_root = fullfile(qc_root, '03_ica_training');
 
 t_all = table();
 output_paths = {};

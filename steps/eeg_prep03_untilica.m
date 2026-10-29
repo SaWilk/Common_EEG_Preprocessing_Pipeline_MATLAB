@@ -10,7 +10,7 @@ function step_out = eeg_prep03_untilica(subj_id, cfg, paths, helpers)
 %   (2) *_forica.set : ICA-training-only dataset
 
 %       Also stores a summary of rejected and remaining training epochs.
-%   (3) Summary CSV under qc/ica_training/, if enabled in the config.
+%   (3) Summary CSV under qc/03_ica_training/, if enabled in the config.
 %
 % Input preference:
 %   A) Step 02 output: *_triggersfixed.set
@@ -87,7 +87,7 @@ helpers.ensure_dir(prep03_out_dir_forica);
 if isfield(paths, 'qc_bad_chans_root') && strlength(string(paths.qc_bad_chans_root)) > 0
     bad_chan_qc_dir = paths.qc_bad_chans_root;
 else
-    bad_chan_qc_dir = fullfile(paths.derivatives_root, 'qc', 'bad_chans');
+    bad_chan_qc_dir = fullfile(paths.derivatives_root, 'qc', '03_bad_chans');
 end
 helpers.ensure_dir(bad_chan_qc_dir);
 
@@ -198,38 +198,40 @@ if step_cfg.crop_to_task_markers
     [end_marker, end_latency]   = helpers.find_first_event_latency(EEG, step_cfg.crop_end_marker);
 
     if isempty(start_latency) || isempty(end_latency)
-        if isfield(step_cfg, 'substitute_crop_markers') && step_cfg.substitute_crop_markers
-            helpers.log_msg_default( ...
-                'prep03_untilica: WARNING at least one crop marker not found, substituting with first and last sample of the task window.');
-            if isempty(start_latency)
-                start_latency = 1;
-                start_marker = 'first_sample';
-            end
-            if isempty(end_latency)
-                end_latency = EEG.pnts;
-                end_marker = 'last_sample';
-            end
-             
-        else
-            msg = sprintf( ...
-                'prep03_untilica: missing task markers start(%s)=%d end(%s)=%d -> cannot continue', ...
-                start_marker, isempty(start_latency), ...
-                end_marker, isempty(end_latency));
-            helpers.log_msg_default('%s', msg);
-            step_out.message = msg;
-            return;
+    if isfield(step_cfg, 'substitute_crop_markers') && ...
+            step_cfg.substitute_crop_markers
+
+        helpers.log_msg_default( ...
+            'prep03_untilica: WARNING missing crop marker(s); using the corresponding recording boundary.');
+
+        if isempty(start_latency)
+            start_latency = 1;
+            start_marker = 'first_sample';
         end
+
+        if isempty(end_latency)
+            end_latency = EEG.pnts;
+            end_marker = 'last_sample';
+        end
+
+    else
         msg = sprintf( ...
             'prep03_untilica: missing task markers start(%s)=%d end(%s)=%d -> cannot continue', ...
             start_marker, isempty(start_latency), ...
             end_marker, isempty(end_latency));
+
         helpers.log_msg_default('%s', msg);
         step_out.message = msg;
         return;
     end
+end
 
-    t_start = (double(start_latency) / EEG.srate) - step_cfg.crop_padding_sec(1);
-    t_end   = (double(end_latency)   / EEG.srate) + step_cfg.crop_padding_sec(2);
+    % Sample 1 corresponds to time zero. Add padding before the start and after the end.
+    t_start = ((double(start_latency) - 1) / EEG.srate) ...
+        - step_cfg.crop_padding_sec(1);
+    
+    t_end = ((double(end_latency) - 1) / EEG.srate) ...
+        + step_cfg.crop_padding_sec(2);
 
     t_start = max(t_start, 0);
     t_end   = min(t_end, (EEG.pnts - 1) / EEG.srate);
@@ -637,12 +639,19 @@ end
 [eeg_idx, eog_idx, ~] = helpers.get_channel_indices_by_type(EEG);
 filter_idx = sort(unique([eeg_idx(:); eog_idx(:)]));
 
+if isempty(filter_idx) % messages might need to be passed to prep03 script, not written here
+    filter_idx = EEG.chanlocs;
+    helpers.log_msg_default('prep03_untilica: WARNING channel indices not available, continuing with all channels.');
+end
 
 line_noise_applied = false;
-if string(step_cfg.line_noise_method) == "pop_cleanline"
-    [EEG, line_noise_applied] = helpers.apply_pop_cleanline_to_subset(EEG, filter_idx, step_cfg);
+
+if string(step_cfg.line_noise_method) ~= "none"
+    plugin_path = fullfile(cfg.toolboxes.("path_eeglab_"+cfg.env.mode), 'plugins');
+
+    [EEG, line_noise_applied, line_noise_log] = helpers.remove_line_noise_from_subset(EEG, filter_idx, step_cfg, plugin_path, helpers);
     if ~line_noise_applied
-        helpers.log_msg_default('prep03_untilica: WARNING pop_cleanline did not apply successfully.');
+        helpers.log_msg_default('prep03_untilica: WARNING line noise removal incomplete or failed.');
     end
 end
 
