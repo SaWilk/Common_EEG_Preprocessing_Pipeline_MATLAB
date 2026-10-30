@@ -5923,7 +5923,7 @@ step_cfg.reference_exclude_non_eeg = true;
 step_cfg.mastoid_channel_labels    = {'T9','T10'};
 
 % Filters
-step_cfg.highpass_hz          = 0.01;
+step_cfg.highpass_hz          = 0.1;
 step_cfg.lowpass_hz           = 40;
 step_cfg.ica_prep_highpass_hz = 1;
 
