@@ -32,6 +32,8 @@ jobs:
         uses: matlab-actions/run-tests@v3
         with:
           select-by-folder: tests
+          include-subfolders: false
+          
 
       # Alternatively, run tasks from your buildfile.m.
       # - name: Run MATLAB build
