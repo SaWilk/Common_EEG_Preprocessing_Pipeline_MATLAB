@@ -1,23 +1,16 @@
 classdef SmokeTest < matlab.unittest.TestCase
     
-    methods (TestClassSetup)
-        % Shared setup for the entire test class
-
-        % Set up paths in test folder
-
-            % add teardown: delete folders again
-
-        % move test_config and test_paths into parentfolder, then cd into parent folder
-            % add teardown: move test_files back
-    end
-
-    methods (TestMethodSetup)
-        % Setup for each test
-    end
-
     methods (Test)
         % Test methods
-        
+        function runnerCodeAnalysis(testCase)
+            % Test that the helper functions pass code analysis
+            testFile = mfilename('fullpath');
+            repoRoot = fileparts(fileparts(testFile));
+            runner_path = fullfile(repoRoot, 'run_eeg_pipeline.m');
+            diagnostics = codeIssues(runner_path);
+            testCase.verifyFalse(any(diagnostics.Issues.('Severity')== 'error'), 'Code Errors in run_eeg_pipeline!');
+        end
+
         function helpersCodeAnalysis(testCase)
             % Test that the helper functions pass code analysis
             testFile = mfilename('fullpath');
