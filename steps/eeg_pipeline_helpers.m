@@ -158,6 +158,8 @@ helpers.safe_rmdir                             = @safe_rmdir_impl;
 helpers.write_ic_topography_pngs               = @write_ic_topography_pngs_impl;
 helpers.merge_structs_recursive                = @merge_structs_recursive_impl;
 
+%helpers.apply_triggerfix_rules_from_cfg_rules = @apply_triggerfix_rules_from_cfg_rules_impl;
+%Rules not implemented in current config
 
 % -------------------------------------------------------------------------
 % AMICA, ICA QC, and Step-05 ICLabel helper functions (Saskia branch)
@@ -6273,13 +6275,18 @@ end
 
 fclose(fid);
 
-try
-    opts = detectImportOptions(tmp_file, 'FileType', 'text');
-catch
-    opts = detectImportOptions(tmp_file, 'Delimiter', '\t', 'FileType', 'text');
-end
-
-T = readtable(tmp_file, opts);
+T = readtable(tmp_file, ...
+    'Delimiter','\t', ...
+    'FileType','text', ...
+    'TextType','string', ...
+    'MultipleDelimsAsOne',true);
+% try
+%     opts = detectImportOptions(tmp_file, 'FileType', 'text');
+% catch
+%     opts = detectImportOptions(tmp_file, 'Delimiter', '\t', 'FileType', 'text');
+% end
+% 
+% T = readtable(tmp_file, opts);
 delete(tmp_file);
 
 T.Properties.VariableNames = matlab.lang.makeValidName(T.Properties.VariableNames);
@@ -6331,7 +6338,7 @@ rep.eeg_ctx_j2 = min(numel(eeg_tokens), lastMatchEegIdx+30);
 rep.eeg_ctx = eeg_tokens(rep.eeg_ctx_j1:rep.eeg_ctx_j2);
 end
 
-function raw_qc_behavior_vs_eeg_and_write_csv_impl(beh, EEG, subj_id, bids_base, out_dir, varargin)
+function [qc_ok, rep] = raw_qc_behavior_vs_eeg_and_write_csv_impl(beh, EEG, subj_id, bids_base, out_dir, varargin)
 
 arguments
     beh table
@@ -6387,6 +6394,7 @@ if isempty(beh_tok) || isempty(eeg_tok)
 end
 
 [ok, rep] = check_subsequence_order_detailed_impl(beh_tok, eeg_tok);
+qc_ok = ok;
 
 if ok && ~opts.write_csv_on_ok
     return;
@@ -6579,44 +6587,6 @@ for r = 1:height(beh)
 end
 end
 
-function t_s = convert_behavior_time_to_seconds_impl(time_raw, time_unit)
-if iscell(time_raw)
-    time_raw = time_raw{1};
-end
-
-if isstring(time_raw) || ischar(time_raw)
-    t_num = str2double(strrep(char(string(time_raw)), ',', '.'));
-else
-    t_num = double(time_raw);
-end
-
-if isnan(t_num)
-    error('Behavior-log time value could not be converted to numeric seconds/ms.');
-end
-
-switch lower(char(string(time_unit)))
-    case {'ms','millisecond','milliseconds'}
-        t_s = t_num / 1000;
-    case {'s','sec','second','seconds'}
-        t_s = t_num;
-    otherwise
-        error('Unsupported behavior_log_time_unit: %s', string(time_unit));
-end
-end
-
-function tf = behavior_value_matches_impl(value, pattern)
-value   = lower(strtrim(char(string(value))));
-pattern = lower(strtrim(char(string(pattern))));
-
-value   = regexprep(value, '\s+', ' ');
-pattern = regexprep(pattern, '\s+', ' ');
-
-if strcmp(pattern, '*')
-    tf = true;
-else
-    tf = strcmp(value, pattern);
-end
-end
 
 function summary = build_ica_training_summary_impl( ...
     EEG, n_before, is_epoched, subj_id, run_base, method, rejection_status, ...
@@ -6753,6 +6723,179 @@ output_paths = {out_path};
 end
 
 % =========================================================================
+% Triggerfix config translation 
+% =========================================================================
+% function step_cfg = apply_triggerfix_rules_from_cfg_rules_impl(step_cfg, rules)
+% NOT IMPLEMENTED in current config options!
+% % Translate paradigma triggerfix rules into the legacy Step02 step_cfg fields.
+% % Expected rules format (from cfg.paradigms.<name>.triggerfix.rules):
+% %   - table:
+% %       struct('phase', 'habituation'|'generalization'|'return_of_fear',
+% %              'match','table','raw_key', <raw_key>, 'target', <target_code>)
+% %   - count_block:
+% %       struct('phase','acquisition'|'extinction','match','count_block','raw_key', <raw_key>, ...)
+% %   - disable_first_ext:
+% %       struct('match','disable_first_ext', 'first_minus_code',..., 'first_plus_code',...,
+% %              'revert_minus_raw_key','cs_minus', 'revert_plus_raw_key','cs_plus')
+% %   - disable_first_acq:
+% %       struct('match','disable_first_acq', 'first_minus_code',..., 'first_plus_code',...,
+% %     s_code',..., 'disabled_plus_code',...)
+% % NOTE:
+% % This helper currently implements only the "table" and "count_block" rule types.
+% 
+%     if nargin < 2 || isempty(rules)
+%         return;
+%     end
+% 
+%     if isempty(step_cfg)
+%         step_cfg = struct();
+%     end
+% 
+%     % rules may be a cell array of structs or a struct array
+%     if isstruct(rules) && ~iscell(rules)
+%         rules = num2cell(rules);
+%     end
+% 
+%     for r = 1:numel(rules)
+%         rule = rules{r};
+% 
+%         match_type = "";
+%         if isstruct(rule) && isfield(rule, 'match')
+%             match_type = string(rule.match);
+%         end
+% 
+%         if match_type == "table"
+%             if isfield(rule,'phase') && isfield(rule,'raw_key') && isfield(rule,'target')
+%                 phase   = string(rule.phase);
+%                 raw_key = char(string(rule.raw_key));
+%                 target  = char(string(rule.target));
+% 
+%                 phase_key = matlab.lang.makeValidName(lower(char(phase)));
+% 
+%                 if ~isfield(step_cfg,'table_maps') || ~isstruct(step_cfg.table_maps)
+%                     step_cfg.table_maps = struct();
+%                 end
+% 
+%                 map_in = {};
+%                 if isfield(step_cfg.table_maps, char(phase_key))
+%                     map_in = step_cfg.table_maps.(char(phase_key));
+%                 end
+% 
+%                 step_cfg.table_maps.(char(phase_key)) = upsert_map_key_impl(map_in, raw_key, target);
+%             end
+% 
+%         elseif match_type == "count_block"
+%             if isfield(rule,'phase') && isfield(rule,'raw_key')
+% 
+%                 phase   = string(rule.phase);
+%                 raw_key = char(string(rule.raw_key));
+%                 phase_key = matlab.lang.makeValidName(lower(char(phase)));
+% 
+%                 if ~isfield(step_cfg,'count_blocks') || ~isstruct(step_cfg.count_blocks)
+%                     step_cfg.count_blocks = struct();
+%                 end
+% 
+%                 if ~isfield(step_cfg.count_blocks, char(phase_key)) || ...
+%                         ~isstruct(step_cfg.count_blocks.(char(phase_key)))
+%                     step_cfg.count_blocks.(char(phase_key)) = struct();
+%                 end
+% 
+%                 cb = step_cfg.count_blocks.(char(phase_key));
+% 
+%                 % block sizes
+%                 if isfield(rule,'n_first_block');  cb.n_first_block  = double(rule.n_first_block); end
+%                 if isfield(rule,'n_second_block'); cb.n_second_block = double(rule.n_second_block); end
+%                 if isfield(rule,'n_third_block');  cb.n_third_block  = double(rule.n_third_block); end
+% 
+%                 % targets (abhängig von raw_key: cs_minus/cs_plus)
+%                 if isfield(rule,'target_first')
+%                     if strcmp(raw_key,'cs_minus'); cb.code_minus_block1 = char(string(rule.target_first)); end
+%                     if strcmp(raw_key,'cs_plus');  cb.code_plus_block1  = char(string(rule.target_first)); end
+%                 end
+%                 if isfield(rule,'target_second')
+%                     if strcmp(raw_key,'cs_minus'); cb.code_minus_block2 = char(string(rule.target_second)); end
+%                     if strcmp(raw_key,'cs_plus');  cb.code_plus_block2  = char(string(rule.target_second)); end
+%                 end
+%                 if isfield(rule,'target_third')
+%                     if strcmp(raw_key,'cs_minus'); cb.code_minus_block3 = char(string(rule.target_third)); end
+%                     if strcmp(raw_key,'cs_plus');  cb.code_plus_block3  = char(string(rule.target_third)); end
+%                 end
+% 
+%                 cb.cs_minus_key = 'cs_minus';
+%                 cb.cs_plus_key  = 'cs_plus';
+% 
+%                 step_cfg.count_blocks.(char(phase_key)) = cb;
+%             end
+%         end
+%     end
+% end
+
+function map_out = upsert_map_key_impl(map_in, raw_key, target_code)
+% map_in is cell array: { 'cs_minus', "S 201"; ... } in Step02 defaults.
+    map_out = map_in;
+    key_str = string(raw_key);
+    found = false;
+
+    if isempty(map_out)
+        map_out = {char(key_str), string(target_code)};
+        return;
+    end
+
+    for i = 1:size(map_out, 1)
+        if size(map_out,2) >= 2 && string(map_out{i,1}) == key_str
+            map_out{i,2} = string(target_code);
+            found = true;
+            break;
+        end
+    end
+
+    if ~found
+        map_out(end+1,:) = {char(key_str), string(target_code)};
+    end
+end
+
+function t_s = convert_behavior_time_to_seconds_impl(time_raw, time_unit)
+if iscell(time_raw)
+    time_raw = time_raw{1};
+end
+
+if isstring(time_raw) || ischar(time_raw)
+    t_num = str2double(strrep(char(string(time_raw)), ',', '.'));
+else
+    t_num = double(time_raw);
+end
+
+if isnan(t_num)
+    %error('Behavior-log time value could not be converted to numeric seconds/ms.');
+     t_s = NaN;   % statt error: fehlerhafte Zeitwerte werden übersprungen/bleiben NaN
+    return;
+end
+
+switch lower(char(string(time_unit)))
+    case {'ms','millisecond','milliseconds'}
+        t_s = t_num / 1000;
+    case {'s','sec','second','seconds'}
+        t_s = t_num;
+    otherwise
+        error('Unsupported behavior_log_time_unit: %s', string(time_unit));
+end
+end
+
+
+function tf = behavior_value_matches_impl(value, pattern)
+value   = lower(strtrim(char(string(value))));
+pattern = lower(strtrim(char(string(pattern))));
+
+value   = regexprep(value, '\s+', ' ');
+pattern = regexprep(pattern, '\s+', ' ');
+
+if strcmp(pattern, '*')
+    tf = true;
+else
+    tf = strcmp(value, pattern);
+end
+end
+
 % SASKIA BRANCH: ADDITIONAL STEP-04/05 AND ICA-QC IMPLEMENTATIONS
 % =========================================================================
 function log_progress_safely_impl(progress_log, varargin)
