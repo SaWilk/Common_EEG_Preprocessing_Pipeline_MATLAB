@@ -30,9 +30,8 @@ jobs:
       # Run tests authored using the MATLAB unit testing framework or Simulink Test.
       - name: Run MATLAB tests
         uses: matlab-actions/run-tests@v3
-        # If you are not using a MATLAB project, add your source code to the path using the source-folder input.
-        # with:
-        #   source-folder: myfolderA; myfolderB
+        with:
+          select-by-folder: tests
 
       # Alternatively, run tasks from your buildfile.m.
       # - name: Run MATLAB build
