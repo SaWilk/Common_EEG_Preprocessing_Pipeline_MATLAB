@@ -5,7 +5,7 @@ name: MATLAB
 
 on:
   push:
-    branches: [all]
+
   pull_request:
     branches: [main]
   workflow_dispatch: {}
