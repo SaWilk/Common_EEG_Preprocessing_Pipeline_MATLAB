@@ -3,12 +3,21 @@ classdef SmokeTest < matlab.unittest.TestCase
     methods (Test)
         % Test methods
         function runnerCodeAnalysis(testCase)
-            % Test that the helper functions pass code analysis
+            % Test that the runner script pass code analysis
             testFile = mfilename('fullpath');
             repoRoot = fileparts(fileparts(testFile));
             runner_path = fullfile(repoRoot, 'run_eeg_pipeline.m');
             diagnostics = codeIssues(runner_path);
             testCase.verifyFalse(any(diagnostics.Issues.('Severity')== 'error'), 'Code Errors in run_eeg_pipeline!');
+        end
+
+        function configCodeAnalysis(testCase)
+            % Test that the configuration script pass code analysis
+            testFile = mfilename('fullpath');
+            repoRoot = fileparts(fileparts(testFile));
+            config_path = fullfile(repoRoot, 'eeg_pipeline_config.m');
+            diagnostics = codeIssues(config_path);
+            testCase.verifyFalse(any(diagnostics.Issues.('Severity')== 'error'), 'Code Errors in eeg_pipeline_config!');
         end
 
         function helpersCodeAnalysis(testCase)
@@ -22,6 +31,7 @@ classdef SmokeTest < matlab.unittest.TestCase
         end
 
         function stepsCodeAnalysis(testCase)
+            % Test looping over steps, if they pass code analysis
             testFile = mfilename('fullpath');
             repoRoot = fileparts(fileparts(testFile));
             stepsDir = fullfile(repoRoot, 'steps');
